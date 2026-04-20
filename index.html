@@ -142,10 +142,11 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     </svg>
   </div>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v1.5</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v1.6</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn" id="rbtn" onclick="loadAll()">Refresh</button>
+    <button class="btn btn-ghost" onclick="openDraftFromUrl()">+ Draft from URL</button>
   </div>
 </div>
 
@@ -479,7 +480,27 @@ async function loadAll(){
 }
 
 // ── WORKFLOW ──
-function openDraft(idx){
+function openDraftFromUrl(){
+  const url = prompt('Paste the article URL:');
+  if(!url) return;
+  currentCard = {title: url, src: new URL(url).hostname.replace('www.',''), cat:'general', heat:8, ago:'now', link: url};
+  document.getElementById('main').style.display='none';
+  document.getElementById('workflow').style.display='block';
+  document.documentElement.style.overflow='auto';
+  document.body.style.overflow='auto';
+  document.getElementById('source-card').innerHTML=`
+    <span class="source-badge">custom url</span>
+    <div>
+      <div class="source-title" style="word-break:break-all;font-size:12px">${url}</div>
+      <div class="source-meta">${currentCard.src}</div>
+    </div>`;
+  document.getElementById('b-title').value='';
+  document.getElementById('b-angle').value='';
+  document.getElementById('r-date').value=new Date().toISOString().split('T')[0];
+  // Store URL for prompt
+  currentCard._url = url;
+  goStep(1);
+}
   currentCard = cards[idx];
   document.getElementById('main').style.display='none';
   document.getElementById('workflow').style.display='block';
@@ -533,8 +554,7 @@ async function startGeneration(){
 
 A news event has come in. Your job is NOT to rewrite the existing headline — create a completely original, Wocult-voice headline that no other publication has used. Think of angles like: the human impact, the irony, the cultural subtext, what it means for the average Indian worker.
 
-Source headline (DO NOT use this): ${title}
-Source publication: ${currentCard?.src||'News'}
+${sourceRef}
 Editorial angle from editor: ${angle||'Focus on the human and cultural impact on Indian workers'}
 
 Wocult voice guidelines:
