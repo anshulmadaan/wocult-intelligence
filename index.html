@@ -66,6 +66,21 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--g2);border-top-color:var(--y);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .errbanner{background:#FCEBEB;border:1px solid #F09595;border-radius:8px;padding:10px 16px;margin:12px 24px 0;font-size:12px;color:#791F1F;display:none}
+/* SAVED */
+.saved-section{padding:12px 24px 0}
+.saved-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.saved-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--g3)}
+.saved-grid{display:flex;flex-direction:column;gap:8px}
+.saved-card{background:var(--w);border-radius:8px;border:1px solid var(--bdr);border-left:3px solid var(--y);padding:12px 14px;display:flex;align-items:center;gap:12px}
+.saved-title-text{font-size:13px;font-weight:500;flex:1;line-height:1.4}
+.saved-src{font-size:11px;color:var(--g3);white-space:nowrap}
+.saved-actions{display:flex;gap:6px;flex-shrink:0}
+.saved-draft{padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;background:var(--blk);color:var(--y);border:none}
+.saved-del{padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;background:transparent;color:var(--g3);border:1px solid var(--g2)}
+.saved-del:hover{color:var(--red);border-color:var(--red)}
+.saved-add{display:flex;gap:8px;margin-top:8px}
+.saved-input{flex:1;padding:8px 12px;border:1px solid var(--g2);border-radius:7px;font-size:13px;outline:none;font-family:inherit}
+.saved-input:focus{border-color:var(--yd)}
 #workflow{display:none;min-height:100vh;background:#f5f0e8;overflow-y:auto}
 .wf-header{background:var(--blk);padding:0 24px;height:52px;display:flex;align-items:center;gap:16px;border-bottom:3px solid var(--y)}
 .wf-back{background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px}
@@ -117,7 +132,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v1.7</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v1.8</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -132,6 +147,18 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   <div class="stat"><div class="sn" id="s3">—</div><div class="sl">Layoff alerts</div></div>
 </div>
 <div class="errbanner" id="err"></div>
+
+<div class="saved-section" id="saved-section" style="display:none">
+  <div class="saved-header">
+    <span class="saved-label">Saved for later</span>
+    <span style="font-size:11px;color:var(--g3)" id="saved-count"></span>
+  </div>
+  <div class="saved-grid" id="saved-grid"></div>
+  <div class="saved-add">
+    <input class="saved-input" id="saved-url-input" placeholder="Paste any article URL to save..." onkeydown="if(event.key==='Enter')saveUrl()" />
+    <button class="btn" onclick="saveUrl()">Save</button>
+  </div>
+</div>
 <div class="tabs">
   <div class="tab on" id="tab-cards" onclick="switchTab('cards')">Cards</div>
   <div class="tab" id="tab-heatmap" onclick="switchTab('heatmap')">Heatmap</div>
@@ -347,7 +374,7 @@ function render(){
   grid.innerHTML=data.map(function(c,idx){
     var i=cards.indexOf(c);
     var bc=c.cat==='hiring'?'bh':c.cat==='layoffs'?'bl':c.cat==='expansion'?'be':c.cat==='investment'?'bi':c.cat==='policy'?'bp':'bg';
-    return '<div class="card '+c.cat+'"><div class="ctop"><span class="badge '+bc+'">'+c.cat+'</span><div class="heat"><span class="hl2">Heat</span><div class="hbars">'+hbars(c.heat)+'</div><span class="hl2">'+c.heat+'/10</span></div></div><div class="ctitle">'+c.title+'</div><div class="csrc">'+c.src+' &middot; '+c.ago+'</div><div class="cbot"><span class="sent s'+c.sent[0]+'">'+c.sent+'</span><div style="display:flex;gap:8px"><a href="'+c.link+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--yd);font-weight:500;text-decoration:none">Read</a><button class="draft-btn" onclick="openDraft('+i+')">Draft story</button></div></div></div>';
+            return '<div class="card '+c.cat+'"><div class="ctop"><span class="badge '+bc+'">'+c.cat+'</span><div class="heat"><span class="hl2">Heat</span><div class="hbars">'+hbars(c.heat)+'</div><span class="hl2">'+c.heat+'/10</span></div></div><div class="ctitle">'+c.title+'</div><div class="csrc">'+c.src+' &middot; '+c.ago+'</div><div class="cbot"><span class="sent s'+c.sent[0]+'">'+c.sent+'</span><div style="display:flex;gap:6px"><a href="'+c.link+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--yd);font-weight:500;text-decoration:none">Read</a><button class="draft-btn" style="background:var(--g2);color:var(--blk)" onclick="saveCard('+i+')">Save</button><button class="draft-btn" onclick="openDraft('+i+')">Draft</button></div></div></div>';
   }).join('');
   document.getElementById('s0').textContent=cards.length;
   var freq=cards.reduce(function(a,b){a[b.cat]=(a[b.cat]||0)+1;return a;},{});
@@ -474,7 +501,7 @@ function startGeneration(){
   },1200);
 
   var sourceInfo=currentCard._url?('Source URL: '+currentCard._url):('Source headline (do not copy): '+currentCard.title+'\nSource: '+currentCard.src);
-  var prompt='You are a senior editor at Wocult, an Indian workplace culture media brand. Sharp, culturally aware, human — not corporate.\n\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Focus on human and cultural impact on Indian workers')+'\n\nCreate an original Wocult headline — never copy the source. Punchy, specific, culturally Indian, for a 25-40 year old working professional.\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>800-1000 word article HTML with 4 h3 subheadings: Context, The Worker Angle, The Bigger Pattern, What Next. No bullet points.</p>","readTime":"X min read"}';
+  var prompt='You are a senior editor at Wocult, an Indian workplace culture media brand. Sharp, culturally aware, human — not corporate.\n\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Focus on human and cultural impact on Indian workers')+'\n\nCRITICAL FACTUAL STANDARDS — follow these strictly:\n1. NEVER invent or assume specific numbers, headcounts, ratings, or statistics. Only use figures explicitly stated in the source.\n2. Use ranges when the source gives ranges (e.g. "65,000-80,000 job opportunities" not "80,000 jobs").\n3. Distinguish between direct employment and "job opportunities" — these are not the same.\n4. For company HQ, founding history, brand count — only state what is publicly confirmed. If unsure, omit or use "reportedly".\n5. Employee sentiment data (Glassdoor etc.) must be attributed and softened: "employees rate it around X on Glassdoor" not stated as fact.\n6. Anything that is interpretation or analysis must be clearly framed as such: "suggests", "indicates", "appears to", not stated as confirmed fact.\n7. If a claim cannot be sourced from the article or widely known public record, remove it entirely. Do not fill gaps with plausible-sounding detail.\n8. Prefer "could create" over "will create", "targets" over "plans to achieve", "expects" over "confirms".\n\nCreate an original Wocult headline — never copy the source. Punchy, specific, culturally Indian, for a 25-40 year old working professional.\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>800-1000 word article HTML with 4 h3 subheadings: Context, The Worker Angle, The Bigger Pattern, What Next. Flowing prose, no bullet points. All statistics attributed to source. Uncertain claims softened.</p>","readTime":"X min read"}';
 
   fetch(WORKER+'/generate',{
     method:'POST',
@@ -597,9 +624,10 @@ function publishToWebflow(){
     name:document.getElementById('r-title').value,
     slug:document.getElementById('r-slug').value,
     'short-story-intro':document.getElementById('r-short').value,
-    '40-word-intro':document.getElementById('r-40').value,
+    'four-line-intro':document.getElementById('r-40').value,
     excerpt:document.getElementById('r-excerpt').value,
-    'story-intro-para-rich-text':document.getElementById('r-intro-rt').value,
+    'story-intro-para---rich-text':document.getElementById('r-intro-rt').value,
+    'story-intro':document.getElementById('r-short').value,
     body:document.getElementById('r-body').value,
     'read-time':document.getElementById('r-readtime').value,
     'publish-date':document.getElementById('r-date').value,
