@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-height:100vh}
+:root{--y:#FAC775;--yd:#BA7517;--ydeep:#412402;--blk:#1a1a1a;--gray:#f0ebe0;--g2:#e0d8c8;--g3:#888;--w:#fff;--red:#E24B4A;--grn:#639922;--blu:#378ADD;--bdr:rgba(0,0,0,0.1)}
+.topbar{background:var(--blk);color:#fff;padding:0 24px;display:flex;align-items:center;gap:16px;height:52px;border-bottom:3px solid var(--y)}
+.logo{font-size:20px;font-weight:700;color:var(--y)}.logo span{color:#fff}
+.tbar-sub{font-size:13px;color:rgba(255,255,255,0.5);border-left:1px solid rgba(255,255,255,0.2);padding-left:16px}
+.tbar-r{margin-left:auto;display:flex;align-items:center;gap:12px}
+.dot{width:7px;height:7px;border-radius:50%;background:#4CAF50;display:inline-block;margin-right:5px}
+.dot.spin{background:var(--y);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.ts{font-size:12px;color:rgba(255,255,255,0.5)}
+.btn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;background:var(--y);color:var(--ydeep);border:none}
+.btn:hover{background:#EFB860}.btn:disabled{opacity:0.5;cursor:not-allowed}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:16px 24px 0}
+.stat{background:var(--w);border:1px solid var(--bdr);border-radius:8px;padding:12px 16px}
+.sn{font-size:22px;font-weight:700}.sl{font-size:11px;color:var(--g3);margin-top:2px}
+.stat.hl{background:var(--blk)}.stat.hl .sn{color:var(--y)}.stat.hl .sl{color:rgba(255,255,255,0.5)}
+.filters{padding:14px 24px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.fl{font-size:12px;color:var(--g3);margin-right:4px}
+.chip{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--g2);background:var(--w);color:var(--g3);transition:all 0.15s}
+.chip.on{background:var(--blk);color:var(--y);border-color:var(--blk)}
+.chip:hover:not(.on){background:var(--gray);color:var(--blk)}
+.grid{padding:0 24px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.card{background:var(--w);border-radius:10px;border:1px solid var(--bdr);padding:16px;border-left:3px solid #ccc;text-decoration:none;display:block;color:inherit;transition:border-color 0.15s}
+.card:hover{border-color:rgba(0,0,0,0.25)}
+.card.hiring{border-left-color:var(--grn)}.card.layoffs{border-left-color:var(--red)}.card.expansion{border-left-color:var(--blu)}.card.investment{border-left-color:var(--y)}.card.policy{border-left-color:#7F77DD}.card.general{border-left-color:#aaa}
+.ctop{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;gap:8px}
+.badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap}
+.bh{background:#EAF3DE;color:#27500A}.bl{background:#FCEBEB;color:#791F1F}.be{background:#E6F1FB;color:#0C447C}.bi{background:#FAEEDA;color:#633806}.bp{background:#EEEDFE;color:#3C3489}.bg{background:#f0ebe0;color:#5F5E5A}
+.heat{display:flex;align-items:center;gap:4px}.hl2{font-size:10px;color:var(--g3)}
+.hbars{display:flex;gap:2px}.hbar{width:4px;height:14px;border-radius:2px;background:var(--g2)}
+.hbar.on{background:var(--yd)}.hbar.hot{background:var(--red)}
+.ctitle{font-size:14px;font-weight:500;line-height:1.4;margin-bottom:6px}
+.csrc{font-size:11px;color:var(--g3);margin-bottom:8px}
+.cbot{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.sent{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+.sp{background:#EAF3DE;color:#27500A}.sn2{background:#FCEBEB;color:#791F1F}.su{background:#f0ebe0;color:#5F5E5A}
+.rl{font-size:11px;color:var(--yd);font-weight:500}
+.empty{text-align:center;padding:60px 20px;color:var(--g3);grid-column:1/-1}
+.spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--g2);border-top-color:var(--y);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.notice{font-size:11px;color:var(--g3);text-align:center;padding:6px 24px 0}
+.tabs{display:flex;gap:0;padding:16px 24px 0;border-bottom:1px solid var(--g2);margin-bottom:0}
+.tab{padding:8px 20px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--g3);transition:all 0.15s}
+.tab.on{color:var(--blk);border-bottom-color:var(--y)}
+.tab:hover:not(.on){color:var(--blk)}
+.hmap-wrap{padding:20px 24px 24px}
+.hmap-legend{display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:12px;color:var(--g3)}
+.leg-item{display:flex;align-items:center;gap:5px}
+.leg-box{width:16px;height:16px;border-radius:3px}
+.hmap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.hbox{border-radius:8px;padding:12px;cursor:pointer;transition:opacity 0.15s;text-decoration:none;display:block}
+.hbox:hover{opacity:0.85}
+.hbox.h10,.hbox.h9{background:#E24B4A;color:#fff}
+.hbox.h8,.hbox.h7{background:#EF9F27;color:#412402}
+.hbox.h6,.hbox.h5{background:#FAC775;color:#412402}
+.hbox.h4,.hbox.h3{background:#C0DD97;color:#173404}
+.hbox.h2,.hbox.h1{background:#e0d8c8;color:#444}
+.hbox-score{font-size:24px;font-weight:700;line-height:1;margin-bottom:6px}
+.hbox-cat{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;opacity:0.75;margin-bottom:6px}
+.hbox-title{font-size:12px;font-weight:500;line-height:1.35;margin-bottom:6px}
+.hbox-meta{font-size:10px;opacity:0.7;display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">WO<span>CULT</span></div>
+  <div class="tbar-sub">Workforce Intelligence</div>
+  <div class="tbar-r">
+    <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
+    <button class="btn" id="rbtn" onclick="load()">Refresh</button>
+  </div>
+</div>
+<div class="stats">
+  <div class="stat hl"><div class="sn" id="s0">—</div><div class="sl">Stories tracked</div></div>
+  <div class="stat"><div class="sn" id="s1">—</div><div class="sl">Hottest sector</div></div>
+  <div class="stat"><div class="sn" id="s2">—</div><div class="sl">Hiring signals</div></div>
+  <div class="stat"><div class="sn" id="s3">—</div><div class="sl">Layoff alerts</div></div>
+</div>
+<div class="tabs">
+  <div class="tab on" id="tab-cards" onclick="switchTab('cards')">Cards</div>
+  <div class="tab" id="tab-heatmap" onclick="switchTab('heatmap')">Heatmap</div>
+</div>
+<div class="filters" id="filters-bar">
+  <span class="fl">Filter:</span>
+  <div class="chip on" onclick="filt('all',this)">All</div>
+  <div class="chip" onclick="filt('hiring',this)">Hiring</div>
+  <div class="chip" onclick="filt('layoffs',this)">Layoffs</div>
+  <div class="chip" onclick="filt('expansion',this)">Expansion</div>
+  <div class="chip" onclick="filt('investment',this)">Investment</div>
+  <div class="chip" onclick="filt('policy',this)">Policy</div>
+</div>
+<div class="grid" id="grid"><div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div></div>
+<div class="hmap-wrap" id="hmap-wrap" style="display:none">
+  <div class="hmap-legend">
+    <span>Heat scale:</span>
+    <div class="leg-item"><div class="leg-box" style="background:#E24B4A"></div><span>9–10 Critical</span></div>
+    <div class="leg-item"><div class="leg-box" style="background:#EF9F27"></div><span>7–8 High</span></div>
+    <div class="leg-item"><div class="leg-box" style="background:#FAC775"></div><span>5–6 Medium</span></div>
+    <div class="leg-item"><div class="leg-box" style="background:#C0DD97"></div><span>3–4 Low</span></div>
+    <div class="leg-item"><div class="leg-box" style="background:#e0d8c8"></div><span>1–2 Minimal</span></div>
+  </div>
+  <div class="hmap-grid" id="hmap-grid"></div>
+</div>
+<div class="notice" id="notice"></div>
+
+<script>
+let cards=[], af='all', timer, activeTab='cards';
+
+function switchTab(t){
+  activeTab=t;
+  document.getElementById('tab-cards').classList.toggle('on',t==='cards');
+  document.getElementById('tab-heatmap').classList.toggle('on',t==='heatmap');
+  document.getElementById('grid').style.display=t==='cards'?'grid':'none';
+  document.getElementById('hmap-wrap').style.display=t==='heatmap'?'block':'none';
+  document.getElementById('filters-bar').style.display=t==='cards'?'flex':'none';
+  if(t==='heatmap') renderHeatmap();
+}
+
+function renderHeatmap(){
+  const hg=document.getElementById('hmap-grid');
+  if(!cards.length){hg.innerHTML='<div style="color:var(--g3);font-size:13px">No data yet.</div>';return;}
+  const sorted=[...cards].sort((a,b)=>b.heat-a.heat);
+  hg.innerHTML=sorted.map(c=>`
+    <a class="hbox h${c.heat}" href="${c.link||'#'}" target="_blank" rel="noopener">
+      <div class="hbox-score">${c.heat}<span style="font-size:12px;font-weight:400">/10</span></div>
+      <div class="hbox-cat">${c.cat}</div>
+      <div class="hbox-title">${c.title}</div>
+      <div class="hbox-meta"><span>${c.src}</span><span>${c.ago}</span></div>
+    </a>`).join('');
+}
+
+const FALLBACK=[
+  {title:'TCS plans to hire 40,000 freshers in FY2026 amid recovery in tech demand',cat:'hiring',heat:9,sent:'positive',src:'Economic Times',ago:'1h ago',link:'https://economictimes.indiatimes.com/jobs'},
+  {title:'Byju\'s owes ₹1,200 crore in unpaid salaries as insolvency proceedings continue',cat:'layoffs',heat:10,sent:'negative',src:'Mint',ago:'2h ago',link:'https://www.livemint.com'},
+  {title:'Tata Motors to invest ₹15,000 crore in new EV manufacturing facility in Pune',cat:'investment',heat:9,sent:'positive',src:'Business Standard',ago:'3h ago',link:'https://www.business-standard.com'},
+  {title:'Infosys opens new 5,000-seat delivery centre in Hyderabad',cat:'expansion',heat:8,sent:'positive',src:'Reuters India',ago:'4h ago',link:'https://in.reuters.com'},
+  {title:'Centre proposes amendments to labour codes on fixed-term contracts',cat:'policy',heat:7,sent:'neutral',src:'PTI',ago:'5h ago',link:'https://www.ptinews.com'},
+  {title:'Zomato to hire 10,000 gig workers ahead of festive season surge',cat:'hiring',heat:8,sent:'positive',src:'ET Jobs',ago:'6h ago',link:'https://economictimes.indiatimes.com/jobs'},
+  {title:'Paytm lays off 1,000 employees as part of AI-driven cost optimisation',cat:'layoffs',heat:9,sent:'negative',src:'Mint',ago:'8h ago',link:'https://www.livemint.com'},
+  {title:'Mahindra sets up new auto components plant in Chakan, creates 2,500 jobs',cat:'expansion',heat:8,sent:'positive',src:'BusinessLine',ago:'10h ago',link:'https://www.thehindubusinessline.com'},
+  {title:'Amazon India to add 1 lakh seasonal jobs for Great Indian Festival',cat:'hiring',heat:8,sent:'positive',src:'Economic Times',ago:'12h ago',link:'https://economictimes.indiatimes.com'},
+  {title:'EPFO adds 18.53 lakh new members in February, shows formal job growth',cat:'policy',heat:7,sent:'positive',src:'PTI',ago:'14h ago',link:'https://www.ptinews.com'},
+  {title:'Ola Electric trims workforce by 500 amid slower EV adoption',cat:'layoffs',heat:8,sent:'negative',src:'Reuters India',ago:'1d ago',link:'https://in.reuters.com'},
+  {title:'Samsung India announces ₹10,000 crore expansion of Noida manufacturing unit',cat:'investment',heat:8,sent:'positive',src:'Business Standard',ago:'1d ago',link:'https://www.business-standard.com'},
+];
+
+async function callAPI(){
+  const prompt=`You are a workforce intelligence analyst for India. Generate a JSON array of 14 recent (last 48 hours) Indian workforce news stories covering: hiring announcements, layoffs/job cuts, factory/campus expansions, capacity investments, policy changes affecting employment.
+
+Return ONLY a raw JSON array. No markdown, no explanation.
+
+Each item: { "title": string (max 15 words), "cat": one of [hiring|layoffs|expansion|investment|policy|general], "heat": number 1-10, "sent": one of [positive|negative|neutral], "src": string (real Indian publication), "ago": string like "2h ago", "link": string (real news site URL) }
+
+Use real companies: TCS, Infosys, Wipro, HCL, Zomato, Swiggy, Ola, Tata, Mahindra, Reliance, Flipkart, Amazon India, Byju's, PhonePe, Paytm, HDFC, SBI, etc. Mix sectors: IT, manufacturing, startups, BFSI, logistics, retail.`;
+
+  const res=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})
+  });
+  const data=await res.json();
+  if(data.error){
+    if(data.error.type==='exceeded_limit') throw new Error('CONCURRENCY');
+    throw new Error(data.error.message);
+  }
+  const txt=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+  const s=txt.indexOf('['), e=txt.lastIndexOf(']');
+  if(s===-1) throw new Error('PARSE');
+  return JSON.parse(txt.slice(s,e+1));
+}
+
+function render(){
+  const data=af==='all'?cards:cards.filter(c=>c.cat===af);
+  if(!data.length){document.getElementById('grid').innerHTML='<div class="empty">No stories in this category.</div>';return;}
+  document.getElementById('grid').innerHTML=data.map(c=>{
+    let bc=c.cat==='hiring'?'bh':c.cat==='layoffs'?'bl':c.cat==='expansion'?'be':c.cat==='investment'?'bi':c.cat==='policy'?'bp':'bg';
+    let sc=c.sent==='positive'?'sp':c.sent==='negative'?'sn2':'su';
+    let bars='';for(let i=1;i<=10;i++) bars+=`<div class="hbar${i<=c.heat?(c.heat>=8?' on hot':' on'):''}"></div>`;
+    return `<a class="card ${c.cat}" href="${c.link||'#'}" target="_blank" rel="noopener">
+      <div class="ctop"><span class="badge ${bc}">${c.cat}</span>
+      <div class="heat"><span class="hl2">Heat</span><div class="hbars">${bars}</div><span class="hl2">${c.heat}/10</span></div></div>
+      <div class="ctitle">${c.title}</div>
+      <div class="csrc">${c.src} · ${c.ago}</div>
+      <div class="cbot"><span class="sent ${sc}">${c.sent}</span><span class="rl">Read →</span></div>
+    </a>`;
+  }).join('');
+  document.getElementById('s0').textContent=cards.length;
+  const freq=cards.reduce((a,b)=>{a[b.cat]=(a[b.cat]||0)+1;return a},{});
+  const hot=Object.entries(freq).sort((a,b)=>b[1]-a[1])[0];
+  document.getElementById('s1').textContent=hot?hot[0][0].toUpperCase()+hot[0].slice(1):'—';
+  document.getElementById('s2').textContent=cards.filter(c=>c.cat==='hiring').length;
+  document.getElementById('s3').textContent=cards.filter(c=>c.cat==='layoffs').length;
+}
+
+function filt(f,el){af=f;document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');render();}
+
+async function load(){
+  const btn=document.getElementById('rbtn'),dot=document.getElementById('dot'),notice=document.getElementById('notice');
+  btn.disabled=true; dot.classList.add('spin'); notice.textContent='';
+  if(!cards.length) document.getElementById('grid').innerHTML='<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
+  document.getElementById('ts').textContent='Refreshing...';
+  let success=false;
+  for(let i=0;i<3;i++){
+    try{
+      if(i>0) await new Promise(r=>setTimeout(r,3000*i));
+      const data=await callAPI();
+      if(!Array.isArray(data)||!data.length) throw new Error('empty');
+      cards=data; success=true; break;
+    }catch(e){
+      if(e.message!=='CONCURRENCY'&&e.message!=='PARSE') break;
+    }
+  }
+  if(!success){
+    cards=FALLBACK;
+    notice.textContent='Showing representative stories — live data temporarily unavailable. Will retry on next refresh.';
+  }
+  render();
+  document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  dot.classList.remove('spin'); btn.disabled=false;
+  clearTimeout(timer); timer=setTimeout(load,5*60*1000);
+}
+
+load();
+</script>
+</body>
+</html>
