@@ -338,12 +338,12 @@ const WF_TOKEN = '9739ddc13b83dbc83edc6bf981bf7804df98e6bee9a29853af92c8b6ec3a89
 const WF_COLLECTION = '695be252bae2cf37c3a4b17b';
 
 const QUERIES=[
-  {q:'india+hiring+recruitment+jobs+2025',cat:'hiring'},
-  {q:'india+layoffs+job+cuts+retrenchment+2025',cat:'layoffs'},
-  {q:'india+factory+expansion+new+plant+campus+2025',cat:'expansion'},
-  {q:'india+investment+capex+manufacturing+capacity+2025',cat:'investment'},
-  {q:'india+labour+policy+employment+workforce+government+2025',cat:'policy'},
-  {q:'india+workforce+jobs+industry+economy+2025',cat:'general'},
+  {q:'india+hiring+recruitment+jobs+when:2d',cat:'hiring'},
+  {q:'india+layoffs+job+cuts+retrenchment+when:2d',cat:'layoffs'},
+  {q:'india+factory+expansion+new+plant+campus+when:2d',cat:'expansion'},
+  {q:'india+investment+capex+manufacturing+capacity+when:2d',cat:'investment'},
+  {q:'india+labour+policy+employment+workforce+government+when:2d',cat:'policy'},
+  {q:'india+workforce+jobs+industry+economy+when:2d',cat:'general'},
 ];
 const POS=['hire','hiring','expand','invest','growth','rise','surge','boost','launch','appoint','fund'];
 const NEG=['layoff','fired','cut','reduc','restructur','fall','decline','retrench','shut'];
@@ -436,7 +436,15 @@ async function loadAll(){
     const results=await Promise.allSettled(QUERIES.map(fetchQ));
     const items=results.flatMap(r=>r.status==='fulfilled'?r.value:[]);
     const seen=new Set();
-    const fresh=items.filter(i=>{if(seen.has(i.title))return false;seen.add(i.title);return true;}).sort((a,b)=>b.heat-a.heat).slice(0,40);
+    const fortyEightHrsAgo = Date.now() - 48*60*60*1000;
+    const fresh=items
+      .filter(i=>{
+        if(seen.has(i.title)) return false;
+        seen.add(i.title);
+        const pubMs = new Date(i.pub||0).getTime();
+        return pubMs > fortyEightHrsAgo || !i.pub;
+      })
+      .sort((a,b)=>b.heat-a.heat).slice(0,40);
     if(fresh.length) cards=fresh;
     if(!cards.length) throw new Error('fallback');
     render();
@@ -466,7 +474,7 @@ async function loadAll(){
     err.style.display='block';
   }
   dot.classList.remove('spin'); btn.disabled=false;
-  clearTimeout(timer); timer=setTimeout(loadAll,5*60*1000);
+  clearTimeout(timer); timer=setTimeout(loadAll,30*60*1000);
 }
 
 // ── WORKFLOW ──
