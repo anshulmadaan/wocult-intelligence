@@ -242,6 +242,10 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       <input class="wf-input" id="img-url" placeholder="Paste image URL here..." style="flex:1" oninput="previewImg()" />
       <button class="btn" onclick="searchImages()">Search Unsplash</button>
     </div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+      <label style="font-size:12px;color:var(--g3)">Or upload from device:</label>
+      <input type="file" id="img-file" accept="image/*" onchange="handleImgUpload(event)" style="font-size:12px" />
+    </div>
     <div id="img-preview" style="margin-top:12px;display:none">
       <img id="img-preview-el" style="width:100%;max-height:240px;object-fit:cover;border-radius:8px;border:3px solid var(--y)" />
     </div>
@@ -268,6 +272,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   <div id="publish-result" style="display:none"></div>
   <div class="wf-actions" id="publish-actions">
     <button class="btn-lg" onclick="goStep(4)" style="background:var(--gray);border:none;cursor:pointer">Back</button>
+    <button class="btn-lg" onclick="exportCSV()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Export CSV</button>
     <button class="btn-lg btn-dark" id="publish-btn" onclick="publishToWebflow()">Publish to Webflow</button>
   </div>
 </div>
@@ -284,7 +289,9 @@ var QUERIES=[
   {q:'india+factory+expansion+new+plant+campus+when:2d',cat:'expansion'},
   {q:'india+investment+capex+manufacturing+capacity+when:2d',cat:'investment'},
   {q:'india+labour+policy+employment+workforce+government+when:2d',cat:'policy'},
-  {q:'india+workforce+jobs+industry+economy+when:2d',cat:'general'}
+  {q:'india+workforce+jobs+industry+economy+when:2d',cat:'general'},
+  {q:'india+hotel+hospitality+retail+logistics+jobs+create+when:2d',cat:'hiring'},
+  {q:'india+startup+unicorn+funding+headcount+talent+when:2d',cat:'investment'}
 ];
 var POS=['hire','hiring','expand','invest','growth','rise','surge','boost','launch','appoint','fund'];
 var NEG=['layoff','fired','cut','reduc','restructur','fall','decline','retrench','shut'];
@@ -505,6 +512,21 @@ function startGeneration(){
   });
 }
 
+function handleImgUpload(e){
+  var file=e.target.files[0];
+  if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    document.getElementById('img-url').value='';
+    var p=document.getElementById('img-preview');
+    var img=document.getElementById('img-preview-el');
+    img.src=ev.target.result;
+    p.style.display='block';
+    window._uploadedImgData=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 function previewImg(){var url=document.getElementById('img-url').value.trim();var p=document.getElementById('img-preview');document.getElementById('img-preview-el').src=url;p.style.display=url?'block':'none';}
 function setImgSearch(kw){window.open('https://unsplash.com/s/photos/'+encodeURIComponent(kw)+'?orientation=landscape','_blank');}
 function searchImages(){var t=document.getElementById('r-title').value||'india workplace';window.open('https://unsplash.com/s/photos/'+encodeURIComponent(t.split(' ').slice(0,3).join(' '))+'?orientation=landscape','_blank');}
@@ -516,6 +538,56 @@ function buildFinalPreview(){
   var date=document.getElementById('r-date').value;
   var rt=document.getElementById('r-readtime').value;
   document.getElementById('final-preview').innerHTML=(imgUrl?'<img src="'+imgUrl+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin-bottom:16px" />':'<div style="width:100%;height:80px;background:var(--g2);border-radius:6px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--g3)">No image selected</div>')+'<div style="font-size:11px;color:var(--g3);margin-bottom:6px">Affairs &middot; Wocult Team &middot; '+rt+' &middot; '+date+'</div><div style="font-size:18px;font-weight:600;margin-bottom:8px;line-height:1.3">'+title+'</div><div style="font-size:13px;color:var(--g3);line-height:1.6">'+excerpt.slice(0,200)+(excerpt.length>200?'...':'')+'</div>';
+}
+
+function exportCSV(){
+  var fields=[
+    ['Post Title', document.getElementById('r-title').value],
+    ['Slug', document.getElementById('r-slug').value],
+    ['Collection ID', '695be252bae2cf37c3a4b17b'],
+    ['Locale ID', ''],
+    ['Item ID', ''],
+    ['Archived', 'false'],
+    ['Draft', 'true'],
+    ['Created On', ''],
+    ['Updated On', ''],
+    ['Published On', ''],
+    ['Sub-Title-Heading', ''],
+    ['Category', 'Affairs'],
+    ['Excerpt', document.getElementById('r-excerpt').value],
+    ['Summary Rich Text', ''],
+    ['Story Intro Para', document.getElementById('r-short').value],
+    ['Story Intro Para - Rich Text', document.getElementById('r-intro-rt').value],
+    ['40 word intro', document.getElementById('r-40').value],
+    ['Short Story Intro', document.getElementById('r-short').value],
+    ['Body', document.getElementById('r-body').value],
+    ['Signal Type', ''],
+    ['Read time', document.getElementById('r-readtime').value],
+    ['Unwind Type', ''],
+    ['HOT', ''],
+    ['Featured', ''],
+    ['Signal', ''],
+    ['Editor Pick', ''],
+    ['Opinion', ''],
+    ['In focus', ''],
+    ['Trending', ''],
+    ['Publish date', document.getElementById('r-date').value],
+    ['Post Image', document.getElementById('img-url').value],
+    ['Writer', 'Wocult Team'],
+    ['Voice Type', '']
+  ];
+  function escCSV(v){
+    v=String(v||'').replace(/\r?\n/g,' ');
+    if(v.includes('"')||v.includes(',')||v.includes('\n')) return '"'+v.replace(/"/g,'""')+'"';
+    return v;
+  }
+  var rows=fields.map(function(f){return escCSV(f[0])+','+escCSV(f[1]);});
+  var csv=rows.join('\n');
+  var blob=new Blob([csv],{type:'text/csv'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=(document.getElementById('r-slug').value||'wocult-story')+'.csv';
+  a.click();
 }
 
 function publishToWebflow(){
@@ -536,9 +608,9 @@ function publishToWebflow(){
   };
   var imgUrl=document.getElementById('img-url').value.trim();
   if(imgUrl) fieldData['post-image']=imgUrl;
-  fetch('https://api.webflow.com/v2/collections/'+WF_COLLECTION+'/items',{
+  fetch(WORKER+'/webflow',{
     method:'POST',
-    headers:{'Authorization':'Bearer '+WF_TOKEN,'Content-Type':'application/json','accept':'application/json'},
+    headers:{'Content-Type':'application/json'},
     body:JSON.stringify({fieldData:fieldData,isDraft:true,isArchived:false})
   }).then(function(r){return r.json().then(function(d){return {ok:r.ok,data:d};});}).then(function(res){
     if(res.ok){
