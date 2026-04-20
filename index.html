@@ -6,8 +6,10 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-height:100vh}
 :root{--y:#FAC775;--yd:#BA7517;--ydeep:#412402;--blk:#1a1a1a;--gray:#f0ebe0;--g2:#e0d8c8;--g3:#888;--w:#fff;--red:#E24B4A;--grn:#639922;--blu:#378ADD;--bdr:rgba(0,0,0,0.1)}
-.topbar{background:var(--blk);color:#fff;padding:0 24px;display:flex;align-items:center;gap:16px;height:52px;border-bottom:3px solid var(--y)}
-.logo{font-size:20px;font-weight:700;color:var(--y)}.logo span{color:#fff}
+
+/* TOPBAR */
+.topbar{background:var(--blk);color:#fff;padding:0 24px;display:flex;align-items:center;gap:16px;height:52px;border-bottom:3px solid var(--y);position:sticky;top:0;z-index:50}
+.logo svg{display:block}
 .tbar-sub{font-size:13px;color:rgba(255,255,255,0.5);border-left:1px solid rgba(255,255,255,0.2);padding-left:16px}
 .tbar-r{margin-left:auto;display:flex;align-items:center;gap:12px}
 .dot{width:7px;height:7px;border-radius:50%;background:#4CAF50;display:inline-block;margin-right:5px}
@@ -16,18 +18,30 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .ts{font-size:12px;color:rgba(255,255,255,0.5)}
 .btn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;background:var(--y);color:var(--ydeep);border:none}
 .btn:hover{background:#EFB860}.btn:disabled{opacity:0.5;cursor:not-allowed}
+.btn-blk{background:var(--blk);color:var(--y);border:1px solid var(--y)}
+.btn-blk:hover{background:#222}
+.btn-ghost{background:transparent;color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.2)}
+.btn-ghost:hover{background:rgba(255,255,255,0.1);color:#fff}
+
+/* STATS */
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:16px 24px 0}
 .stat{background:var(--w);border:1px solid var(--bdr);border-radius:8px;padding:12px 16px}
 .sn{font-size:22px;font-weight:700}.sl{font-size:11px;color:var(--g3);margin-top:2px}
 .stat.hl{background:var(--blk)}.stat.hl .sn{color:var(--y)}.stat.hl .sl{color:rgba(255,255,255,0.5)}
-.filters{padding:14px 24px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* TABS + FILTERS */
+.tabs{display:flex;padding:14px 24px 0;gap:0;border-bottom:1px solid var(--g2)}
+.tab{padding:8px 20px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--g3)}
+.tab.on{color:var(--blk);border-bottom-color:var(--y)}
+.filters{padding:12px 24px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .fl{font-size:12px;color:var(--g3);margin-right:4px}
 .chip{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--g2);background:var(--w);color:var(--g3);transition:all 0.15s}
 .chip.on{background:var(--blk);color:var(--y);border-color:var(--blk)}
 .chip:hover:not(.on){background:var(--gray);color:var(--blk)}
+
+/* CARDS GRID */
 .grid{padding:0 24px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-.card{background:var(--w);border-radius:10px;border:1px solid var(--bdr);padding:16px;border-left:3px solid #ccc;text-decoration:none;display:block;color:inherit;transition:border-color 0.15s}
-.card:hover{border-color:rgba(0,0,0,0.25)}
+.card{background:var(--w);border-radius:10px;border:1px solid var(--bdr);padding:16px;border-left:3px solid #ccc;color:inherit}
 .card.hiring{border-left-color:var(--grn)}.card.layoffs{border-left-color:var(--red)}.card.expansion{border-left-color:var(--blu)}.card.investment{border-left-color:var(--y)}.card.policy{border-left-color:#7F77DD}.card.general{border-left-color:#aaa}
 .ctop{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;gap:8px}
 .badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap}
@@ -36,57 +50,119 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .hbars{display:flex;gap:2px}.hbar{width:4px;height:14px;border-radius:2px;background:var(--g2)}
 .hbar.on{background:var(--yd)}.hbar.hot{background:var(--red)}
 .ctitle{font-size:14px;font-weight:500;line-height:1.4;margin-bottom:6px}
-.csrc{font-size:11px;color:var(--g3);margin-bottom:8px}
+.csrc{font-size:11px;color:var(--g3);margin-bottom:10px}
 .cbot{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .sent{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
 .sp{background:#EAF3DE;color:#27500A}.sn2{background:#FCEBEB;color:#791F1F}.su{background:#f0ebe0;color:#5F5E5A}
-.rl{font-size:11px;color:var(--yd);font-weight:500}
-.empty{text-align:center;padding:60px 20px;color:var(--g3);grid-column:1/-1}
-.spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--g2);border-top-color:var(--y);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
-@keyframes spin{to{transform:rotate(360deg)}}
-.notice{font-size:11px;color:var(--g3);text-align:center;padding:6px 24px 0}
-.tabs{display:flex;gap:0;padding:16px 24px 0;border-bottom:1px solid var(--g2);margin-bottom:0}
-.tab{padding:8px 20px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--g3);transition:all 0.15s}
-.tab.on{color:var(--blk);border-bottom-color:var(--y)}
-.tab:hover:not(.on){color:var(--blk)}
-.hmap-wrap{padding:20px 24px 24px}
-.hmap-legend{display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:12px;color:var(--g3)}
+.draft-btn{padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;background:var(--blk);color:var(--y);border:none}
+.draft-btn:hover{background:#333}
+
+/* HEATMAP */
+.hmap-wrap{padding:16px 24px 24px}
+.hmap-legend{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:12px;color:var(--g3)}
 .leg-item{display:flex;align-items:center;gap:5px}
-.leg-box{width:16px;height:16px;border-radius:3px}
+.leg-box{width:14px;height:14px;border-radius:3px}
 .hmap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
-.hbox{border-radius:8px;padding:12px;cursor:pointer;transition:opacity 0.15s;text-decoration:none;display:block}
+.hbox{border-radius:8px;padding:12px;cursor:pointer;display:block;text-decoration:none}
 .hbox:hover{opacity:0.85}
 .hbox.h10,.hbox.h9{background:#E24B4A;color:#fff}
 .hbox.h8,.hbox.h7{background:#EF9F27;color:#412402}
 .hbox.h6,.hbox.h5{background:#FAC775;color:#412402}
 .hbox.h4,.hbox.h3{background:#C0DD97;color:#173404}
 .hbox.h2,.hbox.h1{background:#e0d8c8;color:#444}
-.hbox-score{font-size:24px;font-weight:700;line-height:1;margin-bottom:6px}
-.hbox-cat{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;opacity:0.75;margin-bottom:6px}
+.hbox-score{font-size:22px;font-weight:700;line-height:1;margin-bottom:4px}
+.hbox-cat{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;opacity:0.75;margin-bottom:5px}
 .hbox-title{font-size:12px;font-weight:500;line-height:1.35;margin-bottom:6px}
-.hbox-meta{font-size:10px;opacity:0.7;display:flex;justify-content:space-between}
+.hbox-meta{font-size:10px;opacity:0.7;display:flex;justify-content:space-between;margin-bottom:6px}
+.hbox-draft{font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(0,0,0,0.15);cursor:pointer;border:none;color:inherit}
+
+.empty{text-align:center;padding:60px 20px;color:var(--g3);grid-column:1/-1}
+.spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--g2);border-top-color:var(--y);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.errbanner{background:#FCEBEB;border:1px solid #F09595;border-radius:8px;padding:10px 16px;margin:12px 24px 0;font-size:12px;color:#791F1F;display:none}
+
+/* ── EDITORIAL WORKFLOW ── */
+#workflow{display:none;min-height:100vh;background:#f5f0e8}
+.wf-header{background:var(--blk);padding:0 24px;height:52px;display:flex;align-items:center;gap:16px;border-bottom:3px solid var(--y)}
+.wf-back{background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px}
+.wf-back:hover{color:#fff}
+.wf-steps{display:flex;gap:0;margin-left:24px}
+.wf-step{padding:6px 16px;font-size:12px;color:rgba(255,255,255,0.4);border-bottom:2px solid transparent;cursor:default}
+.wf-step.done{color:rgba(255,255,255,0.6)}
+.wf-step.active{color:var(--y);border-bottom-color:var(--y)}
+.wf-body{max-width:800px;margin:0 auto;padding:32px 24px}
+.wf-section{background:var(--w);border-radius:12px;border:1px solid var(--bdr);padding:24px;margin-bottom:20px}
+.wf-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--g3);margin-bottom:8px;display:block}
+.wf-input{width:100%;padding:10px 14px;border:1px solid var(--g2);border-radius:8px;font-size:14px;background:var(--w);color:var(--blk);outline:none;font-family:inherit;transition:border 0.15s}
+.wf-input:focus{border-color:var(--yd)}
+.wf-textarea{width:100%;padding:10px 14px;border:1px solid var(--g2);border-radius:8px;font-size:13px;background:var(--w);color:var(--blk);outline:none;font-family:inherit;resize:vertical;min-height:80px;line-height:1.6;transition:border 0.15s}
+.wf-textarea:focus{border-color:var(--yd)}
+.wf-textarea.body-field{min-height:300px}
+.wf-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.wf-field{margin-bottom:16px}
+.wf-actions{display:flex;gap:12px;justify-content:flex-end;padding-top:8px}
+.btn-lg{padding:10px 28px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:none}
+.btn-y{background:var(--y);color:var(--ydeep)}.btn-y:hover{background:#EFB860}
+.btn-dark{background:var(--blk);color:var(--y)}.btn-dark:hover{background:#333}
+.source-card{background:var(--gray);border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start}
+.source-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;background:var(--blk);color:var(--y);white-space:nowrap;margin-top:2px}
+.source-title{font-size:14px;font-weight:500;line-height:1.4}
+.source-meta{font-size:11px;color:var(--g3);margin-top:3px}
+.gen-loading{text-align:center;padding:60px 20px}
+.gen-spinner{width:48px;height:48px;border:4px solid var(--g2);border-top-color:var(--y);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 20px}
+.gen-label{font-size:15px;font-weight:500;margin-bottom:8px}
+.gen-sub{font-size:13px;color:var(--g3)}
+.gen-steps{margin-top:24px;display:flex;flex-direction:column;gap:8px;max-width:300px;margin:24px auto 0}
+.gen-step-item{font-size:12px;color:var(--g3);display:flex;align-items:center;gap:8px}
+.gen-step-item.done{color:var(--grn)}.gen-step-item.active{color:var(--yd)}
+.step-dot{width:8px;height:8px;border-radius:50%;background:var(--g2);flex-shrink:0}
+.gen-step-item.done .step-dot{background:var(--grn)}.gen-step-item.active .step-dot{background:var(--yd);animation:pulse 1s infinite}
+.img-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.img-option{border-radius:8px;overflow:hidden;cursor:pointer;border:3px solid transparent;transition:border-color 0.15s;aspect-ratio:16/9;background:var(--g2)}
+.img-option.selected{border-color:var(--y)}
+.img-option img{width:100%;height:100%;object-fit:cover}
+.img-url-row{display:flex;gap:10px;margin-top:12px}
+.publish-success{text-align:center;padding:40px 20px}
+.publish-icon{font-size:48px;margin-bottom:16px}
+.publish-title{font-size:20px;font-weight:600;margin-bottom:8px}
+.publish-sub{font-size:14px;color:var(--g3);margin-bottom:24px}
+.field-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;background:var(--gray);color:var(--g3);margin-left:8px;vertical-align:middle}
 </style>
 </head>
 <body>
+
+<!-- ═══ MAIN DASHBOARD ═══ -->
+<div id="main">
 <div class="topbar">
-  <div class="logo">WO<span>CULT</span></div>
+  <div style="display:flex;align-items:center">
+    <svg height="34" viewBox="0 0 220 34" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="17" cy="17" r="16" fill="#FAC775"/>
+      <text x="17" y="23" text-anchor="middle" font-family="Georgia,serif" font-size="18" font-weight="700" fill="#1a1a1a">W</text>
+      <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
+    </svg>
+  </div>
   <div class="tbar-sub">Workforce Intelligence</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
-    <button class="btn" id="rbtn" onclick="load()">Refresh</button>
+    <button class="btn" id="rbtn" onclick="loadAll()">Refresh</button>
   </div>
 </div>
+
 <div class="stats">
   <div class="stat hl"><div class="sn" id="s0">—</div><div class="sl">Stories tracked</div></div>
   <div class="stat"><div class="sn" id="s1">—</div><div class="sl">Hottest sector</div></div>
   <div class="stat"><div class="sn" id="s2">—</div><div class="sl">Hiring signals</div></div>
   <div class="stat"><div class="sn" id="s3">—</div><div class="sl">Layoff alerts</div></div>
 </div>
+
+<div class="errbanner" id="err"></div>
+
 <div class="tabs">
   <div class="tab on" id="tab-cards" onclick="switchTab('cards')">Cards</div>
   <div class="tab" id="tab-heatmap" onclick="switchTab('heatmap')">Heatmap</div>
 </div>
-<div class="filters" id="filters-bar">
+
+<div id="filters-bar" class="filters">
   <span class="fl">Filter:</span>
   <div class="chip on" onclick="filt('all',this)">All</div>
   <div class="chip" onclick="filt('hiring',this)">Hiring</div>
@@ -95,22 +171,206 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   <div class="chip" onclick="filt('investment',this)">Investment</div>
   <div class="chip" onclick="filt('policy',this)">Policy</div>
 </div>
+
 <div class="grid" id="grid"><div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div></div>
 <div class="hmap-wrap" id="hmap-wrap" style="display:none">
   <div class="hmap-legend">
-    <span>Heat scale:</span>
-    <div class="leg-item"><div class="leg-box" style="background:#E24B4A"></div><span>9–10 Critical</span></div>
-    <div class="leg-item"><div class="leg-box" style="background:#EF9F27"></div><span>7–8 High</span></div>
-    <div class="leg-item"><div class="leg-box" style="background:#FAC775"></div><span>5–6 Medium</span></div>
-    <div class="leg-item"><div class="leg-box" style="background:#C0DD97"></div><span>3–4 Low</span></div>
-    <div class="leg-item"><div class="leg-box" style="background:#e0d8c8"></div><span>1–2 Minimal</span></div>
+    <span>Heat:</span>
+    <div class="leg-item"><div class="leg-box" style="background:#E24B4A"></div><span>9–10</span></div>
+    <div class="leg-item"><div class="leg-box" style="background:#EF9F27"></div><span>7–8</span></div>
+    <div class="leg-item"><div class="leg-box" style="background:#FAC775"></div><span>5–6</span></div>
+    <div class="leg-item"><div class="leg-box" style="background:#C0DD97"></div><span>3–4</span></div>
   </div>
   <div class="hmap-grid" id="hmap-grid"></div>
 </div>
-<div class="notice" id="notice"></div>
+</div>
+
+<!-- ═══ EDITORIAL WORKFLOW ═══ -->
+<div id="workflow">
+<div class="wf-header">
+  <button class="wf-back" onclick="closeWorkflow()">← Back to dashboard</button>
+  <div class="wf-steps">
+    <div class="wf-step active" id="ws1">1. Brief</div>
+    <div class="wf-step" id="ws2">2. Generate</div>
+    <div class="wf-step" id="ws3">3. Review</div>
+    <div class="wf-step" id="ws4">4. Image</div>
+    <div class="wf-step" id="ws5">5. Publish</div>
+  </div>
+</div>
+
+<!-- STEP 1: BRIEF -->
+<div id="step1" class="wf-body">
+  <div class="source-card" id="source-card"></div>
+  <div class="wf-section">
+    <div style="font-size:16px;font-weight:600;margin-bottom:4px">Editorial brief</div>
+    <div style="font-size:13px;color:var(--g3);margin-bottom:20px">Refine the headline and add your editorial angle before generating</div>
+    <div class="wf-field">
+      <label class="wf-label">Headline <span class="field-badge">Post Title</span></label>
+      <input class="wf-input" id="b-title" placeholder="Story headline..." />
+    </div>
+    <div class="wf-field">
+      <label class="wf-label">Editorial angle & notes</label>
+      <textarea class="wf-textarea" id="b-angle" placeholder="What's the Wocult angle? Who does this impact? Any specific focus areas, stats to include, or context to add..."></textarea>
+    </div>
+    <div class="wf-row">
+      <div class="wf-field">
+        <label class="wf-label">Category <span class="field-badge">Always: Affairs</span></label>
+        <input class="wf-input" value="Affairs" readonly style="background:var(--gray);color:var(--g3)" />
+      </div>
+      <div class="wf-field">
+        <label class="wf-label">Writer <span class="field-badge">Always: Wocult Team</span></label>
+        <input class="wf-input" value="Wocult Team" readonly style="background:var(--gray);color:var(--g3)" />
+      </div>
+    </div>
+  </div>
+  <div class="wf-actions">
+    <button class="btn-lg btn-y" onclick="startGeneration()">Generate story →</button>
+  </div>
+</div>
+
+<!-- STEP 2: GENERATING -->
+<div id="step2" class="wf-body" style="display:none">
+  <div class="gen-loading">
+    <div class="gen-spinner"></div>
+    <div class="gen-label">Writing your story...</div>
+    <div class="gen-sub">Claude is researching and drafting all fields</div>
+    <div class="gen-steps">
+      <div class="gen-step-item active" id="gs1"><div class="step-dot"></div>Analysing source and angle</div>
+      <div class="gen-step-item" id="gs2"><div class="step-dot"></div>Writing intro and excerpt</div>
+      <div class="gen-step-item" id="gs3"><div class="step-dot"></div>Drafting full article body</div>
+      <div class="gen-step-item" id="gs4"><div class="step-dot"></div>Finalising all fields</div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 3: REVIEW -->
+<div id="step3" class="wf-body" style="display:none">
+  <div class="wf-section">
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px">Review & edit</div>
+    <div class="wf-field">
+      <label class="wf-label">Post Title</label>
+      <input class="wf-input" id="r-title" />
+    </div>
+    <div class="wf-field">
+      <label class="wf-label">Slug</label>
+      <input class="wf-input" id="r-slug" />
+    </div>
+    <div class="wf-field">
+      <label class="wf-label">Short Story Intro <span class="field-badge">15–20 words</span></label>
+      <input class="wf-input" id="r-short" />
+    </div>
+    <div class="wf-field">
+      <label class="wf-label">40 Word Intro</label>
+      <textarea class="wf-textarea" id="r-40" style="min-height:60px"></textarea>
+    </div>
+    <div class="wf-field">
+      <label class="wf-label">Excerpt <span class="field-badge">100 words</span></label>
+      <textarea class="wf-textarea" id="r-excerpt"></textarea>
+    </div>
+    <div class="wf-field">
+      <label class="wf-label">Story Intro Para — Rich Text <span class="field-badge">First 100 words</span></label>
+      <textarea class="wf-textarea" id="r-intro-rt" style="min-height:120px;font-family:monospace;font-size:12px"></textarea>
+    </div>
+    <div class="wf-field">
+      <label class="wf-label">Body <span class="field-badge">Full article</span></label>
+      <textarea class="wf-textarea body-field" id="r-body" style="font-family:monospace;font-size:12px"></textarea>
+    </div>
+    <div class="wf-row">
+      <div class="wf-field">
+        <label class="wf-label">Read Time</label>
+        <input class="wf-input" id="r-readtime" />
+      </div>
+      <div class="wf-field">
+        <label class="wf-label">Publish Date</label>
+        <input class="wf-input" type="date" id="r-date" />
+      </div>
+    </div>
+  </div>
+  <div class="wf-actions">
+    <button class="btn-lg" onclick="goStep(1)" style="background:var(--gray);border:none;cursor:pointer">← Back</button>
+    <button class="btn-lg btn-y" onclick="goStep(4)">Choose image →</button>
+  </div>
+</div>
+
+<!-- STEP 4: IMAGE -->
+<div id="step4" class="wf-body" style="display:none">
+  <div class="wf-section">
+    <div style="font-size:16px;font-weight:600;margin-bottom:4px">Select image</div>
+    <div style="font-size:13px;color:var(--g3);margin-bottom:16px">Paste an image URL or search for one</div>
+    <div class="img-url-row">
+      <input class="wf-input" id="img-url" placeholder="Paste image URL here..." style="flex:1" oninput="previewImg()" />
+      <button class="btn" onclick="searchImages()">Search Unsplash</button>
+    </div>
+    <div id="img-preview" style="margin-top:12px;display:none">
+      <img id="img-preview-el" style="width:100%;max-height:240px;object-fit:cover;border-radius:8px;border:3px solid var(--y)" />
+    </div>
+    <div style="margin-top:16px">
+      <div class="wf-label">Suggested searches</div>
+      <div id="img-suggestions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
+    </div>
+  </div>
+  <div class="wf-actions">
+    <button class="btn-lg" onclick="goStep(3)" style="background:var(--gray);border:none;cursor:pointer">← Back</button>
+    <button class="btn-lg btn-y" onclick="goStep(5)">Review & publish →</button>
+  </div>
+</div>
+
+<!-- STEP 5: PUBLISH -->
+<div id="step5" class="wf-body" style="display:none">
+  <div class="wf-section">
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px">Final review before publishing</div>
+    <div id="final-preview" style="border:1px solid var(--g2);border-radius:8px;padding:16px;background:var(--gray)"></div>
+  </div>
+  <div class="wf-section" style="background:#FFF8F0;border-color:#FAC775">
+    <div style="font-size:13px;font-weight:500;margin-bottom:4px">Publishing to Webflow CMS as draft</div>
+    <div style="font-size:12px;color:var(--g3)">The article will be saved as a draft — you can review and publish it from the Webflow dashboard.</div>
+  </div>
+  <div id="publish-result" style="display:none"></div>
+  <div class="wf-actions" id="publish-actions">
+    <button class="btn-lg" onclick="goStep(4)" style="background:var(--gray);border:none;cursor:pointer">← Back</button>
+    <button class="btn-lg btn-dark" id="publish-btn" onclick="publishToWebflow()">Publish to Webflow →</button>
+  </div>
+</div>
+</div>
 
 <script>
-let cards=[], af='all', timer, activeTab='cards';
+const WF_TOKEN = '9739ddc13b83dbc83edc6bf981bf7804df98e6bee9a29853af92c8b6ec3a89ab';
+const WF_COLLECTION = '695be252bae2cf37c3a4b17b';
+
+const QUERIES=[
+  {q:'india+hiring+recruitment+jobs+2025',cat:'hiring'},
+  {q:'india+layoffs+job+cuts+retrenchment+2025',cat:'layoffs'},
+  {q:'india+factory+expansion+new+plant+campus+2025',cat:'expansion'},
+  {q:'india+investment+capex+manufacturing+capacity+2025',cat:'investment'},
+  {q:'india+labour+policy+employment+workforce+government+2025',cat:'policy'},
+  {q:'india+workforce+jobs+industry+economy+2025',cat:'general'},
+];
+const POS=['hire','hiring','expand','invest','growth','rise','surge','boost','launch','appoint','fund'];
+const NEG=['layoff','fired','cut','reduc','restructur','fall','decline','retrench','shut'];
+
+let cards=[], af='all', activeTab='cards', timer;
+let currentCard=null, currentStep=1, generatedContent={};
+
+// ── DASHBOARD ──
+function sentiment(t){const s=t.toLowerCase();const p=POS.filter(k=>s.includes(k)).length;const n=NEG.filter(k=>s.includes(k)).length;return n>p?'negative':p>n?'positive':'neutral';}
+function heat(pub,cat){const h=(Date.now()-new Date(pub||Date.now()).getTime())/3600000;let sc=h<2?10:h<6?9:h<12?8:h<24?7:h<48?5:3;if(cat==='layoffs'||cat==='investment') sc=Math.min(10,sc+1);return Math.max(1,sc);}
+function ago(d){if(!d) return 'recent';const h=Math.floor((Date.now()-new Date(d))/3600000);return h<1?Math.floor((Date.now()-new Date(d))/60000)+'m ago':h<24?h+'h ago':Math.floor(h/24)+'d ago';}
+function strip(s){return (s||'').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();}
+
+async function fetchQ(q){
+  const WORKER='https://wocult-news-proxy.anmadaan.workers.dev';
+  const r=await fetch(`${WORKER}?q=${encodeURIComponent(q.q)}`,{signal:AbortSignal.timeout(12000)});
+  const xml=new DOMParser().parseFromString(await r.text(),'text/xml');
+  return [...xml.querySelectorAll('item')].slice(0,6).map(item=>{
+    const title=strip(item.querySelector('title')?.textContent||'');
+    const link=item.querySelector('link')?.textContent||item.querySelector('link')?.nextSibling?.textContent||'#';
+    const pub=item.querySelector('pubDate')?.textContent||'';
+    const src=strip(item.querySelector('source')?.textContent||'Google News');
+    return {title,link,pub,src,cat:q.cat,sent:sentiment(title),heat:heat(pub,q.cat),ago:ago(pub)};
+  }).filter(i=>i.title.length>10);
+}
+
+function filt(f,el){af=f;document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');render();}
 
 function switchTab(t){
   activeTab=t;
@@ -122,73 +382,29 @@ function switchTab(t){
   if(t==='heatmap') renderHeatmap();
 }
 
-function renderHeatmap(){
-  const hg=document.getElementById('hmap-grid');
-  if(!cards.length){hg.innerHTML='<div style="color:var(--g3);font-size:13px">No data yet.</div>';return;}
-  const sorted=[...cards].sort((a,b)=>b.heat-a.heat);
-  hg.innerHTML=sorted.map(c=>`
-    <a class="hbox h${c.heat}" href="${c.link||'#'}" target="_blank" rel="noopener">
-      <div class="hbox-score">${c.heat}<span style="font-size:12px;font-weight:400">/10</span></div>
-      <div class="hbox-cat">${c.cat}</div>
-      <div class="hbox-title">${c.title}</div>
-      <div class="hbox-meta"><span>${c.src}</span><span>${c.ago}</span></div>
-    </a>`).join('');
-}
-
-const FALLBACK=[
-  {title:'TCS plans to hire 40,000 freshers in FY2026 amid recovery in tech demand',cat:'hiring',heat:9,sent:'positive',src:'Economic Times',ago:'1h ago',link:'https://economictimes.indiatimes.com/jobs'},
-  {title:'Byju\'s owes ₹1,200 crore in unpaid salaries as insolvency proceedings continue',cat:'layoffs',heat:10,sent:'negative',src:'Mint',ago:'2h ago',link:'https://www.livemint.com'},
-  {title:'Tata Motors to invest ₹15,000 crore in new EV manufacturing facility in Pune',cat:'investment',heat:9,sent:'positive',src:'Business Standard',ago:'3h ago',link:'https://www.business-standard.com'},
-  {title:'Infosys opens new 5,000-seat delivery centre in Hyderabad',cat:'expansion',heat:8,sent:'positive',src:'Reuters India',ago:'4h ago',link:'https://in.reuters.com'},
-  {title:'Centre proposes amendments to labour codes on fixed-term contracts',cat:'policy',heat:7,sent:'neutral',src:'PTI',ago:'5h ago',link:'https://www.ptinews.com'},
-  {title:'Zomato to hire 10,000 gig workers ahead of festive season surge',cat:'hiring',heat:8,sent:'positive',src:'ET Jobs',ago:'6h ago',link:'https://economictimes.indiatimes.com/jobs'},
-  {title:'Paytm lays off 1,000 employees as part of AI-driven cost optimisation',cat:'layoffs',heat:9,sent:'negative',src:'Mint',ago:'8h ago',link:'https://www.livemint.com'},
-  {title:'Mahindra sets up new auto components plant in Chakan, creates 2,500 jobs',cat:'expansion',heat:8,sent:'positive',src:'BusinessLine',ago:'10h ago',link:'https://www.thehindubusinessline.com'},
-  {title:'Amazon India to add 1 lakh seasonal jobs for Great Indian Festival',cat:'hiring',heat:8,sent:'positive',src:'Economic Times',ago:'12h ago',link:'https://economictimes.indiatimes.com'},
-  {title:'EPFO adds 18.53 lakh new members in February, shows formal job growth',cat:'policy',heat:7,sent:'positive',src:'PTI',ago:'14h ago',link:'https://www.ptinews.com'},
-  {title:'Ola Electric trims workforce by 500 amid slower EV adoption',cat:'layoffs',heat:8,sent:'negative',src:'Reuters India',ago:'1d ago',link:'https://in.reuters.com'},
-  {title:'Samsung India announces ₹10,000 crore expansion of Noida manufacturing unit',cat:'investment',heat:8,sent:'positive',src:'Business Standard',ago:'1d ago',link:'https://www.business-standard.com'},
-];
-
-async function callAPI(){
-  const prompt=`You are a workforce intelligence analyst for India. Generate a JSON array of 14 recent (last 48 hours) Indian workforce news stories covering: hiring announcements, layoffs/job cuts, factory/campus expansions, capacity investments, policy changes affecting employment.
-
-Return ONLY a raw JSON array. No markdown, no explanation.
-
-Each item: { "title": string (max 15 words), "cat": one of [hiring|layoffs|expansion|investment|policy|general], "heat": number 1-10, "sent": one of [positive|negative|neutral], "src": string (real Indian publication), "ago": string like "2h ago", "link": string (real news site URL) }
-
-Use real companies: TCS, Infosys, Wipro, HCL, Zomato, Swiggy, Ola, Tata, Mahindra, Reliance, Flipkart, Amazon India, Byju's, PhonePe, Paytm, HDFC, SBI, etc. Mix sectors: IT, manufacturing, startups, BFSI, logistics, retail.`;
-
-  const res=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})
-  });
-  const data=await res.json();
-  if(data.error){
-    if(data.error.type==='exceeded_limit') throw new Error('CONCURRENCY');
-    throw new Error(data.error.message);
-  }
-  const txt=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
-  const s=txt.indexOf('['), e=txt.lastIndexOf(']');
-  if(s===-1) throw new Error('PARSE');
-  return JSON.parse(txt.slice(s,e+1));
-}
+function hbars(sc){let b='';for(let i=1;i<=10;i++) b+=`<div class="hbar${i<=sc?(sc>=8?' on hot':' on'):''}"></div>`;return b;}
 
 function render(){
+  const grid=document.getElementById('grid');
   const data=af==='all'?cards:cards.filter(c=>c.cat===af);
-  if(!data.length){document.getElementById('grid').innerHTML='<div class="empty">No stories in this category.</div>';return;}
-  document.getElementById('grid').innerHTML=data.map(c=>{
+  if(!data.length){grid.innerHTML='<div class="empty">No stories in this category.</div>';return;}
+  grid.innerHTML=data.map(c=>{
     let bc=c.cat==='hiring'?'bh':c.cat==='layoffs'?'bl':c.cat==='expansion'?'be':c.cat==='investment'?'bi':c.cat==='policy'?'bp':'bg';
-    let sc=c.sent==='positive'?'sp':c.sent==='negative'?'sn2':'su';
-    let bars='';for(let i=1;i<=10;i++) bars+=`<div class="hbar${i<=c.heat?(c.heat>=8?' on hot':' on'):''}"></div>`;
-    return `<a class="card ${c.cat}" href="${c.link||'#'}" target="_blank" rel="noopener">
-      <div class="ctop"><span class="badge ${bc}">${c.cat}</span>
-      <div class="heat"><span class="hl2">Heat</span><div class="hbars">${bars}</div><span class="hl2">${c.heat}/10</span></div></div>
+    return `<div class="card ${c.cat}">
+      <div class="ctop">
+        <span class="badge ${bc}">${c.cat}</span>
+        <div class="heat"><span class="hl2">Heat</span><div class="hbars">${hbars(c.heat)}</div><span class="hl2">${c.heat}/10</span></div>
+      </div>
       <div class="ctitle">${c.title}</div>
       <div class="csrc">${c.src} · ${c.ago}</div>
-      <div class="cbot"><span class="sent ${sc}">${c.sent}</span><span class="rl">Read →</span></div>
-    </a>`;
+      <div class="cbot">
+        <span class="sent s${c.sent[0]}">${c.sent}</span>
+        <div style="display:flex;gap:8px">
+          <a href="${c.link}" target="_blank" rel="noopener" style="font-size:11px;color:var(--yd);font-weight:500;text-decoration:none">Read →</a>
+          <button class="draft-btn" onclick="openDraft(${cards.indexOf(c)})">Draft story</button>
+        </div>
+      </div>
+    </div>`;
   }).join('');
   document.getElementById('s0').textContent=cards.length;
   const freq=cards.reduce((a,b)=>{a[b.cat]=(a[b.cat]||0)+1;return a},{});
@@ -198,35 +414,240 @@ function render(){
   document.getElementById('s3').textContent=cards.filter(c=>c.cat==='layoffs').length;
 }
 
-function filt(f,el){af=f;document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');render();}
-
-async function load(){
-  const btn=document.getElementById('rbtn'),dot=document.getElementById('dot'),notice=document.getElementById('notice');
-  btn.disabled=true; dot.classList.add('spin'); notice.textContent='';
-  if(!cards.length) document.getElementById('grid').innerHTML='<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
-  document.getElementById('ts').textContent='Refreshing...';
-  let success=false;
-  for(let i=0;i<3;i++){
-    try{
-      if(i>0) await new Promise(r=>setTimeout(r,3000*i));
-      const data=await callAPI();
-      if(!Array.isArray(data)||!data.length) throw new Error('empty');
-      cards=data; success=true; break;
-    }catch(e){
-      if(e.message!=='CONCURRENCY'&&e.message!=='PARSE') break;
-    }
-  }
-  if(!success){
-    cards=FALLBACK;
-    notice.textContent='Showing representative stories — live data temporarily unavailable. Will retry on next refresh.';
-  }
-  render();
-  document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-  dot.classList.remove('spin'); btn.disabled=false;
-  clearTimeout(timer); timer=setTimeout(load,5*60*1000);
+function renderHeatmap(){
+  const hg=document.getElementById('hmap-grid');
+  if(!cards.length){hg.innerHTML='<div style="color:var(--g3);font-size:13px">No data yet.</div>';return;}
+  hg.innerHTML=[...cards].sort((a,b)=>b.heat-a.heat).map((c,i)=>`
+    <div class="hbox h${c.heat}">
+      <div class="hbox-score">${c.heat}<span style="font-size:11px;font-weight:400">/10</span></div>
+      <div class="hbox-cat">${c.cat}</div>
+      <div class="hbox-title">${c.title}</div>
+      <div class="hbox-meta"><span>${c.src}</span><span>${c.ago}</span></div>
+      <button class="hbox-draft" onclick="openDraft(${cards.indexOf(c)})">Draft story</button>
+    </div>`).join('');
 }
 
-load();
+async function loadAll(){
+  const btn=document.getElementById('rbtn'),dot=document.getElementById('dot'),err=document.getElementById('err');
+  btn.disabled=true; dot.classList.add('spin'); err.style.display='none';
+  if(!cards.length) document.getElementById('grid').innerHTML='<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
+  document.getElementById('ts').textContent='Refreshing...';
+  try{
+    const results=await Promise.allSettled(QUERIES.map(fetchQ));
+    const items=results.flatMap(r=>r.status==='fulfilled'?r.value:[]);
+    const seen=new Set();
+    const fresh=items.filter(i=>{if(seen.has(i.title))return false;seen.add(i.title);return true;}).sort((a,b)=>b.heat-a.heat).slice(0,40);
+    if(fresh.length) cards=fresh;
+    if(!cards.length) throw new Error('fallback');
+    render();
+    document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){
+    const FALLBACK=[
+      {title:'TCS to hire 40,000 freshers in FY2026 amid demand recovery in BFSI and retail',src:'Economic Times',cat:'hiring',heat:10,sent:'positive',ago:'1h ago',link:'https://economictimes.indiatimes.com'},
+      {title:'Byju\'s owes ₹1,400 crore in unpaid salaries as NCLT insolvency proceedings deepen',src:'Mint',cat:'layoffs',heat:10,sent:'negative',ago:'2h ago',link:'https://livemint.com'},
+      {title:'Tata Motors to invest ₹16,000 crore in new EV and ICE manufacturing lines in Pune',src:'Business Standard',cat:'investment',heat:9,sent:'positive',ago:'3h ago',link:'https://business-standard.com'},
+      {title:'Infosys opens new 5,000-seat campus in Hyderabad as client wins accelerate',src:'Reuters India',cat:'expansion',heat:9,sent:'positive',ago:'4h ago',link:'https://reuters.com'},
+      {title:'Centre fast-tracks gig worker social security scheme under new labour code rules',src:'PTI',cat:'policy',heat:8,sent:'positive',ago:'5h ago',link:'https://ptinews.com'},
+      {title:'Zomato announces 12,000 dark store hires ahead of 10-minute grocery expansion',src:'ET Jobs',cat:'hiring',heat:8,sent:'positive',ago:'6h ago',link:'https://economictimes.indiatimes.com/jobs'},
+      {title:'Paytm cuts 1,200 jobs in second round of AI-led cost optimisation this year',src:'Mint',cat:'layoffs',heat:9,sent:'negative',ago:'7h ago',link:'https://livemint.com'},
+      {title:'Samsung India breaks ground on ₹8,000 crore Noida display manufacturing plant',src:'Business Standard',cat:'expansion',heat:8,sent:'positive',ago:'9h ago',link:'https://business-standard.com'},
+      {title:'Amazon India to create 1.1 lakh seasonal jobs for Great Indian Festival season',src:'Economic Times',cat:'hiring',heat:8,sent:'positive',ago:'11h ago',link:'https://economictimes.indiatimes.com'},
+      {title:'EPFO records 19.2 lakh new formal job additions in March, highest in eight months',src:'PTI',cat:'policy',heat:7,sent:'positive',ago:'13h ago',link:'https://ptinews.com'},
+      {title:'Ola Electric lays off 600 engineers as EV sales plateau below company projections',src:'Reuters',cat:'layoffs',heat:8,sent:'negative',ago:'1d ago',link:'https://reuters.com'},
+      {title:'Reliance Retail to open 2,000 stores in tier-2 cities, creating 50,000 jobs',src:'BusinessLine',cat:'expansion',heat:7,sent:'positive',ago:'1d ago',link:'https://thehindubusinessline.com'},
+      {title:'PhonePe acquires Indus Appstore team, adds 300 engineers to Bengaluru headcount',src:'Mint',cat:'hiring',heat:7,sent:'positive',ago:'1d ago',link:'https://livemint.com'},
+      {title:'Mahindra Group announces ₹12,000 crore capex for new auto components facility in Chakan',src:'Economic Times',cat:'investment',heat:8,sent:'positive',ago:'1d ago',link:'https://economictimes.indiatimes.com'},
+      {title:'Labour ministry proposes mandatory severance pay for fixed-term contract workers',src:'PTI',cat:'policy',heat:7,sent:'neutral',ago:'2d ago',link:'https://ptinews.com'},
+    ];
+    cards=FALLBACK;
+    render();
+    document.getElementById('ts').textContent='Sample data — live feeds unavailable';
+    err.textContent='Live feeds blocked in preview. Showing representative stories. Full live data works on intelligence.wocult.com';
+    err.style.display='block';
+  }
+  dot.classList.remove('spin'); btn.disabled=false;
+  clearTimeout(timer); timer=setTimeout(loadAll,5*60*1000);
+}
+
+// ── WORKFLOW ──
+function openDraft(idx){
+  currentCard = cards[idx];
+  document.getElementById('main').style.display='none';
+  document.getElementById('workflow').style.display='block';
+  // Fill source card
+  let bc=currentCard.cat==='hiring'?'bh':currentCard.cat==='layoffs'?'bl':currentCard.cat==='expansion'?'be':currentCard.cat==='investment'?'bi':currentCard.cat==='policy'?'bp':'bg';
+  document.getElementById('source-card').innerHTML=`
+    <span class="source-badge">${currentCard.cat}</span>
+    <div>
+      <div class="source-title">${currentCard.title}</div>
+      <div class="source-meta">${currentCard.src} · ${currentCard.ago} · Heat ${currentCard.heat}/10</div>
+    </div>`;
+  document.getElementById('b-title').value=currentCard.title;
+  document.getElementById('b-angle').value='';
+  document.getElementById('r-date').value=new Date().toISOString().split('T')[0];
+  goStep(1);
+}
+
+function closeWorkflow(){
+  document.getElementById('workflow').style.display='none';
+  document.getElementById('main').style.display='block';
+}
+
+function goStep(n){
+  currentStep=n;
+  for(let i=1;i<=5;i++){
+    document.getElementById('step'+i).style.display=i===n?'block':'none';
+    const ws=document.getElementById('ws'+i);
+    ws.className='wf-step'+(i<n?' done':i===n?' active':'');
+  }
+  if(n===5) buildFinalPreview();
+}
+
+async function startGeneration(){
+  const title=document.getElementById('b-title').value.trim();
+  if(!title) return alert('Please enter a headline');
+  const angle=document.getElementById('b-angle').value;
+  goStep(2);
+  // animate steps
+  const steps=['gs1','gs2','gs3','gs4'];
+  let si=0;
+  const anim=setInterval(()=>{
+    if(si>0) {const prev=document.getElementById(steps[si-1]);prev.classList.remove('active');prev.classList.add('done');}
+    if(si<steps.length){document.getElementById(steps[si]).classList.add('active');si++;}
+    else clearInterval(anim);
+  },1200);
+
+  const prompt=`You are a journalist for Wocult, an Indian workplace culture media brand covering work, culture and life. Write a news article based on the following.
+
+Headline: ${title}
+Source: ${currentCard?.src||'News'}
+Category: Affairs (Indian workforce news)
+Editorial angle: ${angle||'General coverage'}
+
+Return ONLY a valid JSON object with exactly these fields (no markdown, no backticks):
+{
+  "title": "Final refined headline (max 12 words, punchy)",
+  "slug": "url-friendly-slug-from-title",
+  "shortIntro": "15 to 20 word teaser that hooks the reader",
+  "intro40": "Exactly 40 word introduction paragraph expanding on the headline",
+  "excerpt": "100 word summary of the full story for SEO and previews",
+  "introRichText": "<p>First 100 words of the article as clean HTML paragraph(s). Professional journalism tone.</p>",
+  "body": "<p>Full article 500 to 700 words in HTML. Use <p> for paragraphs and <h3> for 2 to 3 subheadings. Professional tone, Indian workplace context, Wocult voice — smart, direct, culturally aware.</p>",
+  "readTime": "X min read"
+}`;
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})
+    });
+    clearInterval(anim);
+    steps.forEach(s=>{const el=document.getElementById(s);el.classList.remove('active');el.classList.add('done');});
+    const data=await res.json();
+    if(data.error) throw new Error(data.error.message);
+    const txt=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const s=txt.indexOf('{'),e=txt.lastIndexOf('}');
+    if(s===-1) throw new Error('No JSON returned');
+    generatedContent=JSON.parse(txt.slice(s,e+1));
+    // Fill review fields
+    document.getElementById('r-title').value=generatedContent.title||title;
+    document.getElementById('r-slug').value=generatedContent.slug||(title.toLowerCase().replace(/[^a-z0-9]+/g,'-'));
+    document.getElementById('r-short').value=generatedContent.shortIntro||'';
+    document.getElementById('r-40').value=generatedContent.intro40||'';
+    document.getElementById('r-excerpt').value=generatedContent.excerpt||'';
+    document.getElementById('r-intro-rt').value=generatedContent.introRichText||'';
+    document.getElementById('r-body').value=generatedContent.body||'';
+    document.getElementById('r-readtime').value=generatedContent.readTime||'4 min read';
+    // Image suggestions
+    const keywords=(generatedContent.title||title).split(' ').slice(0,3).join('+');
+    document.getElementById('img-suggestions').innerHTML=['india workplace','office workers india','business india','hiring india','workforce india'].map(kw=>
+      `<button class="chip" onclick="setImgSearch('${kw}')" style="font-size:11px">${kw}</button>`).join('');
+    goStep(3);
+  }catch(e){
+    clearInterval(anim);
+    alert('Generation failed: '+e.message+'\n\nTry again or fill fields manually.');
+    goStep(1);
+  }
+}
+
+function previewImg(){
+  const url=document.getElementById('img-url').value.trim();
+  const preview=document.getElementById('img-preview');
+  const img=document.getElementById('img-preview-el');
+  if(url){preview.style.display='block';img.src=url;}
+  else preview.style.display='none';
+}
+
+function setImgSearch(kw){
+  window.open(`https://unsplash.com/s/photos/${encodeURIComponent(kw)}?orientation=landscape`,'_blank');
+}
+
+function searchImages(){
+  const title=document.getElementById('r-title').value||document.getElementById('b-title').value;
+  const kw=title.split(' ').slice(0,3).join(' ');
+  window.open(`https://unsplash.com/s/photos/${encodeURIComponent(kw+' india')}?orientation=landscape`,'_blank');
+}
+
+function buildFinalPreview(){
+  const title=document.getElementById('r-title').value;
+  const excerpt=document.getElementById('r-excerpt').value;
+  const imgUrl=document.getElementById('img-url').value;
+  const date=document.getElementById('r-date').value;
+  const readtime=document.getElementById('r-readtime').value;
+  document.getElementById('final-preview').innerHTML=`
+    ${imgUrl?`<img src="${imgUrl}" style="width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin-bottom:16px" />`:'<div style="width:100%;height:80px;background:var(--g2);border-radius:6px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--g3)">No image selected</div>'}
+    <div style="font-size:11px;color:var(--g3);margin-bottom:6px">Affairs · Wocult Team · ${readtime} · ${date}</div>
+    <div style="font-size:18px;font-weight:600;margin-bottom:8px;line-height:1.3">${title}</div>
+    <div style="font-size:13px;color:var(--g3);line-height:1.6">${excerpt.slice(0,200)}${excerpt.length>200?'...':''}</div>`;
+}
+
+async function publishToWebflow(){
+  const btn=document.getElementById('publish-btn');
+  btn.disabled=true; btn.textContent='Publishing...';
+  const fieldData={
+    name: document.getElementById('r-title').value,
+    slug: document.getElementById('r-slug').value,
+    'short-story-intro': document.getElementById('r-short').value,
+    '40-word-intro': document.getElementById('r-40').value,
+    excerpt: document.getElementById('r-excerpt').value,
+    'story-intro-para-rich-text': document.getElementById('r-intro-rt').value,
+    body: document.getElementById('r-body').value,
+    'read-time': document.getElementById('r-readtime').value,
+    'publish-date': document.getElementById('r-date').value,
+    writer: 'Wocult Team',
+    category: 'Affairs',
+  };
+  const imgUrl=document.getElementById('img-url').value.trim();
+  if(imgUrl) fieldData['post-image']=imgUrl;
+
+  try{
+    const res=await fetch(`https://api.webflow.com/v2/collections/${WF_COLLECTION}/items`,{
+      method:'POST',
+      headers:{'Authorization':`Bearer ${WF_TOKEN}`,'Content-Type':'application/json','accept':'application/json'},
+      body:JSON.stringify({fieldData, isDraft:true, isArchived:false})
+    });
+    const data=await res.json();
+    const resultDiv=document.getElementById('publish-result');
+    if(res.ok){
+      resultDiv.style.display='block';
+      resultDiv.innerHTML=`<div class="publish-success">
+        <div class="publish-icon">✅</div>
+        <div class="publish-title">Published as draft!</div>
+        <div class="publish-sub">Your story is saved in Webflow CMS as a draft. Review and publish it from your Webflow dashboard.</div>
+        <button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button>
+      </div>`;
+      document.getElementById('publish-actions').style.display='none';
+    } else {
+      throw new Error(data.message||JSON.stringify(data));
+    }
+  }catch(e){
+    btn.disabled=false; btn.textContent='Publish to Webflow →';
+    alert('Publish failed: '+e.message);
+  }
+}
+
+loadAll();
 </script>
 </body>
 </html>
