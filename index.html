@@ -525,22 +525,29 @@ async function startGeneration(){
     else clearInterval(anim);
   },1200);
 
-  const prompt=`You are a journalist for Wocult, an Indian workplace culture media brand covering work, culture and life. Write a news article based on the following.
+  const prompt=`You are a senior editor at Wocult, an Indian workplace culture media brand. Your writing is sharp, culturally aware, and human — not corporate. You cover work, culture, and life in India.
 
-Headline: ${title}
-Source: ${currentCard?.src||'News'}
-Category: Affairs (Indian workforce news)
-Editorial angle: ${angle||'General coverage'}
+A news event has come in. Your job is NOT to rewrite the existing headline — create a completely original, Wocult-voice headline that no other publication has used. Think of angles like: the human impact, the irony, the cultural subtext, what it means for the average Indian worker.
 
-Return ONLY a valid JSON object with exactly these fields (no markdown, no backticks):
+Source headline (DO NOT use this): ${title}
+Source publication: ${currentCard?.src||'News'}
+Editorial angle from editor: ${angle||'Focus on the human and cultural impact on Indian workers'}
+
+Wocult voice guidelines:
+- Headlines: punchy, specific, sometimes provocative — never generic
+- Tone: intelligent, grounded, culturally Indian, conversational but not casual
+- Avoid corporate jargon. Write for a working professional in India aged 25-40
+- Find the angle that other publications missed — the workers behind the numbers, the workplace culture implications, the systemic pattern
+
+Return ONLY a valid JSON object (no markdown, no backticks, no explanation):
 {
-  "title": "Final refined headline (max 12 words, punchy)",
-  "slug": "url-friendly-slug-from-title",
-  "shortIntro": "15 to 20 word teaser that hooks the reader",
-  "intro40": "Exactly 40 word introduction paragraph expanding on the headline",
-  "excerpt": "100 word summary of the full story for SEO and previews",
-  "introRichText": "<p>First 100 words of the article as clean HTML paragraph(s). Professional journalism tone.</p>",
-  "body": "<p>Full article 500 to 700 words in HTML. Use <p> for paragraphs and <h3> for 2 to 3 subheadings. Professional tone, Indian workplace context, Wocult voice — smart, direct, culturally aware.</p>",
+  "title": "Your original Wocult headline — NEVER copy the source headline. Max 12 words. Sharp and specific.",
+  "slug": "url-friendly-slug-from-your-new-title",
+  "shortIntro": "15 to 20 word hook that makes someone stop scrolling",
+  "intro40": "40 words exactly — draws the reader in, sets the stakes, Wocult voice",
+  "excerpt": "100 words — the full picture in a paragraph. What happened, why it matters, what it means for workers. SEO-friendly but human.",
+  "introRichText": "<p>First 100 words as clean HTML. Sets the scene. This is what the reader sees first — make it count.</p>",
+  "body": "<p>Full article 800 to 1000 words in HTML. Use <p> tags for paragraphs and <h3> tags for 4 subheadings structured as: (1) Context — what led here, (2) The worker angle — human impact on ground, (3) The bigger pattern — industry or systemic view, (4) What next — implications and outlook. Go deep on each section. Wocult voice throughout: smart, direct, culturally Indian, never preachy. No bullet points — flowing prose only.</p>",
   "readTime": "X min read"
 }`;
 
