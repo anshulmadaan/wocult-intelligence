@@ -82,7 +82,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .errbanner{background:#FCEBEB;border:1px solid #F09595;border-radius:8px;padding:10px 16px;margin:12px 24px 0;font-size:12px;color:#791F1F;display:none}
 
 /* ── EDITORIAL WORKFLOW ── */
-#workflow{display:none;min-height:100vh;background:#f5f0e8}
+#workflow{display:none;min-height:100vh;background:#f5f0e8;overflow-y:auto}
 .wf-header{background:var(--blk);padding:0 24px;height:52px;display:flex;align-items:center;gap:16px;border-bottom:3px solid var(--y)}
 .wf-back{background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px}
 .wf-back:hover{color:#fff}
@@ -205,8 +205,8 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <div style="font-size:16px;font-weight:600;margin-bottom:4px">Editorial brief</div>
     <div style="font-size:13px;color:var(--g3);margin-bottom:20px">Refine the headline and add your editorial angle before generating</div>
     <div class="wf-field">
-      <label class="wf-label">Headline <span class="field-badge">Post Title</span></label>
-      <input class="wf-input" id="b-title" placeholder="Story headline..." />
+      <label class="wf-label">Your headline idea <span class="field-badge">Leave blank to let Claude create one</span></label>
+      <input class="wf-input" id="b-title" placeholder="Optional — your headline angle, or leave blank for Claude to create..." />
     </div>
     <div class="wf-field">
       <label class="wf-label">Editorial angle & notes</label>
@@ -482,6 +482,8 @@ function openDraft(idx){
   currentCard = cards[idx];
   document.getElementById('main').style.display='none';
   document.getElementById('workflow').style.display='block';
+  document.documentElement.style.overflow='auto';
+  document.body.style.overflow='auto';
   // Fill source card
   let bc=currentCard.cat==='hiring'?'bh':currentCard.cat==='layoffs'?'bl':currentCard.cat==='expansion'?'be':currentCard.cat==='investment'?'bi':currentCard.cat==='policy'?'bp':'bg';
   document.getElementById('source-card').innerHTML=`
@@ -490,7 +492,7 @@ function openDraft(idx){
       <div class="source-title">${currentCard.title}</div>
       <div class="source-meta">${currentCard.src} · ${currentCard.ago} · Heat ${currentCard.heat}/10</div>
     </div>`;
-  document.getElementById('b-title').value=currentCard.title;
+  document.getElementById('b-title').value='';
   document.getElementById('b-angle').value='';
   document.getElementById('r-date').value=new Date().toISOString().split('T')[0];
   goStep(1);
@@ -509,11 +511,12 @@ function goStep(n){
     ws.className='wf-step'+(i<n?' done':i===n?' active':'');
   }
   if(n===5) buildFinalPreview();
+  window.scrollTo(0,0);
 }
 
 async function startGeneration(){
+  const WORKER='https://wocult-news-proxy.anmadaan.workers.dev';
   const title=document.getElementById('b-title').value.trim();
-  if(!title) return alert('Please enter a headline');
   const angle=document.getElementById('b-angle').value;
   goStep(2);
   // animate steps
@@ -555,7 +558,7 @@ Return ONLY a valid JSON object (no markdown, no backticks, no explanation):
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:3000,messages:[{role:'user',content:prompt}]})
     });
     clearInterval(anim);
     steps.forEach(s=>{const el=document.getElementById(s);el.classList.remove('active');el.classList.add('done');});
