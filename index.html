@@ -21,6 +21,20 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .stat{background:var(--w);border:1px solid var(--bdr);border-radius:8px;padding:12px 16px}
 .sn{font-size:22px;font-weight:700}.sl{font-size:11px;color:var(--g3);margin-top:2px}
 .stat.hl{background:var(--blk)}.stat.hl .sn{color:var(--y)}.stat.hl .sl{color:rgba(255,255,255,0.5)}
+.errbanner{background:#FCEBEB;border:1px solid #F09595;border-radius:8px;padding:10px 16px;margin:12px 24px 0;font-size:12px;color:#791F1F;display:none}
+.saved-section{padding:12px 24px 0}
+.saved-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.saved-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--yd)}
+.saved-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.saved-card{background:var(--w);border-radius:8px;border:1px solid var(--bdr);border-left:3px solid var(--y);padding:10px 14px;display:flex;align-items:center;gap:10px}
+.saved-title-text{font-size:13px;font-weight:500;flex:1;line-height:1.4}
+.saved-src{font-size:11px;color:var(--g3);white-space:nowrap}
+.saved-draft{padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;background:var(--blk);color:var(--y);border:none}
+.saved-del{padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;background:transparent;color:var(--g3);border:1px solid var(--g2)}
+.saved-del:hover{color:var(--red);border-color:var(--red)}
+.saved-add{display:flex;gap:8px}
+.saved-input{flex:1;padding:8px 12px;border:1px solid var(--g2);border-radius:7px;font-size:13px;outline:none;font-family:inherit}
+.saved-input:focus{border-color:var(--yd)}
 .tabs{display:flex;padding:14px 24px 0;border-bottom:1px solid var(--g2)}
 .tab{padding:8px 20px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--g3)}
 .tab.on{color:var(--blk);border-bottom-color:var(--y)}
@@ -43,14 +57,13 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .cbot{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .sent{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
 .sp{background:#EAF3DE;color:#27500A}.sn2{background:#FCEBEB;color:#791F1F}.su{background:#f0ebe0;color:#5F5E5A}
-.draft-btn{padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;background:var(--blk);color:var(--y);border:none}
-.draft-btn:hover{background:#333}
+.card-btn{padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:none}
 .hmap-wrap{padding:16px 24px 24px}
 .hmap-legend{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:12px;color:var(--g3)}
 .leg-item{display:flex;align-items:center;gap:5px}
 .leg-box{width:14px;height:14px;border-radius:3px}
 .hmap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
-.hbox{border-radius:8px;padding:12px;cursor:pointer;display:block;text-decoration:none}
+.hbox{border-radius:8px;padding:12px;cursor:pointer;display:block}
 .hbox:hover{opacity:0.85}
 .hbox.h10,.hbox.h9{background:#E24B4A;color:#fff}
 .hbox.h8,.hbox.h7{background:#EF9F27;color:#412402}
@@ -65,22 +78,6 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .empty{text-align:center;padding:60px 20px;color:var(--g3);grid-column:1/-1}
 .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--g2);border-top-color:var(--y);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.errbanner{background:#FCEBEB;border:1px solid #F09595;border-radius:8px;padding:10px 16px;margin:12px 24px 0;font-size:12px;color:#791F1F;display:none}
-/* SAVED */
-.saved-section{padding:12px 24px 0}
-.saved-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.saved-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--g3)}
-.saved-grid{display:flex;flex-direction:column;gap:8px}
-.saved-card{background:var(--w);border-radius:8px;border:1px solid var(--bdr);border-left:3px solid var(--y);padding:12px 14px;display:flex;align-items:center;gap:12px}
-.saved-title-text{font-size:13px;font-weight:500;flex:1;line-height:1.4}
-.saved-src{font-size:11px;color:var(--g3);white-space:nowrap}
-.saved-actions{display:flex;gap:6px;flex-shrink:0}
-.saved-draft{padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;background:var(--blk);color:var(--y);border:none}
-.saved-del{padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;background:transparent;color:var(--g3);border:1px solid var(--g2)}
-.saved-del:hover{color:var(--red);border-color:var(--red)}
-.saved-add{display:flex;gap:8px;margin-top:8px}
-.saved-input{flex:1;padding:8px 12px;border:1px solid var(--g2);border-radius:7px;font-size:13px;outline:none;font-family:inherit}
-.saved-input:focus{border-color:var(--yd)}
 #workflow{display:none;min-height:100vh;background:#f5f0e8;overflow-y:auto}
 .wf-header{background:var(--blk);padding:0 24px;height:52px;display:flex;align-items:center;gap:16px;border-bottom:3px solid var(--y)}
 .wf-back{background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px}
@@ -141,11 +138,12 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 </div>
 
 <div class="stats">
-  <div class="stat hl"><div class="sn" id="s0">—</div><div class="sl">Stories tracked</div></div>
-  <div class="stat"><div class="sn" id="s1">—</div><div class="sl">Hottest sector</div></div>
-  <div class="stat"><div class="sn" id="s2">—</div><div class="sl">Hiring signals</div></div>
-  <div class="stat"><div class="sn" id="s3">—</div><div class="sl">Layoff alerts</div></div>
+  <div class="stat hl"><div class="sn" id="s0">0</div><div class="sl">Stories tracked</div></div>
+  <div class="stat"><div class="sn" id="s1">-</div><div class="sl">Hottest sector</div></div>
+  <div class="stat"><div class="sn" id="s2">0</div><div class="sl">Hiring signals</div></div>
+  <div class="stat"><div class="sn" id="s3">0</div><div class="sl">Layoff alerts</div></div>
 </div>
+
 <div class="errbanner" id="err"></div>
 
 <div class="saved-section" id="saved-section" style="display:none">
@@ -156,9 +154,14 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   <div class="saved-grid" id="saved-grid"></div>
   <div class="saved-add">
     <input class="saved-input" id="saved-url-input" placeholder="Paste any article URL to save..." onkeydown="if(event.key==='Enter')saveUrl()" />
-    <button class="btn" onclick="saveUrl()">Save</button>
+    <button class="btn" onclick="saveUrl()">Save URL</button>
   </div>
 </div>
+
+<div style="padding:8px 24px 0;display:flex;justify-content:flex-end">
+  <button onclick="toggleSaved()" style="font-size:12px;color:var(--yd);background:none;border:none;cursor:pointer;font-weight:500" id="toggle-saved-btn">+ Save for later</button>
+</div>
+
 <div class="tabs">
   <div class="tab on" id="tab-cards" onclick="switchTab('cards')">Cards</div>
   <div class="tab" id="tab-heatmap" onclick="switchTab('heatmap')">Heatmap</div>
@@ -187,7 +190,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 
 <div id="workflow">
 <div class="wf-header">
-  <button class="wf-back" onclick="closeWorkflow()">← Back</button>
+  <button class="wf-back" onclick="closeWorkflow()">Back</button>
   <div class="wf-steps">
     <div class="wf-step active" id="ws1">1. Brief</div>
     <div class="wf-step" id="ws2">2. Generate</div>
@@ -196,36 +199,26 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <div class="wf-step" id="ws5">5. Publish</div>
   </div>
 </div>
-
 <div id="step1" class="wf-body">
   <div class="source-card" id="source-card"></div>
   <div class="wf-section">
     <div style="font-size:16px;font-weight:600;margin-bottom:4px">Editorial brief</div>
-    <div style="font-size:13px;color:var(--g3);margin-bottom:20px">Add your editorial angle before generating</div>
+    <div style="font-size:13px;color:var(--g3);margin-bottom:20px">Add your angle before generating</div>
     <div class="wf-field">
       <label class="wf-label">Your headline idea <span class="field-badge">Leave blank for Claude to create</span></label>
       <input class="wf-input" id="b-title" placeholder="Optional headline angle..." />
     </div>
     <div class="wf-field">
       <label class="wf-label">Editorial angle and notes</label>
-      <textarea class="wf-textarea" id="b-angle" placeholder="What is the Wocult angle? Who does this impact? Any specific context to add..."></textarea>
+      <textarea class="wf-textarea" id="b-angle" placeholder="What is the Wocult angle? Who does this impact?"></textarea>
     </div>
     <div class="wf-row">
-      <div class="wf-field">
-        <label class="wf-label">Category <span class="field-badge">Always: Affairs</span></label>
-        <input class="wf-input" value="Affairs" readonly style="background:var(--gray);color:var(--g3)" />
-      </div>
-      <div class="wf-field">
-        <label class="wf-label">Writer <span class="field-badge">Always: Wocult Team</span></label>
-        <input class="wf-input" value="Wocult Team" readonly style="background:var(--gray);color:var(--g3)" />
-      </div>
+      <div class="wf-field"><label class="wf-label">Category</label><input class="wf-input" value="Affairs" readonly style="background:var(--gray);color:var(--g3)" /></div>
+      <div class="wf-field"><label class="wf-label">Writer</label><input class="wf-input" value="Wocult Team" readonly style="background:var(--gray);color:var(--g3)" /></div>
     </div>
   </div>
-  <div class="wf-actions">
-    <button class="btn-lg btn-y" onclick="startGeneration()">Generate story</button>
-  </div>
+  <div class="wf-actions"><button class="btn-lg btn-y" onclick="startGeneration()">Generate story</button></div>
 </div>
-
 <div id="step2" class="wf-body" style="display:none">
   <div class="gen-loading">
     <div class="gen-spinner"></div>
@@ -239,7 +232,6 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     </div>
   </div>
 </div>
-
 <div id="step3" class="wf-body" style="display:none">
   <div class="wf-section">
     <div style="font-size:16px;font-weight:600;margin-bottom:16px">Review and edit</div>
@@ -248,8 +240,8 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <div class="wf-field"><label class="wf-label">Short Story Intro <span class="field-badge">15-20 words</span></label><input class="wf-input" id="r-short" /></div>
     <div class="wf-field"><label class="wf-label">40 Word Intro</label><textarea class="wf-textarea" id="r-40" style="min-height:60px"></textarea></div>
     <div class="wf-field"><label class="wf-label">Excerpt <span class="field-badge">100 words</span></label><textarea class="wf-textarea" id="r-excerpt"></textarea></div>
-    <div class="wf-field"><label class="wf-label">Story Intro Rich Text <span class="field-badge">First 100 words</span></label><textarea class="wf-textarea" id="r-intro-rt" style="min-height:120px;font-family:monospace;font-size:12px"></textarea></div>
-    <div class="wf-field"><label class="wf-label">Body <span class="field-badge">Full article</span></label><textarea class="wf-textarea" id="r-body" style="min-height:300px;font-family:monospace;font-size:12px"></textarea></div>
+    <div class="wf-field"><label class="wf-label">Story Intro Rich Text</label><textarea class="wf-textarea" id="r-intro-rt" style="min-height:120px;font-family:monospace;font-size:12px"></textarea></div>
+    <div class="wf-field"><label class="wf-label">Body</label><textarea class="wf-textarea" id="r-body" style="min-height:300px;font-family:monospace;font-size:12px"></textarea></div>
     <div class="wf-row">
       <div class="wf-field"><label class="wf-label">Read Time</label><input class="wf-input" id="r-readtime" /></div>
       <div class="wf-field"><label class="wf-label">Publish Date</label><input class="wf-input" type="date" id="r-date" /></div>
@@ -260,17 +252,16 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <button class="btn-lg btn-y" onclick="goStep(4)">Choose image</button>
   </div>
 </div>
-
 <div id="step4" class="wf-body" style="display:none">
   <div class="wf-section">
     <div style="font-size:16px;font-weight:600;margin-bottom:4px">Select image</div>
-    <div style="font-size:13px;color:var(--g3);margin-bottom:16px">Paste an image URL or search Unsplash</div>
+    <div style="font-size:13px;color:var(--g3);margin-bottom:16px">Paste a URL or upload from device</div>
     <div class="img-url-row">
       <input class="wf-input" id="img-url" placeholder="Paste image URL here..." style="flex:1" oninput="previewImg()" />
       <button class="btn" onclick="searchImages()">Search Unsplash</button>
     </div>
     <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
-      <label style="font-size:12px;color:var(--g3)">Or upload from device:</label>
+      <label style="font-size:12px;color:var(--g3)">Or upload:</label>
       <input type="file" id="img-file" accept="image/*" onchange="handleImgUpload(event)" style="font-size:12px" />
     </div>
     <div id="img-preview" style="margin-top:12px;display:none">
@@ -286,7 +277,6 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <button class="btn-lg btn-y" onclick="goStep(5)">Review and publish</button>
   </div>
 </div>
-
 <div id="step5" class="wf-body" style="display:none">
   <div class="wf-section">
     <div style="font-size:16px;font-weight:600;margin-bottom:16px">Final review</div>
@@ -294,7 +284,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   </div>
   <div class="wf-section" style="background:#FFF8F0;border-color:#FAC775">
     <div style="font-size:13px;font-weight:500;margin-bottom:4px">Publishing to Webflow CMS as draft</div>
-    <div style="font-size:12px;color:var(--g3)">Saved as draft — review and publish from your Webflow dashboard.</div>
+    <div style="font-size:12px;color:var(--g3)">Review and publish from your Webflow dashboard.</div>
   </div>
   <div id="publish-result" style="display:none"></div>
   <div class="wf-actions" id="publish-actions">
@@ -306,46 +296,76 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 </div>
 
 <script>
-var WF_TOKEN='9739ddc13b83dbc83edc6bf981bf7804df98e6bee9a29853af92c8b6ec3a89ab';
-var WF_COLLECTION='695be252bae2cf37c3a4b17b';
-var WORKER='https://wocult-news-proxy.anmadaan.workers.dev';
+var WF_TOKEN = '9739ddc13b83dbc83edc6bf981bf7804df98e6bee9a29853af92c8b6ec3a89ab';
+var WF_COLLECTION = '695be252bae2cf37c3a4b17b';
+var WORKER = 'https://wocult-news-proxy.anmadaan.workers.dev';
+var cards = [];
+var af = 'all';
+var activeTab = 'cards';
+var refreshTimer;
+var currentCard = null;
+var generatedContent = {};
 
-var QUERIES=[
-  {q:'india+hiring+recruitment+jobs+when:2d',cat:'hiring'},
-  {q:'india+layoffs+job+cuts+retrenchment+when:2d',cat:'layoffs'},
-  {q:'india+factory+expansion+new+plant+campus+when:2d',cat:'expansion'},
-  {q:'india+investment+capex+manufacturing+capacity+when:2d',cat:'investment'},
-  {q:'india+labour+policy+employment+workforce+government+when:2d',cat:'policy'},
-  {q:'india+workforce+jobs+industry+economy+when:2d',cat:'general'},
-  {q:'india+hotel+hospitality+retail+logistics+jobs+create+when:2d',cat:'hiring'},
-  {q:'india+startup+unicorn+funding+headcount+talent+when:2d',cat:'investment'}
+var saved = [];
+var _lsOk = false;
+try { localStorage.setItem('_t','1'); localStorage.removeItem('_t'); _lsOk = true; saved = JSON.parse(localStorage.getItem('wocult_saved') || '[]'); } catch(e) {}
+function savePersist() { if (_lsOk) { try { localStorage.setItem('wocult_saved', JSON.stringify(saved)); } catch(e) {} } }
+
+var QUERIES = [
+  {q:'india+hiring+recruitment+jobs', cat:'hiring'},
+  {q:'india+layoffs+job+cuts+retrenchment', cat:'layoffs'},
+  {q:'india+factory+expansion+new+plant+campus', cat:'expansion'},
+  {q:'india+investment+capex+manufacturing+capacity', cat:'investment'},
+  {q:'india+labour+policy+employment+workforce+government', cat:'policy'},
+  {q:'india+workforce+jobs+industry+economy', cat:'general'},
+  {q:'india+hotel+hospitality+retail+logistics+jobs', cat:'hiring'},
+  {q:'india+startup+funding+headcount+talent', cat:'investment'}
 ];
-var POS=['hire','hiring','expand','invest','growth','rise','surge','boost','launch','appoint','fund'];
-var NEG=['layoff','fired','cut','reduc','restructur','fall','decline','retrench','shut'];
-var cards=[], af='all', activeTab='cards', refreshTimer;
-var currentCard=null, generatedContent={};
+var POS = ['hire','hiring','expand','invest','growth','rise','surge','boost','launch','appoint','fund'];
+var NEG = ['layoff','fired','cut','reduc','restructur','fall','decline','retrench','shut'];
 
-function sentiment(t){var s=t.toLowerCase();var p=POS.filter(function(k){return s.includes(k);}).length;var n=NEG.filter(function(k){return s.includes(k);}).length;return n>p?'negative':p>n?'positive':'neutral';}
-function heatScore(pub,cat){var h=(Date.now()-new Date(pub||Date.now()).getTime())/3600000;var sc=h<2?10:h<6?9:h<12?8:h<24?7:h<48?5:3;if(cat==='layoffs'||cat==='investment') sc=Math.min(10,sc+1);return Math.max(1,sc);}
-function ago(d){if(!d) return 'recent';var h=Math.floor((Date.now()-new Date(d))/3600000);return h<1?Math.floor((Date.now()-new Date(d))/60000)+'m ago':h<24?h+'h ago':Math.floor(h/24)+'d ago';}
-function strip(s){return (s||'').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();}
+function sentiment(t) {
+  var s = t.toLowerCase();
+  var p = POS.filter(function(k){return s.indexOf(k)>=0;}).length;
+  var n = NEG.filter(function(k){return s.indexOf(k)>=0;}).length;
+  return n>p ? 'negative' : p>n ? 'positive' : 'neutral';
+}
+function heatScore(pub, cat) {
+  var h = (Date.now() - new Date(pub||Date.now()).getTime()) / 3600000;
+  var sc = h<2?10:h<6?9:h<12?8:h<24?7:h<48?5:3;
+  if (cat==='layoffs'||cat==='investment') sc = Math.min(10, sc+1);
+  return Math.max(1, sc);
+}
+function ago(d) {
+  if (!d) return 'recent';
+  var h = Math.floor((Date.now()-new Date(d).getTime())/3600000);
+  return h<1 ? Math.floor((Date.now()-new Date(d).getTime())/60000)+'m ago' : h<24 ? h+'h ago' : Math.floor(h/24)+'d ago';
+}
+function strip(s) {
+  return (s||'').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();
+}
+function hbars(sc) {
+  var b = '';
+  for (var i=1; i<=10; i++) b += '<div class="hbar'+(i<=sc?(sc>=8?' on hot':' on'):'')+'"></div>';
+  return b;
+}
 
-function fetchQ(q){
-  return new Promise(function(resolve){
-    var controller=new AbortController();
-    var t=setTimeout(function(){controller.abort();resolve([]);},12000);
-    fetch(WORKER+'?q='+encodeURIComponent(q.q),{signal:controller.signal})
+function fetchQ(q) {
+  return new Promise(function(resolve) {
+    var ctrl = new AbortController();
+    var t = setTimeout(function(){ctrl.abort();resolve([]);}, 12000);
+    fetch(WORKER+'?q='+encodeURIComponent(q.q), {signal:ctrl.signal})
       .then(function(r){return r.text();})
-      .then(function(txt){
+      .then(function(txt) {
         clearTimeout(t);
-        var xml=new DOMParser().parseFromString(txt,'text/xml');
-        var items=[].slice.call(xml.querySelectorAll('item')).slice(0,6).map(function(item){
-          var title=strip(item.querySelector('title')&&item.querySelector('title').textContent||'');
-          var linkEl=item.querySelector('link');
-          var link=linkEl?linkEl.textContent||linkEl.nextSibling&&linkEl.nextSibling.textContent||'#':'#';
-          var pub=item.querySelector('pubDate')&&item.querySelector('pubDate').textContent||'';
-          var src=strip(item.querySelector('source')&&item.querySelector('source').textContent||'Google News');
-          return {title:title,link:link,pub:pub,src:src,cat:q.cat,sent:sentiment(title),heat:heatScore(pub,q.cat),ago:ago(pub)};
+        var xml = new DOMParser().parseFromString(txt, 'text/xml');
+        var items = [].slice.call(xml.querySelectorAll('item')).slice(0,6).map(function(item) {
+          var title = strip((item.querySelector('title')||{}).textContent||'');
+          var linkEl = item.querySelector('link');
+          var link = linkEl ? (linkEl.textContent||((linkEl.nextSibling||{}).textContent)||'#') : '#';
+          var pub = ((item.querySelector('pubDate')||{}).textContent)||'';
+          var src = strip(((item.querySelector('source')||{}).textContent)||'Google News');
+          return {title:title, link:link, pub:pub, src:src, cat:q.cat, sent:sentiment(title), heat:heatScore(pub,q.cat), ago:ago(pub)};
         }).filter(function(i){return i.title.length>10;});
         resolve(items);
       })
@@ -353,274 +373,308 @@ function fetchQ(q){
   });
 }
 
-function filt(f,el){af=f;document.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on');});el.classList.add('on');render();}
-
-function switchTab(t){
-  activeTab=t;
-  document.getElementById('tab-cards').classList.toggle('on',t==='cards');
-  document.getElementById('tab-heatmap').classList.toggle('on',t==='heatmap');
-  document.getElementById('grid').style.display=t==='cards'?'grid':'none';
-  document.getElementById('hmap-wrap').style.display=t==='heatmap'?'block':'none';
-  document.getElementById('filters-bar').style.display=t==='cards'?'flex':'none';
-  if(t==='heatmap') renderHeatmap();
+function saveCard(idx) {
+  var c = cards[idx];
+  if (!c) return;
+  var already = saved.filter(function(s){return s.url===c.link;}).length;
+  if (already) { alert('Already saved!'); return; }
+  saved.unshift({url:c.link, src:c.src, title:c.title, savedAt:c.ago});
+  savePersist();
+  renderSaved();
 }
 
-function hbars(sc){var b='';for(var i=1;i<=10;i++) b+='<div class="hbar'+(i<=sc?(sc>=8?' on hot':' on'):'')+'"></div>';return b;}
+function saveUrl() {
+  var url = document.getElementById('saved-url-input').value.trim();
+  if (!url) return;
+  var host = 'link';
+  try { host = new URL(url).hostname.replace('www.',''); } catch(e) {}
+  var already = saved.filter(function(s){return s.url===url;}).length;
+  if (already) { alert('Already saved!'); return; }
+  saved.unshift({url:url, src:host, title:null, savedAt:new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'})});
+  savePersist();
+  document.getElementById('saved-url-input').value = '';
+  renderSaved();
+}
 
-function render(){
-  var grid=document.getElementById('grid');
-  var data=af==='all'?cards:cards.filter(function(c){return c.cat===af;});
-  if(!data.length){grid.innerHTML='<div class="empty">No stories in this category.</div>';return;}
-  grid.innerHTML=data.map(function(c,idx){
-    var i=cards.indexOf(c);
-    var bc=c.cat==='hiring'?'bh':c.cat==='layoffs'?'bl':c.cat==='expansion'?'be':c.cat==='investment'?'bi':c.cat==='policy'?'bp':'bg';
-            return '<div class="card '+c.cat+'"><div class="ctop"><span class="badge '+bc+'">'+c.cat+'</span><div class="heat"><span class="hl2">Heat</span><div class="hbars">'+hbars(c.heat)+'</div><span class="hl2">'+c.heat+'/10</span></div></div><div class="ctitle">'+c.title+'</div><div class="csrc">'+c.src+' &middot; '+c.ago+'</div><div class="cbot"><span class="sent s'+c.sent[0]+'">'+c.sent+'</span><div style="display:flex;gap:6px"><a href="'+c.link+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--yd);font-weight:500;text-decoration:none">Read</a><button class="draft-btn" style="background:var(--g2);color:var(--blk)" onclick="saveCard('+i+')">Save</button><button class="draft-btn" onclick="openDraft('+i+')">Draft</button></div></div></div>';
+function deleteSaved(idx) {
+  saved.splice(idx, 1);
+  savePersist();
+  renderSaved();
+}
+
+function draftSaved(idx) {
+  var s = saved[idx];
+  setWorkflowCard({title:s.title||s.url, src:s.src, cat:'general', heat:8, ago:s.savedAt, link:s.url, _url:s.url});
+}
+
+function toggleSaved() {
+  var sec = document.getElementById('saved-section');
+  var btn = document.getElementById('toggle-saved-btn');
+  if (sec.style.display === 'none') {
+    sec.style.display = 'block';
+    btn.textContent = 'Hide saved';
+  } else {
+    sec.style.display = 'none';
+    btn.textContent = '+ Save for later';
+  }
+}
+
+function renderSaved() {
+  var grid = document.getElementById('saved-grid');
+  var count = document.getElementById('saved-count');
+  var btn = document.getElementById('toggle-saved-btn');
+  var sec = document.getElementById('saved-section');
+  count.textContent = saved.length + ' saved';
+  btn.textContent = saved.length > 0 ? 'Saved (' + saved.length + ')' : '+ Save for later';
+  if (!saved.length) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  grid.innerHTML = saved.map(function(s, i) {
+    var display = s.title || s.url;
+    var short = display.length > 90 ? display.slice(0,90)+'...' : display;
+    return '<div class="saved-card"><div class="saved-title-text">'+short+'</div><span class="saved-src">'+s.src+'</span><div style="display:flex;gap:6px;flex-shrink:0"><button class="saved-draft" onclick="draftSaved('+i+')">Draft</button><button class="saved-del" onclick="deleteSaved('+i+')">x</button></div></div>';
   }).join('');
-  document.getElementById('s0').textContent=cards.length;
-  var freq=cards.reduce(function(a,b){a[b.cat]=(a[b.cat]||0)+1;return a;},{});
-  var hot=Object.entries(freq).sort(function(a,b){return b[1]-a[1];})[0];
-  document.getElementById('s1').textContent=hot?hot[0][0].toUpperCase()+hot[0].slice(1):'—';
-  document.getElementById('s2').textContent=cards.filter(function(c){return c.cat==='hiring';}).length;
-  document.getElementById('s3').textContent=cards.filter(function(c){return c.cat==='layoffs';}).length;
 }
 
-function renderHeatmap(){
-  var hg=document.getElementById('hmap-grid');
-  if(!cards.length){hg.innerHTML='<div style="color:var(--g3);font-size:13px">No data yet.</div>';return;}
-  hg.innerHTML=[].concat(cards).sort(function(a,b){return b.heat-a.heat;}).map(function(c){
-    var i=cards.indexOf(c);
-    return '<div class="hbox h'+c.heat+'"><div class="hbox-score">'+c.heat+'<span style="font-size:11px;font-weight:400">/10</span></div><div class="hbox-cat">'+c.cat+'</div><div class="hbox-title">'+c.title+'</div><div class="hbox-meta"><span>'+c.src+'</span><span>'+c.ago+'</span></div><button class="hbox-draft" onclick="openDraft('+i+')">Draft story</button></div>';
+function filt(f, el) {
+  af = f;
+  document.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on');});
+  el.classList.add('on');
+  render();
+}
+
+function switchTab(t) {
+  activeTab = t;
+  document.getElementById('tab-cards').classList.toggle('on', t==='cards');
+  document.getElementById('tab-heatmap').classList.toggle('on', t==='heatmap');
+  document.getElementById('grid').style.display = t==='cards' ? 'grid' : 'none';
+  document.getElementById('hmap-wrap').style.display = t==='heatmap' ? 'block' : 'none';
+  document.getElementById('filters-bar').style.display = t==='cards' ? 'flex' : 'none';
+  if (t==='heatmap') renderHeatmap();
+}
+
+function render() {
+  var grid = document.getElementById('grid');
+  var data = af==='all' ? cards : cards.filter(function(c){return c.cat===af;});
+  if (!data.length) { grid.innerHTML = '<div class="empty">No stories in this category.</div>'; return; }
+  grid.innerHTML = data.map(function(c) {
+    var i = cards.indexOf(c);
+    var bc = c.cat==='hiring'?'bh':c.cat==='layoffs'?'bl':c.cat==='expansion'?'be':c.cat==='investment'?'bi':c.cat==='policy'?'bp':'bg';
+    return '<div class="card '+c.cat+'"><div class="ctop"><span class="badge '+bc+'">'+c.cat+'</span><div class="heat"><span class="hl2">Heat</span><div class="hbars">'+hbars(c.heat)+'</div><span class="hl2">'+c.heat+'/10</span></div></div><div class="ctitle">'+c.title+'</div><div class="csrc">'+c.src+' &middot; '+c.ago+'</div><div class="cbot"><span class="sent s'+c.sent[0]+'">'+c.sent+'</span><div style="display:flex;gap:6px"><a href="'+c.link+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--yd);font-weight:500;text-decoration:none">Read</a><button class="card-btn" style="background:var(--g2);color:var(--blk)" onclick="saveCard('+i+')">Save</button><button class="card-btn" style="background:var(--blk);color:var(--y)" onclick="openDraft('+i+')">Draft</button></div></div></div>';
+  }).join('');
+  document.getElementById('s0').textContent = cards.length;
+  var freq = cards.reduce(function(a,b){a[b.cat]=(a[b.cat]||0)+1;return a;},{});
+  var hot = Object.entries(freq).sort(function(a,b){return b[1]-a[1];})[0];
+  document.getElementById('s1').textContent = hot ? hot[0][0].toUpperCase()+hot[0].slice(1) : '-';
+  document.getElementById('s2').textContent = cards.filter(function(c){return c.cat==='hiring';}).length;
+  document.getElementById('s3').textContent = cards.filter(function(c){return c.cat==='layoffs';}).length;
+}
+
+function renderHeatmap() {
+  var hg = document.getElementById('hmap-grid');
+  if (!cards.length) { hg.innerHTML = '<div style="color:var(--g3);font-size:13px">No data yet.</div>'; return; }
+  hg.innerHTML = [].concat(cards).sort(function(a,b){return b.heat-a.heat;}).map(function(c) {
+    var i = cards.indexOf(c);
+    return '<div class="hbox h'+c.heat+'"><div class="hbox-score">'+c.heat+'<span style="font-size:11px;font-weight:400">/10</span></div><div class="hbox-cat">'+c.cat+'</div><div class="hbox-title">'+c.title+'</div><div class="hbox-meta"><span>'+c.src+'</span><span>'+c.ago+'</span></div><button class="hbox-draft" onclick="openDraft('+i+')">Draft</button></div>';
   }).join('');
 }
 
-function loadAll(){
-  var btn=document.getElementById('rbtn');
-  var dot=document.getElementById('dot');
-  var err=document.getElementById('err');
-  btn.disabled=true; dot.classList.add('spin'); err.style.display='none';
-  if(!cards.length) document.getElementById('grid').innerHTML='<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
-  document.getElementById('ts').textContent='Refreshing...';
-  Promise.all(QUERIES.map(fetchQ)).then(function(results){
-    var items=results.reduce(function(a,b){return a.concat(b);},[]);
-    var seen={};
-    var cutoff=Date.now()-48*60*60*1000;
-    var fresh=items.filter(function(i){
-      if(seen[i.title]) return false;
-      seen[i.title]=true;
-      var pubMs=new Date(i.pub||0).getTime();
-      return pubMs>cutoff||!i.pub;
+function loadAll() {
+  var btn = document.getElementById('rbtn');
+  var dot = document.getElementById('dot');
+  var err = document.getElementById('err');
+  btn.disabled = true; dot.classList.add('spin'); err.style.display = 'none';
+  if (!cards.length) document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
+  document.getElementById('ts').textContent = 'Refreshing...';
+  Promise.all(QUERIES.map(fetchQ)).then(function(results) {
+    var items = results.reduce(function(a,b){return a.concat(b);}, []);
+    var seen = {};
+    var cutoff = Date.now() - 48*60*60*1000;
+    var fresh = items.filter(function(i) {
+      if (seen[i.title]) return false;
+      seen[i.title] = true;
+      var pubMs = new Date(i.pub||0).getTime();
+      return pubMs > cutoff || !i.pub;
     }).sort(function(a,b){return b.heat-a.heat;}).slice(0,40);
-    if(fresh.length) cards=fresh;
-    if(!cards.length){
-      loadFallback();
-    } else {
-      render();
-      document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-    }
-  }).catch(function(){loadFallback();}).finally(function(){
-    dot.classList.remove('spin'); btn.disabled=false;
-    clearTimeout(refreshTimer); refreshTimer=setTimeout(loadAll,30*60*1000);
+    if (fresh.length) cards = fresh;
+    if (!cards.length) { loadFallback(); return; }
+    render();
+    document.getElementById('ts').textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  }).catch(function(){loadFallback();}).then(function(){
+    dot.classList.remove('spin'); btn.disabled = false;
+    clearTimeout(refreshTimer); refreshTimer = setTimeout(loadAll, 30*60*1000);
   });
 }
 
-function loadFallback(){
-  var err=document.getElementById('err');
-  cards=[
-    {title:'TCS to hire 40,000 freshers in FY2026 amid demand recovery in BFSI and retail',src:'Economic Times',cat:'hiring',heat:9,sent:'positive',ago:'1h ago',link:'https://economictimes.indiatimes.com'},
-    {title:"Byju's insolvency deepens as unpaid salaries cross Rs 1,400 crore mark",src:'Mint',cat:'layoffs',heat:10,sent:'negative',ago:'2h ago',link:'https://livemint.com'},
-    {title:'Tata Motors to invest Rs 16,000 crore in new EV manufacturing lines in Pune',src:'Business Standard',cat:'investment',heat:9,sent:'positive',ago:'3h ago',link:'https://business-standard.com'},
-    {title:'Infosys opens new 5,000-seat campus in Hyderabad as client wins accelerate',src:'Reuters India',cat:'expansion',heat:8,sent:'positive',ago:'4h ago',link:'https://reuters.com'},
-    {title:'Centre fast-tracks gig worker social security scheme under new labour code',src:'PTI',cat:'policy',heat:8,sent:'positive',ago:'5h ago',link:'https://ptinews.com'},
-    {title:'Zomato to hire 12,000 dark store staff ahead of 10-minute grocery expansion',src:'ET Jobs',cat:'hiring',heat:8,sent:'positive',ago:'6h ago',link:'https://economictimes.indiatimes.com'},
-    {title:'Paytm cuts 1,200 jobs in second round of AI-led cost optimisation',src:'Mint',cat:'layoffs',heat:9,sent:'negative',ago:'7h ago',link:'https://livemint.com'},
+function loadFallback() {
+  cards = [
+    {title:"TCS to hire 40,000 freshers in FY2026 amid demand recovery",src:'Economic Times',cat:'hiring',heat:9,sent:'positive',ago:'1h ago',link:'https://economictimes.indiatimes.com'},
+    {title:"Byju's insolvency deepens as unpaid salaries cross Rs 1,400 crore",src:'Mint',cat:'layoffs',heat:10,sent:'negative',ago:'2h ago',link:'https://livemint.com'},
+    {title:'Tata Motors to invest Rs 16,000 crore in new EV manufacturing lines',src:'Business Standard',cat:'investment',heat:9,sent:'positive',ago:'3h ago',link:'https://business-standard.com'},
+    {title:'Infosys opens new 5,000-seat campus in Hyderabad',src:'Reuters India',cat:'expansion',heat:8,sent:'positive',ago:'4h ago',link:'https://reuters.com'},
+    {title:'Centre fast-tracks gig worker social security scheme',src:'PTI',cat:'policy',heat:8,sent:'positive',ago:'5h ago',link:'https://ptinews.com'},
+    {title:'Zomato to hire 12,000 dark store staff ahead of grocery expansion',src:'ET Jobs',cat:'hiring',heat:8,sent:'positive',ago:'6h ago',link:'https://economictimes.indiatimes.com'},
+    {title:'Paytm cuts 1,200 jobs in AI-led cost optimisation round',src:'Mint',cat:'layoffs',heat:9,sent:'negative',ago:'7h ago',link:'https://livemint.com'},
     {title:'Samsung India breaks ground on Rs 8,000 crore Noida display plant',src:'Business Standard',cat:'expansion',heat:8,sent:'positive',ago:'9h ago',link:'https://business-standard.com'},
-    {title:'Amazon India to create 1.1 lakh seasonal jobs for Great Indian Festival',src:'Economic Times',cat:'hiring',heat:8,sent:'positive',ago:'11h ago',link:'https://economictimes.indiatimes.com'},
-    {title:'EPFO records 19.2 lakh new formal job additions in March, highest in eight months',src:'PTI',cat:'policy',heat:7,sent:'positive',ago:'13h ago',link:'https://ptinews.com'},
+    {title:'Amazon India to create 1.1 lakh seasonal jobs for festive season',src:'Economic Times',cat:'hiring',heat:8,sent:'positive',ago:'11h ago',link:'https://economictimes.indiatimes.com'},
+    {title:'EPFO records 19.2 lakh new formal job additions in March',src:'PTI',cat:'policy',heat:7,sent:'positive',ago:'13h ago',link:'https://ptinews.com'},
     {title:'Ola Electric lays off 600 engineers as EV sales miss projections',src:'Reuters',cat:'layoffs',heat:8,sent:'negative',ago:'1d ago',link:'https://reuters.com'},
-    {title:'Mahindra announces Rs 12,000 crore capex for new auto components facility in Chakan',src:'Economic Times',cat:'investment',heat:8,sent:'positive',ago:'1d ago',link:'https://economictimes.indiatimes.com'}
+    {title:'Mahindra announces Rs 12,000 crore capex for Chakan auto facility',src:'Economic Times',cat:'investment',heat:8,sent:'positive',ago:'1d ago',link:'https://economictimes.indiatimes.com'}
   ];
   render();
-  document.getElementById('ts').textContent='Sample data';
-  err.textContent='Live feeds unavailable in preview. Full live data on intelligence.wocult.com';
-  err.style.display='block';
+  var err = document.getElementById('err');
+  document.getElementById('ts').textContent = 'Sample data';
+  err.textContent = 'Live feeds unavailable in preview. Full live data on intelligence.wocult.com';
+  err.style.display = 'block';
 }
 
-function setWorkflowCard(card){
-  currentCard=card;
-  document.getElementById('main').style.display='none';
-  document.getElementById('workflow').style.display='block';
-  document.documentElement.style.overflow='auto';
-  document.body.style.overflow='auto';
-  var bc=card.cat==='hiring'?'bh':card.cat==='layoffs'?'bl':card.cat==='expansion'?'be':card.cat==='investment'?'bi':card.cat==='policy'?'bp':'bg';
-  document.getElementById('source-card').innerHTML='<span class="source-badge">'+card.cat+'</span><div><div class="source-title">'+(card._url||card.title)+'</div><div class="source-meta">'+card.src+' &middot; '+(card.ago||'now')+' &middot; Heat '+(card.heat||8)+'/10</div></div>';
-  document.getElementById('b-title').value='';
-  document.getElementById('b-angle').value='';
-  document.getElementById('r-date').value=new Date().toISOString().split('T')[0];
+function setWorkflowCard(card) {
+  currentCard = card;
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('workflow').style.display = 'block';
+  document.documentElement.style.overflow = 'auto';
+  document.body.style.overflow = 'auto';
+  var bc = card.cat==='hiring'?'bh':card.cat==='layoffs'?'bl':card.cat==='expansion'?'be':card.cat==='investment'?'bi':card.cat==='policy'?'bp':'bg';
+  document.getElementById('source-card').innerHTML = '<span class="source-badge">'+card.cat+'</span><div><div class="source-title">'+(card._url||card.title)+'</div><div class="source-meta">'+card.src+' &middot; '+(card.ago||'now')+'</div></div>';
+  document.getElementById('b-title').value = '';
+  document.getElementById('b-angle').value = '';
+  document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
   goStep(1);
 }
-
-function openDraft(idx){setWorkflowCard(cards[idx]);}
-
-function openDraftFromUrl(){
-  var url=prompt('Paste the article URL:');
-  if(!url) return;
-  var host='custom';
-  try{host=new URL(url).hostname.replace('www.','');}catch(e){}
-  setWorkflowCard({title:url,src:host,cat:'general',heat:8,ago:'now',link:url,_url:url});
+function openDraft(idx) { setWorkflowCard(cards[idx]); }
+function openDraftFromUrl() {
+  var url = prompt('Paste the article URL:');
+  if (!url) return;
+  var host = 'link';
+  try { host = new URL(url).hostname.replace('www.',''); } catch(e) {}
+  setWorkflowCard({title:url, src:host, cat:'general', heat:8, ago:'now', link:url, _url:url});
 }
-
-function closeWorkflow(){
-  document.getElementById('workflow').style.display='none';
-  document.getElementById('main').style.display='block';
+function closeWorkflow() {
+  document.getElementById('workflow').style.display = 'none';
+  document.getElementById('main').style.display = 'block';
 }
-
-function goStep(n){
-  for(var i=1;i<=5;i++){
-    document.getElementById('step'+i).style.display=i===n?'block':'none';
-    var ws=document.getElementById('ws'+i);
-    ws.className='wf-step'+(i<n?' done':i===n?' active':'');
+function goStep(n) {
+  for (var i=1; i<=5; i++) {
+    document.getElementById('step'+i).style.display = i===n ? 'block' : 'none';
+    var ws = document.getElementById('ws'+i);
+    ws.className = 'wf-step'+(i<n?' done':i===n?' active':'');
   }
-  if(n===5) buildFinalPreview();
+  if (n===5) buildFinalPreview();
   window.scrollTo(0,0);
 }
-
-function startGeneration(){
-  var angle=document.getElementById('b-angle').value;
-  var titleHint=document.getElementById('b-title').value.trim();
-  document.getElementById('step1').style.display='none';
-  document.getElementById('step2').style.display='block';
-  document.getElementById('ws1').className='wf-step done';
-  document.getElementById('ws2').className='wf-step active';
+function startGeneration() {
+  var angle = document.getElementById('b-angle').value;
+  var titleHint = document.getElementById('b-title').value.trim();
+  document.getElementById('step1').style.display = 'none';
+  document.getElementById('step2').style.display = 'block';
+  document.getElementById('ws1').className = 'wf-step done';
+  document.getElementById('ws2').className = 'wf-step active';
   window.scrollTo(0,0);
-  var steps=['gs1','gs2','gs3','gs4'];
-  var si=0;
-  var anim=setInterval(function(){
-    if(si>0){var prev=document.getElementById(steps[si-1]);prev.classList.remove('active');prev.classList.add('done');}
-    if(si<steps.length){document.getElementById(steps[si]).classList.add('active');si++;}
+  var steps = ['gs1','gs2','gs3','gs4'];
+  var si = 0;
+  var anim = setInterval(function() {
+    if (si>0) { var prev=document.getElementById(steps[si-1]); prev.classList.remove('active'); prev.classList.add('done'); }
+    if (si<steps.length) { document.getElementById(steps[si]).classList.add('active'); si++; }
     else clearInterval(anim);
-  },1200);
-
-  var sourceInfo=currentCard._url?('Source URL: '+currentCard._url):('Source headline (do not copy): '+currentCard.title+'\nSource: '+currentCard.src);
-  var prompt='You are a senior editor at Wocult, an Indian workplace culture media brand. Sharp, culturally aware, human — not corporate.\n\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Focus on human and cultural impact on Indian workers')+'\n\nCRITICAL FACTUAL STANDARDS — follow these strictly:\n1. NEVER invent or assume specific numbers, headcounts, ratings, or statistics. Only use figures explicitly stated in the source.\n2. Use ranges when the source gives ranges (e.g. "65,000-80,000 job opportunities" not "80,000 jobs").\n3. Distinguish between direct employment and "job opportunities" — these are not the same.\n4. For company HQ, founding history, brand count — only state what is publicly confirmed. If unsure, omit or use "reportedly".\n5. Employee sentiment data (Glassdoor etc.) must be attributed and softened: "employees rate it around X on Glassdoor" not stated as fact.\n6. Anything that is interpretation or analysis must be clearly framed as such: "suggests", "indicates", "appears to", not stated as confirmed fact.\n7. If a claim cannot be sourced from the article or widely known public record, remove it entirely. Do not fill gaps with plausible-sounding detail.\n8. Prefer "could create" over "will create", "targets" over "plans to achieve", "expects" over "confirms".\n\nCreate an original Wocult headline — never copy the source. Punchy, specific, culturally Indian, for a 25-40 year old working professional.\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>800-1000 word article HTML with 4 h3 subheadings: Context, The Worker Angle, The Bigger Pattern, What Next. Flowing prose, no bullet points. All statistics attributed to source. Uncertain claims softened.</p>","readTime":"X min read"}';
-
-  fetch(WORKER+'/generate',{
+  }, 1200);
+  var sourceInfo = currentCard._url ? ('Source URL: '+currentCard._url) : ('Source headline (do not copy): '+currentCard.title+'\nSource: '+currentCard.src);
+  var prompt = 'You are a senior editor at Wocult, an Indian workplace culture media brand. Sharp, culturally aware, human, not corporate.\n\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Focus on human and cultural impact on Indian workers')+'\n\nCRITICAL FACTUAL STANDARDS:\n1. Never invent numbers, headcounts, ratings or statistics. Only use figures from the source.\n2. Use ranges when source gives ranges e.g. 65,000-80,000 job opportunities not 80,000 jobs.\n3. Distinguish direct employment from job opportunities.\n4. For HQ, brand count, founding - only state what is confirmed. If unsure, omit.\n5. Sentiment data must be attributed and softened: employees rate it around X.\n6. Analysis must be framed as such: suggests, indicates, appears to.\n7. If a claim cannot be sourced, remove it. Do not fill gaps with plausible detail.\n8. Use could create over will create, targets over plans to achieve.\n\nCreate an original Wocult headline, never copy the source. Punchy, specific, culturally Indian, for a 25-40 year old working professional.\n\nReturn ONLY valid JSON no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>800-1000 word article HTML with 4 h3 subheadings Context The Worker Angle The Bigger Pattern What Next. Flowing prose no bullet points. All statistics attributed. Uncertain claims softened.</p>","readTime":"X min read"}';
+  fetch(WORKER+'/generate', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:3000,messages:[{role:'user',content:prompt}]})
-  }).then(function(r){return r.json();}).then(function(data){
+    body:JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, messages:[{role:'user',content:prompt}]})
+  }).then(function(r){return r.json();}).then(function(data) {
     clearInterval(anim);
     steps.forEach(function(s){var el=document.getElementById(s);el.classList.remove('active');el.classList.add('done');});
-    if(data.error) throw new Error(data.error.message);
-    var txt=(data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
-    var s=txt.indexOf('{'),e=txt.lastIndexOf('}');
-    if(s===-1) throw new Error('No JSON in response');
-    generatedContent=JSON.parse(txt.slice(s,e+1));
-    document.getElementById('r-title').value=generatedContent.title||'';
-    document.getElementById('r-slug').value=generatedContent.slug||'';
-    document.getElementById('r-short').value=generatedContent.shortIntro||'';
-    document.getElementById('r-40').value=generatedContent.intro40||'';
-    document.getElementById('r-excerpt').value=generatedContent.excerpt||'';
-    document.getElementById('r-intro-rt').value=generatedContent.introRichText||'';
-    document.getElementById('r-body').value=generatedContent.body||'';
-    document.getElementById('r-readtime').value=generatedContent.readTime||'5 min read';
-    document.getElementById('img-suggestions').innerHTML=['india workplace','office workers india','business india','hiring india','workforce india'].map(function(kw){return '<button class="chip" onclick="setImgSearch(\''+kw+'\')" style="font-size:11px">'+kw+'</button>';}).join('');
-    document.getElementById('step2').style.display='none';
-    document.getElementById('step3').style.display='block';
-    document.getElementById('ws2').className='wf-step done';
-    document.getElementById('ws3').className='wf-step active';
+    if (data.error) throw new Error(data.error.message);
+    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
+    if (s===-1) throw new Error('No JSON in response');
+    generatedContent = JSON.parse(txt.slice(s,e+1));
+    document.getElementById('r-title').value = generatedContent.title||'';
+    document.getElementById('r-slug').value = generatedContent.slug||'';
+    document.getElementById('r-short').value = generatedContent.shortIntro||'';
+    document.getElementById('r-40').value = generatedContent.intro40||'';
+    document.getElementById('r-excerpt').value = generatedContent.excerpt||'';
+    document.getElementById('r-intro-rt').value = generatedContent.introRichText||'';
+    document.getElementById('r-body').value = generatedContent.body||'';
+    document.getElementById('r-readtime').value = generatedContent.readTime||'5 min read';
+    document.getElementById('img-suggestions').innerHTML = ['india workplace','office workers india','business india','hiring india','workforce india'].map(function(kw){return '<button class="chip" onclick="setImgSearch(\''+kw+'\')" style="font-size:11px">'+kw+'</button>';}).join('');
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'block';
+    document.getElementById('ws2').className = 'wf-step done';
+    document.getElementById('ws3').className = 'wf-step active';
     window.scrollTo(0,0);
-  }).catch(function(e){
+  }).catch(function(e) {
     clearInterval(anim);
-    document.getElementById('step2').style.display='none';
-    document.getElementById('step1').style.display='block';
-    document.getElementById('ws2').className='wf-step';
-    document.getElementById('ws1').className='wf-step active';
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step1').style.display = 'block';
+    document.getElementById('ws2').className = 'wf-step';
+    document.getElementById('ws1').className = 'wf-step active';
     alert('Generation failed: '+e.message);
   });
 }
-
-function handleImgUpload(e){
-  var file=e.target.files[0];
-  if(!file) return;
-  var reader=new FileReader();
-  reader.onload=function(ev){
-    document.getElementById('img-url').value='';
-    var p=document.getElementById('img-preview');
-    var img=document.getElementById('img-preview-el');
-    img.src=ev.target.result;
-    p.style.display='block';
-    window._uploadedImgData=ev.target.result;
+function handleImgUpload(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    document.getElementById('img-url').value = '';
+    document.getElementById('img-preview-el').src = ev.target.result;
+    document.getElementById('img-preview').style.display = 'block';
   };
   reader.readAsDataURL(file);
 }
-
-function previewImg(){var url=document.getElementById('img-url').value.trim();var p=document.getElementById('img-preview');document.getElementById('img-preview-el').src=url;p.style.display=url?'block':'none';}
-function setImgSearch(kw){window.open('https://unsplash.com/s/photos/'+encodeURIComponent(kw)+'?orientation=landscape','_blank');}
-function searchImages(){var t=document.getElementById('r-title').value||'india workplace';window.open('https://unsplash.com/s/photos/'+encodeURIComponent(t.split(' ').slice(0,3).join(' '))+'?orientation=landscape','_blank');}
-
-function buildFinalPreview(){
-  var title=document.getElementById('r-title').value;
-  var excerpt=document.getElementById('r-excerpt').value;
-  var imgUrl=document.getElementById('img-url').value;
-  var date=document.getElementById('r-date').value;
-  var rt=document.getElementById('r-readtime').value;
-  document.getElementById('final-preview').innerHTML=(imgUrl?'<img src="'+imgUrl+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin-bottom:16px" />':'<div style="width:100%;height:80px;background:var(--g2);border-radius:6px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--g3)">No image selected</div>')+'<div style="font-size:11px;color:var(--g3);margin-bottom:6px">Affairs &middot; Wocult Team &middot; '+rt+' &middot; '+date+'</div><div style="font-size:18px;font-weight:600;margin-bottom:8px;line-height:1.3">'+title+'</div><div style="font-size:13px;color:var(--g3);line-height:1.6">'+excerpt.slice(0,200)+(excerpt.length>200?'...':'')+'</div>';
+function previewImg() {
+  var url = document.getElementById('img-url').value.trim();
+  document.getElementById('img-preview-el').src = url;
+  document.getElementById('img-preview').style.display = url ? 'block' : 'none';
 }
-
-function exportCSV(){
-  var fields=[
-    ['Post Title', document.getElementById('r-title').value],
-    ['Slug', document.getElementById('r-slug').value],
-    ['Collection ID', '695be252bae2cf37c3a4b17b'],
-    ['Locale ID', ''],
-    ['Item ID', ''],
-    ['Archived', 'false'],
-    ['Draft', 'true'],
-    ['Created On', ''],
-    ['Updated On', ''],
-    ['Published On', ''],
-    ['Sub-Title-Heading', ''],
-    ['Category', 'Affairs'],
-    ['Excerpt', document.getElementById('r-excerpt').value],
-    ['Summary Rich Text', ''],
-    ['Story Intro Para', document.getElementById('r-short').value],
-    ['Story Intro Para - Rich Text', document.getElementById('r-intro-rt').value],
-    ['40 word intro', document.getElementById('r-40').value],
-    ['Short Story Intro', document.getElementById('r-short').value],
-    ['Body', document.getElementById('r-body').value],
-    ['Signal Type', ''],
-    ['Read time', document.getElementById('r-readtime').value],
-    ['Unwind Type', ''],
-    ['HOT', ''],
-    ['Featured', ''],
-    ['Signal', ''],
-    ['Editor Pick', ''],
-    ['Opinion', ''],
-    ['In focus', ''],
-    ['Trending', ''],
-    ['Publish date', document.getElementById('r-date').value],
-    ['Post Image', document.getElementById('img-url').value],
-    ['Writer', 'Wocult Team'],
-    ['Voice Type', '']
+function setImgSearch(kw) { window.open('https://unsplash.com/s/photos/'+encodeURIComponent(kw)+'?orientation=landscape','_blank'); }
+function searchImages() {
+  var t = document.getElementById('r-title').value||'india workplace';
+  window.open('https://unsplash.com/s/photos/'+encodeURIComponent(t.split(' ').slice(0,3).join(' '))+'?orientation=landscape','_blank');
+}
+function buildFinalPreview() {
+  var title = document.getElementById('r-title').value;
+  var excerpt = document.getElementById('r-excerpt').value;
+  var imgUrl = document.getElementById('img-url').value;
+  var date = document.getElementById('r-date').value;
+  var rt = document.getElementById('r-readtime').value;
+  document.getElementById('final-preview').innerHTML = (imgUrl?'<img src="'+imgUrl+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin-bottom:16px" />':'<div style="width:100%;height:80px;background:var(--g2);border-radius:6px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--g3)">No image selected</div>')+'<div style="font-size:11px;color:var(--g3);margin-bottom:6px">Affairs &middot; Wocult Team &middot; '+rt+' &middot; '+date+'</div><div style="font-size:18px;font-weight:600;margin-bottom:8px;line-height:1.3">'+title+'</div><div style="font-size:13px;color:var(--g3);line-height:1.6">'+excerpt.slice(0,200)+(excerpt.length>200?'...':'')+'</div>';
+}
+function exportCSV() {
+  var fields = [
+    ['Post Title',document.getElementById('r-title').value],
+    ['Slug',document.getElementById('r-slug').value],
+    ['Collection ID','695be252bae2cf37c3a4b17b'],
+    ['Locale ID',''],['Item ID',''],['Archived','false'],['Draft','true'],
+    ['Created On',''],['Updated On',''],['Published On',''],
+    ['Sub-Title-Heading',''],['Category','Affairs'],
+    ['Excerpt',document.getElementById('r-excerpt').value],
+    ['Summary Rich Text',''],
+    ['Story Intro Para',document.getElementById('r-short').value],
+    ['Story Intro Para - Rich Text',document.getElementById('r-intro-rt').value],
+    ['40 word intro',document.getElementById('r-40').value],
+    ['Short Story Intro',document.getElementById('r-short').value],
+    ['Body',document.getElementById('r-body').value],
+    ['Signal Type',''],['Read time',document.getElementById('r-readtime').value],
+    ['Unwind Type',''],['HOT',''],['Featured',''],['Signal',''],
+    ['Editor Pick',''],['Opinion',''],['In focus',''],['Trending',''],
+    ['Publish date',document.getElementById('r-date').value],
+    ['Post Image',document.getElementById('img-url').value],
+    ['Writer','Wocult Team'],['Voice Type','']
   ];
-  function escCSV(v){
-    v=String(v||'').replace(/\r?\n/g,' ');
-    if(v.includes('"')||v.includes(',')||v.includes('\n')) return '"'+v.replace(/"/g,'""')+'"';
-    return v;
-  }
-  var rows=fields.map(function(f){return escCSV(f[0])+','+escCSV(f[1]);});
-  var csv=rows.join('\n');
-  var blob=new Blob([csv],{type:'text/csv'});
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=(document.getElementById('r-slug').value||'wocult-story')+'.csv';
+  function esc(v) { v=String(v||'').replace(/\r?\n/g,' '); if(v.indexOf('"')>=0||v.indexOf(',')>=0) return '"'+v.replace(/"/g,'""')+'"'; return v; }
+  var csv = fields.map(function(f){return esc(f[0])+','+esc(f[1]);}).join('\n');
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = (document.getElementById('r-slug').value||'wocult-story')+'.csv';
   a.click();
 }
-
-function publishToWebflow(){
-  var btn=document.getElementById('publish-btn');
-  btn.disabled=true; btn.textContent='Publishing...';
-  var fieldData={
+function publishToWebflow() {
+  var btn = document.getElementById('publish-btn');
+  btn.disabled = true; btn.textContent = 'Publishing...';
+  var fieldData = {
     name:document.getElementById('r-title').value,
     slug:document.getElementById('r-slug').value,
     'short-story-intro':document.getElementById('r-short').value,
@@ -634,23 +688,24 @@ function publishToWebflow(){
     writer:'Wocult Team',
     category:'Affairs'
   };
-  var imgUrl=document.getElementById('img-url').value.trim();
-  if(imgUrl) fieldData['post-image']=imgUrl;
-  fetch(WORKER+'/webflow',{
+  var imgUrl = document.getElementById('img-url').value.trim();
+  if (imgUrl) fieldData['post-image'] = imgUrl;
+  fetch(WORKER+'/webflow', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({fieldData:fieldData,isDraft:true,isArchived:false})
-  }).then(function(r){return r.json().then(function(d){return {ok:r.ok,data:d};});}).then(function(res){
-    if(res.ok){
-      document.getElementById('publish-result').style.display='block';
-      document.getElementById('publish-result').innerHTML='<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Published as draft!</div><div class="publish-sub">Review and publish from your Webflow dashboard.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
-      document.getElementById('publish-actions').style.display='none';
+    body:JSON.stringify({fieldData:fieldData, isDraft:true, isArchived:false})
+  }).then(function(r){return r.json().then(function(d){return {ok:r.ok,data:d};});}).then(function(res) {
+    if (res.ok) {
+      document.getElementById('publish-result').style.display = 'block';
+      document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Published as draft!</div><div class="publish-sub">Review and publish from your Webflow dashboard.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
+      document.getElementById('publish-actions').style.display = 'none';
     } else {
       throw new Error(res.data.message||JSON.stringify(res.data));
     }
   }).catch(function(e){btn.disabled=false;btn.textContent='Publish to Webflow';alert('Publish failed: '+e.message);});
 }
 
+renderSaved();
 loadAll();
 </script>
 </body>
