@@ -129,7 +129,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v1.9</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v2.0</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -311,16 +311,7 @@ var _lsOk = false;
 try { localStorage.setItem('_t','1'); localStorage.removeItem('_t'); _lsOk = true; saved = JSON.parse(localStorage.getItem('wocult_saved') || '[]'); } catch(e) {}
 function savePersist() { if (_lsOk) { try { localStorage.setItem('wocult_saved', JSON.stringify(saved)); } catch(e) {} } }
 
-var QUERIES = [
-  {q:'india+hiring+recruitment+jobs', cat:'hiring'},
-  {q:'india+layoffs+job+cuts+retrenchment', cat:'layoffs'},
-  {q:'india+factory+expansion+new+plant+campus', cat:'expansion'},
-  {q:'india+investment+capex+manufacturing+capacity', cat:'investment'},
-  {q:'india+labour+policy+employment+workforce+government', cat:'policy'},
-  {q:'india+workforce+jobs+industry+economy', cat:'general'},
-  {q:'india+hotel+hospitality+retail+logistics+jobs', cat:'hiring'},
-  {q:'india+startup+funding+headcount+talent', cat:'investment'}
-];
+
 var POS = ['hire','hiring','expand','invest','growth','rise','surge','boost','launch','appoint','fund'];
 var NEG = ['layoff','fired','cut','reduc','restructur','fall','decline','retrench','shut'];
 
@@ -350,28 +341,7 @@ function hbars(sc) {
   return b;
 }
 
-function fetchQ(q) {
-  return new Promise(function(resolve) {
-    var ctrl = new AbortController();
-    var t = setTimeout(function(){ctrl.abort();resolve([]);}, 12000);
-    fetch(WORKER+'?q='+encodeURIComponent(q.q), {signal:ctrl.signal})
-      .then(function(r){return r.text();})
-      .then(function(txt) {
-        clearTimeout(t);
-        var xml = new DOMParser().parseFromString(txt, 'text/xml');
-        var items = [].slice.call(xml.querySelectorAll('item')).slice(0,6).map(function(item) {
-          var title = strip((item.querySelector('title')||{}).textContent||'');
-          var linkEl = item.querySelector('link');
-          var link = linkEl ? (linkEl.textContent||((linkEl.nextSibling||{}).textContent)||'#') : '#';
-          var pub = ((item.querySelector('pubDate')||{}).textContent)||'';
-          var src = strip(((item.querySelector('source')||{}).textContent)||'Google News');
-          return {title:title, link:link, pub:pub, src:src, cat:q.cat, sent:sentiment(title), heat:heatScore(pub,q.cat), ago:ago(pub)};
-        }).filter(function(i){return i.title.length>10;});
-        resolve(items);
-      })
-      .catch(function(){clearTimeout(t);resolve([]);});
-  });
-}
+
 
 function saveCard(idx) {
   var c = cards[idx];
@@ -485,20 +455,27 @@ function loadAll() {
   btn.disabled = true; dot.classList.add('spin'); err.style.display = 'none';
   if (!cards.length) document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
   document.getElementById('ts').textContent = 'Refreshing...';
-  Promise.all(QUERIES.map(fetchQ)).then(function(results) {
-    var items = results.reduce(function(a,b){return a.concat(b);}, []);
-    var seen = {};
-    var cutoff = Date.now() - 48*60*60*1000;
-    var fresh = items.filter(function(i) {
-      if (seen[i.title]) return false;
-      seen[i.title] = true;
-      var pubMs = new Date(i.pub||0).getTime();
-      return pubMs > cutoff || !i.pub;
-    }).sort(function(a,b){return b.heat-a.heat;}).slice(0,40);
-    if (fresh.length) cards = fresh;
-    if (!cards.length) { loadFallback(); return; }
-    render();
-    document.getElementById('ts').textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  var newsPrompt = 'Search the web for the latest Indian workforce and industry news from the past 48 hours. Find 15 to 20 recent stories covering: corporate hiring drives and recruitment announcements, layoffs or job cuts or retrenchments, factory or office or campus expansions and new facility openings, major investments in manufacturing capacity or infrastructure, and government policy changes affecting Indian workers or employment. For each story provide these fields: title (the news headline), src (publication name such as Economic Times or Mint or Business Standard or Reuters India or PTI or NDTV Business), cat (one of: hiring, layoffs, expansion, investment, policy), pub (publication datetime in ISO format if available), link (full article URL), sent (positive or negative or neutral). Prioritise stories from major Indian business publications. Return ONLY a valid JSON array of objects with no markdown and no explanation.';
+  fetch(WORKER+'/generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:3000,
+      tools:[{"type":"web_search_20250305","name":"web_search"}],
+      messages:[{role:'user',content:newsPrompt}]
+    })
+  }).then(function(r){return r.json();}).then(function(data) {
+    if (data.error) throw new Error(data.error.message||'API error');
+    var text = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    var s = text.indexOf('['); var e = text.lastIndexOf(']');
+    if (s===-1) throw new Error('no json array');
+    var items = JSON.parse(text.slice(s,e+1));
+    var fresh = items.map(function(i){
+      return {title:strip(i.title||''), src:i.src||'News', cat:i.cat||'general', pub:i.pub||'', link:i.link||'#', sent:i.sent||sentiment(i.title||''), heat:heatScore(i.pub,i.cat), ago:ago(i.pub)};
+    }).filter(function(i){return i.title.length>10;}).sort(function(a,b){return b.heat-a.heat;}).slice(0,40);
+    if (fresh.length) { cards = fresh; render(); document.getElementById('ts').textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
+    else loadFallback();
   }).catch(function(){loadFallback();}).then(function(){
     dot.classList.remove('spin'); btn.disabled = false;
     clearTimeout(refreshTimer); refreshTimer = setTimeout(loadAll, 30*60*1000);
@@ -523,7 +500,7 @@ function loadFallback() {
   render();
   var err = document.getElementById('err');
   document.getElementById('ts').textContent = 'Sample data';
-  err.textContent = 'Live feeds unavailable in preview. Full live data on intelligence.wocult.com';
+  err.textContent = 'Could not fetch live news — showing sample data. Check Worker logs or try refreshing.';
   err.style.display = 'block';
 }
 
