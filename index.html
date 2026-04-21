@@ -129,7 +129,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v2.3</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v2.4</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -448,45 +448,16 @@ function renderHeatmap() {
   }).join('');
 }
 
-var QUERIES = [
-  {q:'india+hiring+layoffs+jobs+retrenchment+workforce+2026', cat:'mixed'},
-  {q:'india+factory+expansion+investment+capex+policy+employment+2026', cat:'mixed'}
-];
-
-function fetchNews() {
-  return Promise.all(QUERIES.map(function(q) {
-    return new Promise(function(resolve) {
-      var ctrl = new AbortController();
-      var t = setTimeout(function(){ctrl.abort();resolve([]);}, 15000);
-      fetch(WORKER+'?q='+encodeURIComponent(q.q), {signal:ctrl.signal})
-        .then(function(r){return r.text();})
-        .then(function(txt) {
-          clearTimeout(t);
-          var xml = new DOMParser().parseFromString(txt,'text/xml');
-          var items = [].slice.call(xml.querySelectorAll('item')).slice(0,10).map(function(item) {
-            var title = strip((item.querySelector('title')||{}).textContent||'');
-            var linkEl = item.querySelector('link');
-            var link = linkEl ? (linkEl.textContent||((linkEl.nextSibling||{}).nodeValue)||'#') : '#';
-            var pub = ((item.querySelector('pubDate')||{}).textContent)||'';
-            var src = strip(((item.querySelector('source')||{}).textContent)||'News');
-            var cat = catFromTitle(title);
-            return {title:title,link:link,pub:pub,src:src,cat:cat,sent:sentiment(title),heat:heatScore(pub,cat),ago:ago(pub)};
-          }).filter(function(i){return i.title.length>10;});
-          resolve(items);
-        }).catch(function(){clearTimeout(t);resolve([]);});
-    });
-  }));
-}
-
 function catFromTitle(t) {
   var s = t.toLowerCase();
-  if (/hire|hiring|recruit|job opening|appointment|onboard/.test(s)) return 'hiring';
-  if (/layoff|retrench|job cut|fired|pink slip|redund/.test(s)) return 'layoffs';
-  if (/expand|campus|plant|facility|new office|inaugurat/.test(s)) return 'expansion';
-  if (/invest|capex|crore|billion|fund|raise|acquisition/.test(s)) return 'investment';
-  if (/policy|scheme|law|regulation|epfo|ministry|govt/.test(s)) return 'policy';
+  if (/hire|hiring|recruit|onboard|appointment|talent acquisition/.test(s)) return 'hiring';
+  if (/layoff|retrench|job cut|fired|pink slip|redundan|downsiz/.test(s)) return 'layoffs';
+  if (/expand|campus|plant|facility|new office|inaugurat|greenfield/.test(s)) return 'expansion';
+  if (/invest|capex|crore|billion|fund|raise|acquisition|merger/.test(s)) return 'investment';
+  if (/policy|scheme|law|regulation|epfo|ministry|govt|government|labour code/.test(s)) return 'policy';
   return 'general';
 }
+
 function loadAll() {
   var btn = document.getElementById('rbtn');
   var dot = document.getElementById('dot');
@@ -494,22 +465,32 @@ function loadAll() {
   btn.disabled = true; dot.classList.add('spin'); err.style.display = 'none';
   if (!cards.length) document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
   document.getElementById('ts').textContent = 'Refreshing...';
-  fetchNews().then(function(results) {
-    var items = results.reduce(function(a,b){return a.concat(b);}, []);
-    var seen = {};
-    var cutoffMs = Date.now() - 48*3600000;
-    var fresh = items.filter(function(i) {
-      if (!i.title || seen[i.title]) return false;
-      seen[i.title] = true;
-      if (i.pub) { var ms = new Date(i.pub).getTime(); if (!isNaN(ms) && ms < cutoffMs) return false; }
-      return true;
-    }).sort(function(a,b){return b.heat-a.heat;}).slice(0,40);
-    if (fresh.length) { cards = fresh; render(); document.getElementById('ts').textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
-    else loadFallback();
-  }).catch(function(){loadFallback();}).then(function(){
-    dot.classList.remove('spin'); btn.disabled = false;
-    clearTimeout(refreshTimer); refreshTimer = setTimeout(loadAll, 30*60*1000);
-  });
+  fetch(WORKER + '/news')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.results || !data.results.length) throw new Error('no results');
+      var seen = {};
+      var cutoffMs = Date.now() - 48 * 3600000;
+      var fresh = data.results.map(function(i) {
+        var title = strip(i.title || '');
+        var cat = catFromTitle(title);
+        var pub = i.pubDate || '';
+        return {title:title, src:i.source_name||i.source_id||'News', cat:cat, pub:pub, link:i.link||'#', sent:i.sentiment||sentiment(title), heat:heatScore(pub,cat), ago:ago(pub)};
+      }).filter(function(i) {
+        if (!i.title || i.title.length < 10) return false;
+        if (seen[i.title]) return false;
+        seen[i.title] = true;
+        if (i.pub) { var ms = new Date(i.pub).getTime(); if (!isNaN(ms) && ms < cutoffMs) return false; }
+        return true;
+      }).sort(function(a,b) { return b.heat - a.heat; }).slice(0,40);
+      if (fresh.length) { cards = fresh; render(); document.getElementById('ts').textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
+      else loadFallback();
+    })
+    .catch(function() { loadFallback(); })
+    .then(function() {
+      dot.classList.remove('spin'); btn.disabled = false;
+      clearTimeout(refreshTimer); refreshTimer = setTimeout(loadAll, 30*60*1000);
+    });
 }
 
 function loadFallback() {
