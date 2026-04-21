@@ -129,7 +129,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v2.2</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v2.3</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -459,7 +459,7 @@ function loadAll() {
   var todayStr = now.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   var cutoffDate = new Date(now - 48*3600000);
   var cutoffStr = cutoffDate.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
-  var newsPrompt = 'Today is '+todayStr+'. Search the web for Indian workforce and industry news published on or after '+cutoffStr+'. I need ONLY stories from the last 48 hours — reject anything older, even if relevant. Find 15 to 20 stories across these categories: corporate hiring drives or recruitment announcements (cat: hiring), layoffs or job cuts or retrenchments (cat: layoffs), factory or campus expansions or new facility openings (cat: expansion), major investments in manufacturing or infrastructure capacity (cat: investment), government policy changes affecting Indian workers or employment (cat: policy). For each story return these exact fields: title (news headline), src (publication name e.g. Economic Times, Mint, Business Standard, Reuters India, PTI, Hindu BusinessLine, NDTV Business), cat (hiring/layoffs/expansion/investment/policy), pub (ISO 8601 datetime of publication — must be within last 48 hours), link (full article URL), sent (positive/negative/neutral). Do NOT include stories older than 48 hours. Return ONLY a valid JSON array with no markdown and no explanation before or after.';
+  var newsPrompt = 'Today is '+todayStr+'. Find 12 Indian workforce news stories from the last 48 hours (after '+cutoffStr+'). Categories: hiring, layoffs, expansion, investment, policy. For each return JSON: {title, src, cat, pub (ISO date), link, sent}. Only last 48h. Return ONLY a JSON array.';
   fetch(WORKER+'/generate', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
