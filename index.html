@@ -129,7 +129,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v2.5</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v2.6</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -302,7 +302,6 @@ var WORKER = 'https://wocult-news-proxy.anmadaan.workers.dev';
 var cards = [];
 var af = 'all';
 var activeTab = 'cards';
-var refreshTimer;
 var currentCard = null;
 var generatedContent = {};
 
@@ -488,10 +487,14 @@ function loadAll() {
   if (!cards.length) document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
   document.getElementById('ts').textContent = 'Refreshing...';
   Promise.all([
-    fetchRSS('india hiring layoffs jobs workforce'),
-    fetchRSS('india factory expansion investment capex policy employment')
+    fetchRSS('india+hiring+recruitment+jobs+2026'),
+    fetchRSS('india+layoffs+job+cuts+retrenchment+2026'),
+    fetchRSS('india+factory+expansion+new+plant+campus+2026'),
+    fetchRSS('india+investment+capex+manufacturing+capacity+2026'),
+    fetchRSS('india+labour+policy+employment+workforce+government+2026'),
+    fetchRSS('india+workforce+jobs+industry+economy+2026')
   ]).then(function(results) {
-    var items = results[0].concat(results[1]);
+    var items = results.reduce(function(a,b){return a.concat(b);}, []);
     var seen = {};
     var cutoffMs = Date.now() - 48*3600000;
     var fresh = items.map(function(i) {
@@ -507,7 +510,6 @@ function loadAll() {
     else loadFallback();
   }).catch(function(){loadFallback();}).then(function(){
     dot.classList.remove('spin'); btn.disabled = false;
-    clearTimeout(refreshTimer); refreshTimer = setTimeout(loadAll, 30*60*1000);
   });
 }
 
