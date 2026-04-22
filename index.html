@@ -129,7 +129,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v3.2</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v3.3</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -543,14 +543,14 @@ function loadAll() {
   document.getElementById('ts').textContent = 'Refreshing...';
 
   var today = new Date().toISOString().slice(0,10);
-  var prompt = 'Today is ' + today + '. Search the web for Indian news published TODAY (' + today + ') about corporate hiring, layoffs, job cuts, factory expansion, business investment, and labour policy in India. Only include articles from today. Return ONLY a JSON array (no markdown, no explanation) of up to 20 articles. Each item must have: title (string), url (string), source (string), publishedAt (ISO date string), category (one of: hiring/layoffs/expansion/investment/policy/general). Example: [{"title":"...","url":"...","source":"...","publishedAt":"2026-04-22T10:00:00Z","category":"hiring"}]';
+  var prompt = 'Search for India workforce news today ' + today + ': hiring, layoffs, expansion, investment, policy. Return JSON array only, max 10 items: [{title,url,source,publishedAt,category}]. Categories: hiring/layoffs/expansion/investment/policy/general. No markdown.';
 
   fetch(WORKER + '/generate', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 4000,
+      max_tokens: 1500,
       tools: [{"type":"web_search_20250305","name":"web_search"}],
       messages: [{role:'user', content: prompt}]
     })
