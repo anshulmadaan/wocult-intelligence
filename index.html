@@ -129,7 +129,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v2.6</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v2.8</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -165,6 +165,11 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 <div class="tabs">
   <div class="tab on" id="tab-cards" onclick="switchTab('cards')">Cards</div>
   <div class="tab" id="tab-heatmap" onclick="switchTab('heatmap')">Heatmap</div>
+  <div class="tab" id="tab-search" onclick="switchTab('search')">Search</div>
+</div>
+<div id="search-bar" style="display:none;padding:12px 24px;display:none;align-items:center;gap:10px">
+  <input id="search-input" class="saved-input" style="max-width:500px" placeholder="e.g. appraisal, India, April 2026" onkeydown="if(event.key==='Enter')runSearch()" />
+  <button class="btn" onclick="runSearch()">Search</button>
 </div>
 <div id="filters-bar" class="filters">
   <span class="fl">Filter:</span>
@@ -415,10 +420,36 @@ function switchTab(t) {
   activeTab = t;
   document.getElementById('tab-cards').classList.toggle('on', t==='cards');
   document.getElementById('tab-heatmap').classList.toggle('on', t==='heatmap');
+  document.getElementById('tab-search').classList.toggle('on', t==='search');
   document.getElementById('grid').style.display = t==='cards' ? 'grid' : 'none';
   document.getElementById('hmap-wrap').style.display = t==='heatmap' ? 'block' : 'none';
   document.getElementById('filters-bar').style.display = t==='cards' ? 'flex' : 'none';
+  document.getElementById('search-bar').style.display = t==='search' ? 'flex' : 'none';
+  if (t==='search') { document.getElementById('grid').style.display = 'grid'; document.getElementById('search-input').focus(); }
   if (t==='heatmap') renderHeatmap();
+}
+
+function runSearch() {
+  var raw = document.getElementById('search-input').value.trim();
+  if (!raw) return;
+  var q = raw.split(',').map(function(s){return s.trim();}).filter(Boolean).join('+');
+  var btn = document.getElementById('rbtn');
+  var dot = document.getElementById('dot');
+  btn.disabled = true; dot.classList.add('spin');
+  document.getElementById('grid').style.display = 'grid';
+  document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Searching...</div></div>';
+  fetchRSS(q).then(function(items) {
+    if (!items.length) { document.getElementById('grid').innerHTML = '<div class="empty">No results found. Try different keywords.</div>'; dot.classList.remove('spin'); btn.disabled=false; return; }
+    var seen = {};
+    var results = items.map(function(i) {
+      var cat = catFromTitle(i.title);
+      return {title:i.title, src:i.src, cat:cat, pub:i.pub, link:i.link, sent:sentiment(i.title), heat:heatScore(i.pub,cat), ago:ago(i.pub)};
+    }).filter(function(i){ if(seen[i.title]) return false; seen[i.title]=true; return i.title.length>10; })
+    .sort(function(a,b){return b.heat-a.heat;});
+    cards = results;
+    render();
+    dot.classList.remove('spin'); btn.disabled = false;
+  }).catch(function(){ document.getElementById('grid').innerHTML = '<div class="empty">Search failed. Try again.</div>'; dot.classList.remove('spin'); btn.disabled=false; });
 }
 
 function render() {
@@ -484,7 +515,7 @@ function loadAll() {
   var dot = document.getElementById('dot');
   var err = document.getElementById('err');
   btn.disabled = true; dot.classList.add('spin'); err.style.display = 'none';
-  if (!cards.length) document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
+  document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
   document.getElementById('ts').textContent = 'Refreshing...';
   Promise.all([
     fetchRSS('india+hiring+recruitment+jobs+2026'),
@@ -682,33 +713,29 @@ function exportCSV() {
 function publishToWebflow() {
   var btn = document.getElementById('publish-btn');
   btn.disabled = true; btn.textContent = 'Publishing...';
+  var dateVal = document.getElementById('r-date').value;
   var fieldData = {
-    name:document.getElementById('r-title').value,
-    slug:document.getElementById('r-slug').value,
-    'short-story-intro':document.getElementById('r-short').value,
-    'four-line-intro':document.getElementById('r-40').value,
-    excerpt:document.getElementById('r-excerpt').value,
-    'story-intro-para---rich-text':document.getElementById('r-intro-rt').value,
-    'story-intro':document.getElementById('r-short').value,
-    body:document.getElementById('r-body').value,
-    'read-time':document.getElementById('r-readtime').value,
-    'publish-date':document.getElementById('r-date').value,
-    writer:'Wocult Team',
-    category:'Affairs'
+    name: document.getElementById('r-title').value,
+    slug: document.getElementById('r-slug').value,
+    excerpt: document.getElementById('r-excerpt').value,
+    'story-intro-para': document.getElementById('r-short').value,
+    'short-story-intro': document.getElementById('r-short').value,
+    '40-word-intro': document.getElementById('r-40').value,
+    body: document.getElementById('r-body').value,
+    'read-time': document.getElementById('r-readtime').value,
+    'publish-date': dateVal ? new Date(dateVal).toISOString() : new Date().toISOString()
   };
-  var imgUrl = document.getElementById('img-url').value.trim();
-  if (imgUrl) fieldData['post-image'] = imgUrl;
   fetch(WORKER+'/webflow', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({fieldData:fieldData, isDraft:true, isArchived:false})
   }).then(function(r){return r.json().then(function(d){return {ok:r.ok,data:d};});}).then(function(res) {
-    if (res.ok) {
+    if (res.ok && res.data.id) {
       document.getElementById('publish-result').style.display = 'block';
       document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Published as draft!</div><div class="publish-sub">Review and publish from your Webflow dashboard.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
       document.getElementById('publish-actions').style.display = 'none';
     } else {
-      throw new Error(res.data.message||JSON.stringify(res.data));
+      throw new Error(res.data.message||JSON.stringify(res.data).substring(0,200));
     }
   }).catch(function(e){btn.disabled=false;btn.textContent='Publish to Webflow';alert('Publish failed: '+e.message);});
 }
