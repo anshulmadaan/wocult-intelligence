@@ -129,7 +129,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v2.8</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v3.0</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -438,7 +438,7 @@ function runSearch() {
   btn.disabled = true; dot.classList.add('spin');
   document.getElementById('grid').style.display = 'grid';
   document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Searching...</div></div>';
-  fetchRSS(q).then(function(items) {
+  fetchNews(q).then(function(items) {
     if (!items.length) { document.getElementById('grid').innerHTML = '<div class="empty">No results found. Try different keywords.</div>'; dot.classList.remove('spin'); btn.disabled=false; return; }
     var seen = {};
     var results = items.map(function(i) {
@@ -488,22 +488,22 @@ function catFromTitle(t) {
   return 'general';
 }
 
-function fetchRSS(q) {
+function fetchNews(q) {
   return new Promise(function(resolve) {
     var ctrl = new AbortController();
     var t = setTimeout(function(){ctrl.abort();resolve([]);}, 15000);
     fetch(WORKER + '?q=' + encodeURIComponent(q), {signal:ctrl.signal})
-      .then(function(r){return r.text();})
-      .then(function(txt) {
+      .then(function(r){return r.json();})
+      .then(function(data) {
         clearTimeout(t);
-        var xml = new DOMParser().parseFromString(txt, 'text/xml');
-        var items = [].slice.call(xml.querySelectorAll('item')).slice(0,15).map(function(item) {
-          var title = strip((item.querySelector('title')||{}).textContent||'');
-          var linkEl = item.querySelector('link');
-          var link = linkEl ? (linkEl.textContent||((linkEl.nextSibling||{}).nodeValue)||'#') : '#';
-          var pub = ((item.querySelector('pubDate')||{}).textContent)||'';
-          var src = strip(((item.querySelector('source')||{}).textContent)||'News');
-          return {title:title, link:link, pub:pub, src:src};
+        if (!data.results) { resolve([]); return; }
+        var items = data.results.map(function(i) {
+          return {
+            title: strip(i.title||''),
+            link: i.link||'#',
+            pub: i.pubDate||'',
+            src: i.source_name||'News'
+          };
         }).filter(function(i){return i.title.length>10;});
         resolve(items);
       }).catch(function(){clearTimeout(t);resolve([]);});
@@ -518,12 +518,11 @@ function loadAll() {
   document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
   document.getElementById('ts').textContent = 'Refreshing...';
   Promise.all([
-    fetchRSS('india+hiring+recruitment+jobs+2026'),
-    fetchRSS('india+layoffs+job+cuts+retrenchment+2026'),
-    fetchRSS('india+factory+expansion+new+plant+campus+2026'),
-    fetchRSS('india+investment+capex+manufacturing+capacity+2026'),
-    fetchRSS('india+labour+policy+employment+workforce+government+2026'),
-    fetchRSS('india+workforce+jobs+industry+economy+2026')
+    fetchNews('india hiring recruitment jobs'),
+    fetchNews('india layoffs job cuts retrenchment'),
+    fetchNews('india factory expansion plant campus'),
+    fetchNews('india investment capex manufacturing'),
+    fetchNews('india labour policy employment government')
   ]).then(function(results) {
     var items = results.reduce(function(a,b){return a.concat(b);}, []);
     var seen = {};
