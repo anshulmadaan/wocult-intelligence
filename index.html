@@ -129,7 +129,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v3.3</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v3.5</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -534,6 +534,28 @@ function updateCreditsDisplay() {
   el.style.color = left < 20 ? 'var(--red)' : 'var(--g3)';
 }
 
+function fetchRSS(url) {
+  return new Promise(function(resolve) {
+    var ctrl = new AbortController();
+    var t = setTimeout(function(){ctrl.abort();resolve([]);}, 15000);
+    fetch(WORKER + '/proxy?url=' + encodeURIComponent(url), {signal:ctrl.signal})
+      .then(function(r){return r.text();})
+      .then(function(txt) {
+        clearTimeout(t);
+        var xml = new DOMParser().parseFromString(txt, 'text/xml');
+        var items = [].slice.call(xml.querySelectorAll('item')).map(function(item) {
+          var title = strip(((item.querySelector('title')||{}).textContent||'').replace(/^CDATA\[/,'').replace(/\]$/,''));
+          var linkEl = item.querySelector('link');
+          var link = linkEl ? (linkEl.textContent || (linkEl.nextSibling||{}).nodeValue || '#') : '#';
+          var pub = ((item.querySelector('pubDate')||{}).textContent)||'';
+          var src = strip(((item.querySelector('source')||{}).textContent)||'Economic Times');
+          return {title:title, link:link, pub:pub, src:src};
+        }).filter(function(i){return i.title && i.title.length>10;});
+        resolve(items);
+      }).catch(function(){clearTimeout(t);resolve([]);});
+  });
+}
+
 function loadAll() {
   var btn = document.getElementById('rbtn');
   var dot = document.getElementById('dot');
@@ -541,41 +563,29 @@ function loadAll() {
   btn.disabled = true; dot.classList.add('spin'); err.style.display = 'none';
   document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
   document.getElementById('ts').textContent = 'Refreshing...';
-
-  var today = new Date().toISOString().slice(0,10);
-  var prompt = 'Search for India workforce news today ' + today + ': hiring, layoffs, expansion, investment, policy. Return JSON array only, max 10 items: [{title,url,source,publishedAt,category}]. Categories: hiring/layoffs/expansion/investment/policy/general. No markdown.';
-
-  fetch(WORKER + '/generate', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      tools: [{"type":"web_search_20250305","name":"web_search"}],
-      messages: [{role:'user', content: prompt}]
-    })
-  })
-  .then(function(r){return r.json();})
-  .then(function(data) {
-    var text = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
-    var clean = text.replace(/```json|```/g,'').trim();
-    var articles = JSON.parse(clean);
-    if (!Array.isArray(articles) || !articles.length) { loadFallback(); return; }
+  Promise.all([
+    fetchRSS('https://economictimes.indiatimes.com/rssfeedstopstories.cms'),
+    fetchRSS('https://economictimes.indiatimes.com/jobs/rssfeedstopstories.cms'),
+    fetchRSS('https://economictimes.indiatimes.com/industry/rssfeedstopstories.cms'),
+    fetchRSS('https://timesofindia.indiatimes.com/rssfeedstopstories.cms'),
+    fetchRSS('https://timesofindia.indiatimes.com/business/rssfeedstopstories.cms')
+  ]).then(function(results) {
+    var items = results.reduce(function(a,b){return a.concat(b);}, []);
     var seen = {};
-    var cutoffMs = Date.now() - 48*3600000;
-    cards = articles.map(function(a) {
-      var cat = a.category || catFromTitle(a.title||'');
-      return {title:a.title||'', src:a.source||'News', cat:cat, pub:a.publishedAt||'', link:a.url||'#', sent:sentiment(a.title||''), heat:heatScore(a.publishedAt||'',cat), ago:ago(a.publishedAt||'')};
+    var fresh = items.map(function(i) {
+      var cat = catFromTitle(i.title);
+      var src = i.link && i.link.includes('timesofindia') ? 'Times of India' : 'Economic Times';
+      return {title:i.title, src:src, cat:cat, pub:i.pub, link:i.link, sent:sentiment(i.title), heat:heatScore(i.pub,cat), ago:ago(i.pub)};
     }).filter(function(i) {
       if (!i.title || seen[i.title]) return false;
       seen[i.title] = true;
       return true;
-    }).sort(function(a,b){return b.heat-a.heat;});
-    if (cards.length) { render(); document.getElementById('ts').textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
+    }).sort(function(a,b){return b.heat-a.heat;}).slice(0,40);
+    if (fresh.length) { cards = fresh; render(); document.getElementById('ts').textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
     else loadFallback();
-  })
-  .catch(function(){ loadFallback(); })
-  .then(function(){ dot.classList.remove('spin'); btn.disabled = false; });
+  }).catch(function(){loadFallback();}).then(function(){
+    dot.classList.remove('spin'); btn.disabled = false;
+  });
 }
 
 function loadFallback() {
