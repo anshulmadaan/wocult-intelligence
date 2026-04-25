@@ -93,7 +93,10 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .wf-textarea{width:100%;padding:10px 14px;border:1px solid var(--g2);border-radius:8px;font-size:13px;background:var(--w);color:var(--blk);outline:none;font-family:inherit;resize:vertical;min-height:80px;line-height:1.6}
 .wf-textarea:focus{border-color:var(--yd)}
 .wf-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-#chat-article-preview h2{font-size:22px;font-weight:700;line-height:1.3;margin-bottom:12px}
+.version-sep{display:flex;align-items:center;gap:12px;margin:32px 0;user-select:none;pointer-events:none}
+.version-sep::before,.version-sep::after{content:'';flex:1;height:1px;background:var(--bdr)}
+.version-sep span{font-size:11px;color:var(--g3);background:var(--gray);border:1px solid var(--bdr);padding:2px 10px;border-radius:10px;white-space:nowrap}
+.version-block{padding-bottom:8px}
 #chat-article-preview h3{font-size:16px;font-weight:600;margin-top:24px;margin-bottom:8px}
 #chat-article-preview p{font-size:14px;line-height:1.8;margin-bottom:16px;color:#1a1a1a}
 #chat-article-preview .short-intro{font-size:13px;color:var(--g3);margin-bottom:20px;font-style:italic}
@@ -135,7 +138,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v4.8</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v4.9</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -247,35 +250,34 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     </div>
   </div>
 </div>
-<div id="step2b" class="wf-body" style="display:none">
-  <div class="wf-section" style="display:flex;flex-direction:column;gap:0;padding:0;max-width:820px;margin:0 auto">
-    <div style="padding:12px 24px;border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center">
+<div id="step2b" class="wf-body" style="display:none;padding:0">
+  <div style="max-width:820px;margin:0 auto;display:flex;flex-direction:column">
+    <div id="refine-header" style="position:sticky;top:0;z-index:100;padding:10px 24px;background:#fff;border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="font-size:15px;font-weight:600">Refine your story</div>
         <div style="font-size:10px;color:var(--g3);background:var(--gray);border:1px solid var(--bdr);padding:2px 8px;border-radius:10px">claude-sonnet-4</div>
       </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn" id="save-preview-btn" onclick="savePreview()" style="padding:6px 14px;font-size:13px">💾 Save</button>
-        <button class="btn-lg btn-y" style="white-space:nowrap;padding:6px 14px;font-size:13px" onclick="proceedToReview()">Proceed to Review →</button>
+      <button class="btn-lg btn-y" style="white-space:nowrap;padding:6px 16px;font-size:13px" onclick="proceedToReview()">Proceed to Review →</button>
+    </div>
+    <div style="padding:6px 12px;background:#fafaf8;border-bottom:1px solid var(--bdr);display:flex;gap:4px;flex-wrap:wrap;align-items:center;position:sticky;top:49px;z-index:99">
+      <button onclick="document.execCommand('bold')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-weight:700;font-size:13px;cursor:pointer">B</button>
+      <button onclick="document.execCommand('italic')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-style:italic;font-size:13px;cursor:pointer">I</button>
+      <button onclick="document.execCommand('underline')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;text-decoration:underline;font-size:13px;cursor:pointer">U</button>
+      <div style="width:1px;height:20px;background:var(--bdr);margin:0 2px"></div>
+      <button onclick="document.execCommand('formatBlock',false,'h2')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:12px;font-weight:600;cursor:pointer">H2</button>
+      <button onclick="document.execCommand('formatBlock',false,'h3')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:12px;font-weight:600;cursor:pointer">H3</button>
+      <button onclick="document.execCommand('formatBlock',false,'p')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:12px;cursor:pointer">¶</button>
+      <div style="width:1px;height:20px;background:var(--bdr);margin:0 2px"></div>
+      <button onclick="document.execCommand('insertUnorderedList')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:13px;cursor:pointer">• List</button>
+      <button onclick="document.execCommand('removeFormat')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--g3)">Clear</button>
+    </div>
+    <div id="chat-article-preview" contenteditable="true" style="padding:24px;background:#fff;min-height:400px;outline:none;cursor:text;font-size:14px;line-height:1.8;border-bottom:1px solid var(--bdr)"></div>
+    <div style="background:var(--gray);border-top:2px solid var(--bdr)">
+      <div id="chat-messages" style="padding:16px;display:flex;flex-direction:column;gap:10px"></div>
+      <div style="padding:10px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;align-items:flex-end;background:#fff;position:sticky;bottom:0">
+        <textarea id="chat-input" class="wf-textarea" style="margin:0;flex:1;min-height:40px;max-height:120px;resize:none;font-size:13px" placeholder="Ask Claude to edit, research, add sections, change tone..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}"></textarea>
+        <button class="btn" onclick="sendChatMessage()" id="chat-send-btn" style="height:40px;padding:0 16px;white-space:nowrap">Send</button>
       </div>
-    </div>
-    <div style="padding:6px 12px;border-bottom:1px solid var(--bdr);background:#fafaf8;display:flex;gap:4px;flex-wrap:wrap;align-items:center">
-      <button onclick="document.execCommand('bold')" title="Bold" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-weight:700;font-size:13px;cursor:pointer">B</button>
-      <button onclick="document.execCommand('italic')" title="Italic" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-style:italic;font-size:13px;cursor:pointer">I</button>
-      <button onclick="document.execCommand('underline')" title="Underline" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;text-decoration:underline;font-size:13px;cursor:pointer">U</button>
-      <div style="width:1px;height:20px;background:var(--bdr);margin:0 4px"></div>
-      <button onclick="document.execCommand('formatBlock',false,'h2')" title="Heading" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:12px;font-weight:600;cursor:pointer">H2</button>
-      <button onclick="document.execCommand('formatBlock',false,'h3')" title="Subheading" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:12px;font-weight:600;cursor:pointer">H3</button>
-      <button onclick="document.execCommand('formatBlock',false,'p')" title="Paragraph" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:12px;cursor:pointer">¶</button>
-      <div style="width:1px;height:20px;background:var(--bdr);margin:0 4px"></div>
-      <button onclick="document.execCommand('insertUnorderedList')" title="Bullet list" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:13px;cursor:pointer">• List</button>
-      <button onclick="document.execCommand('removeFormat')" title="Clear formatting" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--g3)">Clear</button>
-    </div>
-    <div id="chat-article-preview" contenteditable="true" style="padding:24px;background:#fff;height:500px;overflow-y:scroll;scroll-behavior:smooth;border-bottom:1px solid var(--bdr);outline:none;cursor:text;font-size:14px;line-height:1.8"></div>
-    <div id="chat-messages" style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;background:var(--gray)"></div>
-    <div style="padding:10px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;align-items:flex-end;background:#fff">
-      <textarea id="chat-input" class="wf-textarea" style="margin:0;flex:1;min-height:40px;max-height:120px;resize:none;font-size:13px" placeholder="Ask Claude to edit a section, add research, change tone, add subheadings..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}"></textarea>
-      <button class="btn" onclick="sendChatMessage()" id="chat-send-btn" style="height:40px;padding:0 16px;white-space:nowrap">Send</button>
     </div>
   </div>
 </div>
@@ -754,11 +756,13 @@ function startGeneration() {
     document.getElementById('ws2').className = 'wf-step done';
     document.getElementById('ws2b').className = 'wf-step active';
     // Show article preview
-    document.getElementById('chat-article-preview').innerHTML = renderPreview(generatedContent);
+    document.getElementById('chat-article-preview').innerHTML = '<div class="version-block" id="version-1">'+renderPreview(generatedContent)+'</div>';
+    window._versionCount = 1;
     document.getElementById('chat-messages').innerHTML = '';
+    window._versionCount = 1;
     window._chatHistory = [
-      {role:'user', content: 'You are a sharp editorial assistant for Wocult, an Indian media platform covering work and workplace culture. You are helping refine a draft article shown in a live preview window.\n\nHow you work:\n- The user can ask you to edit specific parts, add sections, change tone, do research, or anything editorial.\n- If the instruction is clear and specific (e.g. "rewrite the intro", "add a subheading before the last para", "make this punchier") — just do it confidently.\n- If genuinely unclear what scope they want, ask one short clarifying question.\n- NEVER rewrite the whole article unless explicitly asked.\n- Use web search when asked to add facts, data, or research.\n\nHow to return changes:\n- Wrap the updated/new HTML in <patch> tags. Only include what changed.\n- Add a very brief note (one sentence max) above the patch saying what you did.\n- Example: "Updated the opening paragraph to lead with the worker perspective.\\n<patch><p>New opening paragraph here.</p></patch>"\n- For conversational replies (questions, opinions, clarifications): just reply normally, no patch needed.\n\nCurrent article:\n'+document.getElementById('chat-article-preview').innerHTML},
-      {role:'assistant', content: 'Ready. Tell me what to change — a specific section, the headline, tone, or ask me to research something.'}
+      {role:'user', content: 'You are a sharp editorial assistant for Wocult, an Indian media platform covering work and workplace culture.\n\nYou are helping refine a draft article in a live preview window.\n\nRULES:\n- For ANY editorial change (rewrite, edit, add section, change tone, add subheadings, etc.): respond with a brief 1-line description of what you changed, then wrap the FULL revised article HTML in <version> tags.\n- For research, factual questions, opinions, or anything conversational: reply normally with NO <version> tags. This appears in the chat below.\n- Use web search when asked to find data, statistics, or sources.\n- Be intelligent and confident. Improve the writing substantially, not cosmetically.\n\nExample editorial response:\nRewrote the intro to lead with the worker perspective.\n<version><h2>New Title</h2><p class="short-intro">New intro line</p><p>Full revised article...</p></version>\n\nCurrent article (Version 1):\n'+document.getElementById('chat-article-preview').innerHTML},
+      {role:'assistant', content: 'Ready. Tell me what to change — a section, the tone, the headline — or ask me to research something.'}
     ];
     window.scrollTo(0,0);
   }).catch(function(e) {
@@ -788,45 +792,22 @@ function sendChatMessage() {
   }).then(function(r){return r.json();}).then(function(data) {
     var thinking = document.getElementById('chat-thinking');
     if (thinking) thinking.remove();
-    if (data.error) { box.innerHTML += '<div class="chat-msg-claude">Error: '+data.error.message+'</div>'; return; }
+    if (data.error) { box.innerHTML += '<div class="chat-msg-claude">Error: '+data.error.message+'</div>'; document.getElementById('chat-send-btn').disabled=false; return; }
     var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
-    var patchMatch = txt.match(/<patch>([\s\S]*?)<\/patch>/);
-    var ack = txt.replace(/<patch>[\s\S]*?<\/patch>/g,'').trim();
-    var s = txt.indexOf('{'); var jsonLike = s !== -1 && txt.includes('"title"');
+    var versionMatch = txt.match(/<version>([\s\S]*?)<\/version>/);
+    var ack = txt.replace(/<version>[\s\S]*?<\/version>/g,'').trim();
 
-    if (patchMatch) {
+    if (versionMatch) {
+      window._versionCount = (window._versionCount||1) + 1;
+      var vNum = window._versionCount;
       var preview = document.getElementById('chat-article-preview');
-      var patchHtml = patchMatch[1].trim();
-      var temp = document.createElement('div');
-      temp.innerHTML = patchHtml;
-      var firstTag = temp.firstElementChild ? temp.firstElementChild.tagName : null;
-      // Try to intelligently place the patch
-      if (firstTag === 'P' && temp.children.length === 1) {
-        // Single paragraph — find best matching location or append
-        var paras = preview.querySelectorAll('p');
-        if (paras.length > 0) paras[0].outerHTML = patchHtml;
-        else preview.innerHTML += patchHtml;
-      } else if (firstTag && firstTag.match(/^H[1-6]$/)) {
-        // Heading + content — append as new section
-        preview.innerHTML += patchHtml;
-      } else {
-        // Default: append
-        preview.innerHTML += patchHtml;
-      }
+      var sep = '<div class="version-sep" contenteditable="false"><span>Version '+vNum+'</span></div>';
+      var newBlock = '<div class="version-block" id="version-'+vNum+'">'+versionMatch[1]+'</div>';
+      preview.innerHTML += sep + newBlock;
+      setTimeout(function(){ var el=document.getElementById('version-'+vNum); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }, 100);
       if (ack) box.innerHTML += '<div class="chat-msg-claude">'+ack+'</div>';
+      window._chatHistory[0].content = window._chatHistory[0].content.replace(/Current article[\s\S]*$/, 'Current article (Version '+vNum+'):\n'+versionMatch[1]);
       window._chatHistory.push({role:'assistant', content: txt});
-      // Update chat history context with latest preview
-      window._chatHistory[0].content = window._chatHistory[0].content.replace(/Current article:[\s\S]*$/, 'Current article:\n'+preview.innerHTML);
-    } else if (jsonLike) {
-      try {
-        generatedContent = JSON.parse(txt.slice(s, txt.lastIndexOf('}')+1));
-        document.getElementById('chat-article-preview').innerHTML = renderPreview(generatedContent);
-        if (ack) box.innerHTML += '<div class="chat-msg-claude">'+ack+'</div>';
-        window._chatHistory.push({role:'assistant', content: txt});
-      } catch(err) {
-        box.innerHTML += '<div class="chat-msg-claude">'+txt+'</div>';
-        window._chatHistory.push({role:'assistant', content: txt});
-      }
     } else {
       box.innerHTML += '<div class="chat-msg-claude">'+txt+'</div>';
       window._chatHistory.push({role:'assistant', content: txt});
@@ -842,15 +823,18 @@ function sendChatMessage() {
 }
 
 function proceedToReview() {
-  // Capture any manual edits from the preview pane
   var preview = document.getElementById('chat-article-preview');
-  if (preview) {
-    var h2 = preview.querySelector('h2');
-    var shortIntro = preview.querySelector('.short-intro');
-    if (h2) generatedContent.title = h2.innerText;
-    if (shortIntro) generatedContent.shortIntro = shortIntro.innerText;
-    generatedContent.body = preview.innerHTML;
-  }
+  // Get latest version block if versioning has happened, else use full preview
+  var vNum = window._versionCount || 1;
+  var latestBlock = document.getElementById('version-'+vNum);
+  var content = latestBlock ? latestBlock.innerHTML : preview.innerHTML;
+  // Parse content into fields
+  var tmp = document.createElement('div'); tmp.innerHTML = content;
+  var h2 = tmp.querySelector('h2');
+  var shortIntro = tmp.querySelector('.short-intro');
+  if (h2) generatedContent.title = h2.innerText;
+  if (shortIntro) generatedContent.shortIntro = shortIntro.innerText;
+  generatedContent.body = content;
   document.getElementById('r-title').value = generatedContent.title||'';
   document.getElementById('r-slug').value = generatedContent.slug||'';
   document.getElementById('r-short').value = generatedContent.shortIntro||'';
