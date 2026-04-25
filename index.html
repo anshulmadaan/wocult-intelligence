@@ -78,7 +78,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .empty{text-align:center;padding:60px 20px;color:var(--g3);grid-column:1/-1}
 .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--g2);border-top-color:var(--y);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
-#workflow{display:none;min-height:100vh;background:#f5f0e8;overflow-y:auto}
+#workflow{display:none;min-height:100vh;background:#f5f0e8}
 .wf-header{background:var(--blk);padding:0 24px;height:52px;display:flex;align-items:center;gap:16px;border-bottom:3px solid var(--y)}
 .wf-back{background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px}
 .wf-back:hover{color:#fff}
@@ -138,7 +138,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v4.9</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v5.4</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -257,7 +257,10 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
         <div style="font-size:15px;font-weight:600">Refine your story</div>
         <div style="font-size:10px;color:var(--g3);background:var(--gray);border:1px solid var(--bdr);padding:2px 8px;border-radius:10px">claude-sonnet-4</div>
       </div>
-      <button class="btn-lg btn-y" style="white-space:nowrap;padding:6px 16px;font-size:13px" onclick="proceedToReview()">Proceed to Review →</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="update-draft-btn" onclick="updateDraft()" style="padding:6px 14px;font-size:13px" title="Sync your manual edits and let Claude polish them">↻ Update</button>
+        <button class="btn-lg btn-y" style="white-space:nowrap;padding:6px 16px;font-size:13px" onclick="proceedToReview()">Proceed to Review →</button>
+      </div>
     </div>
     <div style="padding:6px 12px;background:#fafaf8;border-bottom:1px solid var(--bdr);display:flex;gap:4px;flex-wrap:wrap;align-items:center;position:sticky;top:49px;z-index:99">
       <button onclick="document.execCommand('bold')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-weight:700;font-size:13px;cursor:pointer">B</button>
@@ -271,7 +274,11 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       <button onclick="document.execCommand('insertUnorderedList')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:13px;cursor:pointer">• List</button>
       <button onclick="document.execCommand('removeFormat')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--g3)">Clear</button>
     </div>
-    <div id="chat-article-preview" contenteditable="true" style="padding:24px;background:#fff;min-height:400px;outline:none;cursor:text;font-size:14px;line-height:1.8;border-bottom:1px solid var(--bdr)"></div>
+    <div id="chat-article-preview" contenteditable="true" style="padding:24px;background:#fff;min-height:400px;outline:none;cursor:text;font-size:14px;line-height:1.8;border-bottom:1px solid var(--bdr)" oninput="updateWordCount()"></div>
+    <div id="word-count-bar" style="padding:6px 24px;background:#fff;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--g3)">
+      <span id="word-count-num">0 words</span>
+      <span id="word-count-warn" style="display:none;color:#E24B4A;font-weight:500">⚠ Over 1200 words — recommended max exceeded</span>
+    </div>
     <div style="background:var(--gray);border-top:2px solid var(--bdr)">
       <div id="chat-messages" style="padding:16px;display:flex;flex-direction:column;gap:10px"></div>
       <div style="padding:10px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;align-items:flex-end;background:#fff;position:sticky;bottom:0">
@@ -729,7 +736,7 @@ function startGeneration() {
     else clearInterval(anim);
   }, 1200);
   var sourceInfo = currentCard._url ? ('Source URL: '+currentCard._url) : ('Source headline (do not copy): '+currentCard.title+'\nSource: '+currentCard.src);
-  var prompt = 'You are a senior editor at Wocult, an Indian workplace culture media brand. Sharp, culturally aware, human, not corporate.\n\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Focus on human and cultural impact on Indian workers')+'\n\nCRITICAL FACTUAL STANDARDS:\n1. Never invent numbers, headcounts, ratings or statistics. Only use figures from the source.\n2. Use ranges when source gives ranges e.g. 65,000-80,000 job opportunities not 80,000 jobs.\n3. Distinguish direct employment from job opportunities.\n4. For HQ, brand count, founding - only state what is confirmed. If unsure, omit.\n5. Sentiment data must be attributed and softened: employees rate it around X.\n6. Analysis must be framed as such: suggests, indicates, appears to.\n7. If a claim cannot be sourced, remove it. Do not fill gaps with plausible detail.\n8. Use could create over will create, targets over plans to achieve.\n\nCreate an original Wocult headline, never copy the source. Punchy, specific, culturally Indian, for a 25-40 year old working professional.\n\nReturn ONLY valid JSON no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>800-1000 word article HTML with 4 h3 subheadings Context The Worker Angle The Bigger Pattern What Next. Flowing prose no bullet points. All statistics attributed. Uncertain claims softened.</p>","readTime":"X min read"}';
+  var prompt = 'You are a senior editor at Wocult — an independent Indian media platform covering work, culture, and life for modern working professionals. Wocult is building the world\'s first lifestyle destination for the modern professional.\n\nWHO WOCULT IS BUILT FOR:\nThe person who knows life is more than work. Who wakes up on Sunday evening already feeling Monday. Who stays late not because they have to, but because leaving on time feels risky. Who has been told "great question" and then heard something else answered. Who is not burnt out — just bored in a serious way. Smart, slightly cynical about corporate culture, deeply invested in their career and life. Indian. 28-38 years old.\n\nWOCULT\'S EDITORIAL COMMITMENTS:\n1. Lived reality over theory — how work is actually experienced, not abstracted into frameworks\n2. Behavior over hierarchy — what people do, not the titles they hold\n3. Standards over noise — every story earns its place by saying something worth reading\n\nWHAT MAKES A STORY WOCULT:\n- It tells the working professional something true about their own life that they hadn\'t found words for yet\n- It educates, advises, explains — always in service of the reader, never the company\n- It gives voice to experiences that never make it into official narratives\n- It treats the professional as a complete human being — ambition, health, relationships, identity, money, not just their job title\n- It ends with something that makes the reader think, not a corporate call to action\n- The reader should feel: "This is written for me. This platform gets it."\n\nWHAT WOCULT NEVER DOES:\n- No corporate speak. No hustle worship. No glorifying overwork.\n- Never celebrate a layoff as "efficiency" or "streamlining" without naming the human cost\n- Never write breathless press releases disguised as journalism\n- No title worship. No paid rankings. No motivational filler.\n- Never give companies the benefit of the doubt without evidence\n- Never mistake the company\'s story for the worker\'s story\n\nVOICE — study these real Wocult opening lines for tone:\n"Most leaders who rule by fear do not know they are doing it."\n"High performance has a biology. And most organisations are ignoring it."\n"Every transformation has a business case. Very few have a human one."\n"The question most professionals are asking about AI is the wrong one."\n"They have been called lazy, entitled, allergic to feedback. Most of that is projection."\nNotice: Direct. Confident. No hedging in the opening. Names the thing most people feel but don\'t say. Peer-to-peer, never above the reader.\n\nSTORY STRUCTURE FOR NEWS-DERIVED ARTICLES:\nContext — what happened, plainly stated\nThe Worker Angle — what this means for the person actually living through it\nThe Bigger Pattern — what this connects to, what it reveals about work culture\nWhat Next — not a corporate forecast. A human question worth sitting with.\n\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Tell the working professional what this means for their life, their choices, and their sense of self at work. Make them feel seen.')+'\n\nCRITICAL FACTUAL STANDARDS:\n1. Never invent numbers or statistics. Only use figures from the source.\n2. Use ranges when source gives ranges.\n3. Frame analysis as: suggests, indicates, appears to.\n4. If a claim cannot be sourced, remove it.\n5. Use "could" over "will", "targets" over "plans to achieve".\n\nHEADLINE: Original, never copied from source. Sharp, specific, speaks to the working professional\'s experience. Max 12 words. Should make the reader stop scrolling.\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook — human, intriguing, not a news summary","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>article HTML. ALWAYS include 4 h3 subheadings: Context, The Worker Angle, The Bigger Pattern, What Next. Target 800-1000 words. Flowing prose, no bullet points. All statistics attributed. Uncertain claims softened. End with a thought, not a prescription.</p>","readTime":"X min read"}';
   fetch(WORKER+'/generate', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -758,10 +765,11 @@ function startGeneration() {
     // Show article preview
     document.getElementById('chat-article-preview').innerHTML = '<div class="version-block" id="version-1">'+renderPreview(generatedContent)+'</div>';
     window._versionCount = 1;
+    updateWordCount();
     document.getElementById('chat-messages').innerHTML = '';
     window._versionCount = 1;
     window._chatHistory = [
-      {role:'user', content: 'You are a sharp editorial assistant for Wocult, an Indian media platform covering work and workplace culture.\n\nYou are helping refine a draft article in a live preview window.\n\nRULES:\n- For ANY editorial change (rewrite, edit, add section, change tone, add subheadings, etc.): respond with a brief 1-line description of what you changed, then wrap the FULL revised article HTML in <version> tags.\n- For research, factual questions, opinions, or anything conversational: reply normally with NO <version> tags. This appears in the chat below.\n- Use web search when asked to find data, statistics, or sources.\n- Be intelligent and confident. Improve the writing substantially, not cosmetically.\n\nExample editorial response:\nRewrote the intro to lead with the worker perspective.\n<version><h2>New Title</h2><p class="short-intro">New intro line</p><p>Full revised article...</p></version>\n\nCurrent article (Version 1):\n'+document.getElementById('chat-article-preview').innerHTML},
+      {role:'user', content: 'You are a sharp senior editor at Wocult — an independent Indian media platform for modern working professionals.\n\nWocult\'s north star: Every story must answer — what is in this for the working professional? Does it educate, advise, explain something they\'ve lived but never named? The reader should feel: this platform gets it. This is written for me. Wocult\'s goal is to be the most trusted voice for India\'s working class.\n\nVoice: Direct, confident, peer-to-peer. Reader is smart, slightly cynical about corporate culture, 28-38, Indian. Never preachy. Never corporate. Never above the reader. Study these real Wocult opening lines: "Most leaders who rule by fear do not know they are doing it." / "High performance has a biology. And most organisations are ignoring it." / "Every transformation has a business case. Very few have a human one."\n\nWhat never belongs: hustle worship, title worship, glorifying overwork, treating companies as heroes, press releases dressed as journalism.\n\nYou are helping refine a draft article in a live preview window.\n\nRULES:\n- For ANY editorial change (rewrite, edit, add section, change tone, add subheadings, etc.): respond with a brief 1-line description of what you changed, then wrap the FULL revised article HTML in <version> tags.\n- For research, factual questions, opinions, or anything conversational: reply normally with NO <version> tags. This appears in the chat below.\n- Target 800-1000 words per version. The user may add content beyond this — do not trim user additions.\n- Use web search when asked to find data, statistics, or sources.\n- Be intelligent and confident. Improve the writing substantially, not cosmetically.\n\nExample editorial response:\nRewrote the intro to lead with the worker perspective.\n<version><h2>New Title</h2><p class="short-intro">New intro line</p><p>Full revised article...</p></version>\n\nCurrent article (Version 1):\n'+document.getElementById('chat-article-preview').innerHTML},
       {role:'assistant', content: 'Ready. Tell me what to change — a section, the tone, the headline — or ask me to research something.'}
     ];
     window.scrollTo(0,0);
@@ -804,7 +812,7 @@ function sendChatMessage() {
       var sep = '<div class="version-sep" contenteditable="false"><span>Version '+vNum+'</span></div>';
       var newBlock = '<div class="version-block" id="version-'+vNum+'">'+versionMatch[1]+'</div>';
       preview.innerHTML += sep + newBlock;
-      setTimeout(function(){ var el=document.getElementById('version-'+vNum); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }, 100);
+      setTimeout(function(){ var el=document.getElementById('version-'+vNum); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); updateWordCount(); }, 100);
       if (ack) box.innerHTML += '<div class="chat-msg-claude">'+ack+'</div>';
       window._chatHistory[0].content = window._chatHistory[0].content.replace(/Current article[\s\S]*$/, 'Current article (Version '+vNum+'):\n'+versionMatch[1]);
       window._chatHistory.push({role:'assistant', content: txt});
@@ -849,22 +857,55 @@ function proceedToReview() {
   document.getElementById('ws3').className = 'wf-step active';
   window.scrollTo(0,0);
 }
-function savePreview() {
+function updateDraft() {
   var preview = document.getElementById('chat-article-preview');
-  var btn = document.getElementById('save-preview-btn');
-  // Save to generatedContent
-  var h2 = preview.querySelector('h2');
-  var shortIntro = preview.querySelector('.short-intro');
-  if (h2) generatedContent.title = h2.innerText;
-  if (shortIntro) generatedContent.shortIntro = shortIntro.innerText;
-  generatedContent.body = preview.innerHTML;
-  // Update chat history with latest content
-  if (window._chatHistory && window._chatHistory.length > 0) {
-    window._chatHistory[0].content = 'You are an editorial assistant helping refine a Wocult article displayed in an editable preview window.\n\nCRITICAL RULES:\n1. NEVER rewrite the entire article unless the user explicitly asks to rewrite everything.\n2. Only edit, add, or modify the SPECIFIC section or element the user asks about.\n3. If the user\'s request is ambiguous, ask: "Should I rewrite the entire article or just a specific section?"\n4. You have web search — use it when asked to research or add data.\n\nRESPONSE FORMAT:\n- For EDITS: Reply with acknowledgment + <edit>updated HTML</edit>\n- For ADDITIONS: Reply with acknowledgment + <append>new HTML</append>\n- For QUESTIONS: Just reply conversationally.\n- For full rewrites only if explicitly asked: acknowledgment + full JSON.\n\nCurrent article HTML:\n'+preview.innerHTML;
-  }
-  btn.textContent = '✓ Saved';
-  setTimeout(function(){ btn.textContent = '💾 Save'; }, 2000);
+  var btn = document.getElementById('update-draft-btn');
+  var box = document.getElementById('chat-messages');
+  var currentHtml = preview.innerHTML;
+  btn.disabled = true; btn.textContent = 'Updating...';
+  box.innerHTML += '<div class="chat-msg-user">↻ Update draft with my manual edits</div>';
+  // Send current state to Claude — ask it to polish manual edits only
+  var updatePrompt = 'The user has made manual edits directly in the preview. Here is the current state of the article after their edits:\n\n'+currentHtml+'\n\nYour task: Review this version. Polish any rough edits, fix grammar or style inconsistencies from the manual changes, improve flow where content was added or deleted. Keep all existing content and structure exactly as is — only smooth out any rough edges from the manual edits. Return the full polished article wrapped in <version> tags.';
+  var msgs = window._chatHistory.slice(0,2).concat([{role:'user', content: updatePrompt}]);
+  box.innerHTML += '<div class="chat-msg-thinking" id="chat-thinking">Wocult is thinking...</div>';
+  fetch(WORKER+'/generate', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, messages: msgs})
+  }).then(function(r){return r.json();}).then(function(data) {
+    var thinking = document.getElementById('chat-thinking');
+    if (thinking) thinking.remove();
+    if (data.error) { box.innerHTML += '<div class="chat-msg-claude">Error: '+data.error.message+'</div>'; btn.disabled=false; btn.textContent='↻ Update'; return; }
+    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    var versionMatch = txt.match(/<version>([\s\S]*?)<\/version>/);
+    if (versionMatch) {
+      window._versionCount = (window._versionCount||1) + 1;
+      var vNum = window._versionCount;
+      var sep = '<div class="version-sep" contenteditable="false"><span>Version '+vNum+' (updated)</span></div>';
+      preview.innerHTML += sep + '<div class="version-block" id="version-'+vNum+'">'+versionMatch[1]+'</div>';
+      setTimeout(function(){ var el=document.getElementById('version-'+vNum); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); updateWordCount(); }, 100);
+      box.innerHTML += '<div class="chat-msg-claude">✓ Draft updated and polished.</div>';
+      window._chatHistory[0].content = window._chatHistory[0].content.replace(/Current article[\s\S]*$/, 'Current article (Version '+vNum+'):\n'+versionMatch[1]);
+    } else {
+      box.innerHTML += '<div class="chat-msg-claude">'+txt+'</div>';
+    }
+    btn.disabled=false; btn.textContent='↻ Update';
+    box.scrollTop = box.scrollHeight;
+  }).catch(function(e){ var t=document.getElementById('chat-thinking'); if(t) t.remove(); btn.disabled=false; btn.textContent='↻ Update'; });
 }
+
+function updateWordCount() {
+  var preview = document.getElementById('chat-article-preview');
+  var num = document.getElementById('word-count-num');
+  var warn = document.getElementById('word-count-warn');
+  if (!preview || !num || !warn) return;
+  var text = preview.innerText || '';
+  var count = text.trim().split(/\s+/).filter(function(w){return w.length>0;}).length;
+  num.textContent = count + ' words';
+  num.style.color = count > 1200 ? '#E24B4A' : count > 1000 ? '#EF9F27' : 'var(--g3)';
+  warn.style.display = count > 1200 ? 'inline' : 'none';
+}
+
+function savePreview() {}
 
 function handleImgUpload(e) {
   var file = e.target.files[0];
