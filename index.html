@@ -135,7 +135,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v4.2</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v4.3</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -518,6 +518,26 @@ function catFromTitle(t) {
   return 'general';
 }
 
+function renderPreview(content) {
+  var title = content.title || '';
+  var shortIntro = content.shortIntro || '';
+  var body = content.body || content.introRichText || '';
+  // If body has no HTML tags, convert markdown/plaintext to HTML
+  if (!/<[a-z][\s\S]*>/i.test(body)) {
+    body = body
+      .split(/\n\n+/)
+      .map(function(para) {
+        para = para.trim();
+        if (!para) return '';
+        if (/^###\s/.test(para)) return '<h3>'+para.replace(/^###\s*/,'')+'</h3>';
+        if (/^##\s/.test(para)) return '<h2>'+para.replace(/^##\s*/,'')+'</h2>';
+        if (/^#\s/.test(para)) return '<h2>'+para.replace(/^#\s*/,'')+'</h2>';
+        return '<p>'+para+'</p>';
+      }).join('');
+  }
+  return '<h2>'+title+'</h2><p class="short-intro">'+shortIntro+'</p>'+(content.introRichText && content.introRichText !== body ? content.introRichText : '')+body;
+}
+
 function fetchNews(q) {
   return new Promise(function(resolve) {
     var ctrl = new AbortController();
@@ -721,10 +741,7 @@ function startGeneration() {
     document.getElementById('ws2').className = 'wf-step done';
     document.getElementById('ws2b').className = 'wf-step active';
     // Show article preview
-    var preview = '<h2>'+generatedContent.title+'</h2>';
-    preview += '<p class="short-intro">'+generatedContent.shortIntro+'</p>';
-    preview += (generatedContent.introRichText||'') + (generatedContent.body||'');
-    document.getElementById('chat-article-preview').innerHTML = preview;
+    document.getElementById('chat-article-preview').innerHTML = renderPreview(generatedContent);
     document.getElementById('chat-messages').innerHTML = '';
     window._chatHistory = [
       {role:'user', content: 'You are an editorial assistant helping refine a Wocult article. You have web search capability — use it when asked to research, verify facts, find statistics, or add sourced details to the article.\n\nYou have two modes:\n1. EDIT MODE: If the user gives an editorial instruction (add titles, rewrite section, change tone, make shorter, add research, find data, etc.) — apply it to the article and respond with: one brief sentence describing what you changed, then the complete updated article JSON.\n2. CHAT MODE: If the user asks a question or makes a general comment (word count, what sources, looks good, etc.) — just reply conversationally. No JSON needed.\n\nWhen adding researched facts or statistics, cite the source inline in the article text like: (Source: Economic Times, 2026).\n\nThe article JSON format is: {title, slug, shortIntro, intro40, excerpt, introRichText, body, readTime}\n\nCurrent article:\n'+txt},
@@ -765,9 +782,7 @@ function sendChatMessage() {
     if (s !== -1) {
       try {
         generatedContent = JSON.parse(txt.slice(s,e+1));
-        var preview = '<h2>'+generatedContent.title+'</h2>';
-        preview += '<p class="short-intro">'+generatedContent.shortIntro+'</p>';
-        preview += (generatedContent.introRichText||'') + (generatedContent.body||'');
+        document.getElementById('chat-article-preview').innerHTML = renderPreview(generatedContent);
         document.getElementById('chat-article-preview').innerHTML = preview;
         box.innerHTML += '<div class="chat-msg-claude">'+(ack||'✓ Story updated.')+'</div>';
         window._chatHistory.push({role:'assistant', content: txt});
