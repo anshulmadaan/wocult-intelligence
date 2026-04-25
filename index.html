@@ -93,7 +93,9 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .wf-textarea{width:100%;padding:10px 14px;border:1px solid var(--g2);border-radius:8px;font-size:13px;background:var(--w);color:var(--blk);outline:none;font-family:inherit;resize:vertical;min-height:80px;line-height:1.6}
 .wf-textarea:focus{border-color:var(--yd)}
 .wf-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-.wf-field{margin-bottom:16px}
+.chat-msg-user{background:var(--y);color:var(--blk);padding:8px 12px;border-radius:12px 12px 2px 12px;font-size:13px;align-self:flex-end;max-width:80%}
+.chat-msg-claude{background:#fff;border:1px solid var(--bdr);padding:8px 12px;border-radius:12px 12px 12px 2px;font-size:13px;align-self:flex-start;max-width:90%;line-height:1.5}
+.chat-msg-thinking{color:var(--g3);font-size:12px;font-style:italic;align-self:flex-start}
 .wf-actions{display:flex;gap:12px;justify-content:flex-end;padding-top:8px}
 .btn-lg{padding:10px 28px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:none}
 .btn-y{background:var(--y);color:var(--ydeep)}.btn-y:hover{background:#EFB860}
@@ -129,7 +131,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v3.7</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v3.8</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -202,9 +204,10 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   <div class="wf-steps">
     <div class="wf-step active" id="ws1">1. Brief</div>
     <div class="wf-step" id="ws2">2. Generate</div>
-    <div class="wf-step" id="ws3">3. Review</div>
-    <div class="wf-step" id="ws4">4. Image</div>
-    <div class="wf-step" id="ws5">5. Publish</div>
+    <div class="wf-step" id="ws2b">3. Refine</div>
+    <div class="wf-step" id="ws3">4. Review</div>
+    <div class="wf-step" id="ws4">5. Image</div>
+    <div class="wf-step" id="ws5">6. Publish</div>
   </div>
 </div>
 <div id="step1" class="wf-body">
@@ -237,6 +240,25 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       <div class="gen-step-item" id="gs2"><div class="step-dot"></div>Writing intro and excerpt</div>
       <div class="gen-step-item" id="gs3"><div class="step-dot"></div>Drafting full article body</div>
       <div class="gen-step-item" id="gs4"><div class="step-dot"></div>Finalising all fields</div>
+    </div>
+  </div>
+</div>
+<div id="step2b" class="wf-body" style="display:none">
+  <div class="wf-section" style="display:flex;flex-direction:column;gap:0;padding:0;max-width:820px;margin:0 auto">
+    <div style="padding:20px 24px 12px;border-bottom:1px solid var(--bdr)">
+      <div style="font-size:16px;font-weight:600;margin-bottom:2px">Refine your story</div>
+      <div style="font-size:12px;color:var(--g3)">Review the draft below. Chat with Claude to refine — change tone, add angles, rewrite sections. Click Proceed when done.</div>
+    </div>
+    <div id="chat-preview" style="padding:24px;border-bottom:1px solid var(--bdr);background:#fff;max-height:340px;overflow-y:auto">
+      <div id="chat-article-preview" style="font-size:14px;line-height:1.7;color:var(--blk)"></div>
+    </div>
+    <div id="chat-messages" style="padding:16px 24px;display:flex;flex-direction:column;gap:12px;max-height:260px;overflow-y:auto;background:var(--gray)"></div>
+    <div style="padding:12px 24px;border-top:1px solid var(--bdr);display:flex;gap:8px;align-items:flex-end;background:#fff">
+      <textarea id="chat-input" class="wf-textarea" style="margin:0;flex:1;min-height:44px;max-height:120px;resize:vertical;font-size:13px" placeholder="e.g. Make the headline punchier, focus on the impact on mid-career professionals, rewrite the intro..."></textarea>
+      <button class="btn-lg btn-y" style="white-space:nowrap;padding:10px 18px;height:44px" onclick="sendChatMessage()" id="chat-send-btn">Send</button>
+    </div>
+    <div class="wf-actions" style="border-top:1px solid var(--bdr)">
+      <button class="btn-lg btn-y" onclick="proceedToReview()">Proceed to Review →</button>
     </div>
   </div>
 </div>
@@ -691,9 +713,16 @@ function startGeneration() {
     document.getElementById('r-readtime').value = generatedContent.readTime||'5 min read';
     document.getElementById('img-suggestions').innerHTML = ['india workplace','office workers india','business india','hiring india','workforce india'].map(function(kw){return '<button class="chip" onclick="setImgSearch(\''+kw+'\')" style="font-size:11px">'+kw+'</button>';}).join('');
     document.getElementById('step2').style.display = 'none';
-    document.getElementById('step3').style.display = 'block';
+    document.getElementById('step2b').style.display = 'block';
     document.getElementById('ws2').className = 'wf-step done';
-    document.getElementById('ws3').className = 'wf-step active';
+    document.getElementById('ws2b').className = 'wf-step active';
+    // Show article preview
+    var preview = '<h2 style="font-size:18px;font-weight:700;margin-bottom:8px">'+generatedContent.title+'</h2>';
+    preview += '<p style="font-size:12px;color:var(--g3);margin-bottom:16px">'+generatedContent.shortIntro+'</p>';
+    preview += (generatedContent.introRichText||generatedContent.body||'').substring(0,600)+'...';
+    document.getElementById('chat-article-preview').innerHTML = preview;
+    document.getElementById('chat-messages').innerHTML = '';
+    window._chatHistory = [{role:'user',content:prompt},{role:'assistant',content:txt}];
     window.scrollTo(0,0);
   }).catch(function(e) {
     clearInterval(anim);
@@ -703,6 +732,69 @@ function startGeneration() {
     document.getElementById('ws1').className = 'wf-step active';
     alert('Generation failed: '+e.message);
   });
+}
+function sendChatMessage() {
+  var input = document.getElementById('chat-input');
+  var msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  var box = document.getElementById('chat-messages');
+  box.innerHTML += '<div class="chat-msg-user">'+msg+'</div>';
+  box.innerHTML += '<div class="chat-msg-thinking" id="chat-thinking">Claude is refining...</div>';
+  box.scrollTop = box.scrollHeight;
+  document.getElementById('chat-send-btn').disabled = true;
+  window._chatHistory.push({role:'user', content: msg + '\n\nReturn ONLY updated JSON in same format as before, no markdown.'});
+  fetch(WORKER+'/generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, messages: window._chatHistory})
+  }).then(function(r){return r.json();}).then(function(data) {
+    var thinking = document.getElementById('chat-thinking');
+    if (thinking) thinking.remove();
+    if (data.error) { box.innerHTML += '<div class="chat-msg-claude">Error: '+data.error.message+'</div>'; return; }
+    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
+    if (s !== -1) {
+      try {
+        generatedContent = JSON.parse(txt.slice(s,e+1));
+        var preview = '<h2 style="font-size:18px;font-weight:700;margin-bottom:8px">'+generatedContent.title+'</h2>';
+        preview += '<p style="font-size:12px;color:var(--g3);margin-bottom:16px">'+generatedContent.shortIntro+'</p>';
+        preview += (generatedContent.introRichText||generatedContent.body||'').substring(0,600)+'...';
+        document.getElementById('chat-article-preview').innerHTML = preview;
+        box.innerHTML += '<div class="chat-msg-claude">✓ Story updated. Review the preview above.</div>';
+        window._chatHistory.push({role:'assistant', content: txt});
+      } catch(err) {
+        box.innerHTML += '<div class="chat-msg-claude">'+txt.substring(0,300)+'</div>';
+        window._chatHistory.push({role:'assistant', content: txt});
+      }
+    } else {
+      box.innerHTML += '<div class="chat-msg-claude">'+txt.substring(0,300)+'</div>';
+      window._chatHistory.push({role:'assistant', content: txt});
+    }
+    box.scrollTop = box.scrollHeight;
+    document.getElementById('chat-send-btn').disabled = false;
+  }).catch(function(e) {
+    var thinking = document.getElementById('chat-thinking');
+    if (thinking) thinking.remove();
+    box.innerHTML += '<div class="chat-msg-claude">Error: '+e.message+'</div>';
+    document.getElementById('chat-send-btn').disabled = false;
+  });
+}
+
+function proceedToReview() {
+  document.getElementById('r-title').value = generatedContent.title||'';
+  document.getElementById('r-slug').value = generatedContent.slug||'';
+  document.getElementById('r-short').value = generatedContent.shortIntro||'';
+  document.getElementById('r-40').value = generatedContent.intro40||'';
+  document.getElementById('r-excerpt').value = generatedContent.excerpt||'';
+  document.getElementById('r-intro-rt').value = generatedContent.introRichText||'';
+  document.getElementById('r-body').value = generatedContent.body||'';
+  document.getElementById('r-readtime').value = generatedContent.readTime||'5 min read';
+  document.getElementById('img-suggestions').innerHTML = ['india workplace','office workers india','business india','hiring india','workforce india'].map(function(kw){return '<button class="chip" onclick="setImgSearch(\''+kw+'\')" style="font-size:11px">'+kw+'</button>';}).join('');
+  document.getElementById('step3').style.display = 'block';
+  document.getElementById('ws2b').className = 'wf-step done';
+  document.getElementById('ws3').className = 'wf-step active';
+  window.scrollTo(0,0);
 }
 function handleImgUpload(e) {
   var file = e.target.files[0];
