@@ -127,10 +127,38 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .publish-sub{font-size:14px;color:var(--g3);margin-bottom:24px}
 .field-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;background:var(--gray);color:var(--g3);margin-left:8px;vertical-align:middle}
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
-<div id="main">
+<!-- Firebase Toast -->
+<div id="fb-toast" style="display:none;position:fixed;bottom:24px;right:24px;background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;border-left:3px solid var(--y)"></div>
+
+<!-- Memory Modal -->
+<div id="memory-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:600px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:20px 24px;border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:16px;font-weight:600">🧠 Editorial Memory</div>
+        <div style="font-size:12px;color:var(--g3);margin-top:2px">These notes are injected into every story generation. Teach the AI your preferences.</div>
+      </div>
+      <button onclick="closeMemory()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--g3)">×</button>
+    </div>
+    <div style="padding:16px 24px;border-bottom:1px solid var(--bdr);display:flex;gap:8px">
+      <input id="memory-input" class="wf-input" style="flex:1;margin:0" placeholder="e.g. Never open with a rhetorical question. Always anchor salary to numbers Indians recognise." onkeydown="if(event.key==='Enter')addMemoryNote()" />
+      <button class="btn-lg btn-y" onclick="addMemoryNote()" style="padding:8px 16px;white-space:nowrap">Add Note</button>
+    </div>
+    <div id="memory-list" style="padding:16px 24px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:8px">
+      <div style="color:var(--g3);font-size:13px;text-align:center;padding:24px 0">Loading memory...</div>
+    </div>
+    <div style="padding:12px 24px;border-top:1px solid var(--bdr);font-size:11px;color:var(--g3)">
+      <span id="memory-count">0 notes</span> · Stored in Firebase · Injected into every generation
+    </div>
+  </div>
+</div>
+
+
 <div class="topbar">
   <svg height="34" viewBox="0 0 220 34" xmlns="http://www.w3.org/2000/svg">
     <circle cx="17" cy="17" r="16" fill="#FAC775"/>
@@ -138,10 +166,11 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v5.4</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v5.7</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
+    <button class="btn btn-ghost" onclick="openMemory()" style="font-size:11px">🧠 Memory</button>
     <button class="btn" id="rbtn" onclick="loadAll()">Refresh</button>
   </div>
 </div>
@@ -251,8 +280,9 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   </div>
 </div>
 <div id="step2b" class="wf-body" style="display:none;padding:0">
-  <div style="max-width:820px;margin:0 auto;display:flex;flex-direction:column">
-    <div id="refine-header" style="position:sticky;top:0;z-index:100;padding:10px 24px;background:#fff;border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+  <!-- Sticky header rendered outside the flex column -->
+  <div id="refine-header" style="position:sticky;top:0;z-index:200;background:#fff;border-bottom:1px solid var(--bdr);box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+    <div style="max-width:820px;margin:0 auto;padding:10px 24px;display:flex;justify-content:space-between;align-items:center">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="font-size:15px;font-weight:600">Refine your story</div>
         <div style="font-size:10px;color:var(--g3);background:var(--gray);border:1px solid var(--bdr);padding:2px 8px;border-radius:10px">claude-sonnet-4</div>
@@ -262,7 +292,8 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
         <button class="btn-lg btn-y" style="white-space:nowrap;padding:6px 16px;font-size:13px" onclick="proceedToReview()">Proceed to Review →</button>
       </div>
     </div>
-    <div style="padding:6px 12px;background:#fafaf8;border-bottom:1px solid var(--bdr);display:flex;gap:4px;flex-wrap:wrap;align-items:center;position:sticky;top:49px;z-index:99">
+    <!-- Toolbar row -->
+    <div style="max-width:820px;margin:0 auto;padding:4px 24px;background:#fafaf8;border-top:1px solid var(--bdr);display:flex;gap:4px;flex-wrap:wrap;align-items:center">
       <button onclick="document.execCommand('bold')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-weight:700;font-size:13px;cursor:pointer">B</button>
       <button onclick="document.execCommand('italic')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-style:italic;font-size:13px;cursor:pointer">I</button>
       <button onclick="document.execCommand('underline')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;text-decoration:underline;font-size:13px;cursor:pointer">U</button>
@@ -274,6 +305,9 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       <button onclick="document.execCommand('insertUnorderedList')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:13px;cursor:pointer">• List</button>
       <button onclick="document.execCommand('removeFormat')" style="border:1px solid var(--bdr);background:#fff;border-radius:4px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--g3)">Clear</button>
     </div>
+  </div>
+  <!-- Content area -->
+  <div style="max-width:820px;margin:0 auto">
     <div id="chat-article-preview" contenteditable="true" style="padding:24px;background:#fff;min-height:400px;outline:none;cursor:text;font-size:14px;line-height:1.8;border-bottom:1px solid var(--bdr)" oninput="updateWordCount()"></div>
     <div id="word-count-bar" style="padding:6px 24px;background:#fff;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--g3)">
       <span id="word-count-num">0 words</span>
@@ -281,7 +315,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     </div>
     <div style="background:var(--gray);border-top:2px solid var(--bdr)">
       <div id="chat-messages" style="padding:16px;display:flex;flex-direction:column;gap:10px"></div>
-      <div style="padding:10px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;align-items:flex-end;background:#fff;position:sticky;bottom:0">
+      <div style="padding:10px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;align-items:flex-end;background:#fff;position:sticky;bottom:0;z-index:100">
         <textarea id="chat-input" class="wf-textarea" style="margin:0;flex:1;min-height:40px;max-height:120px;resize:none;font-size:13px" placeholder="Ask Claude to edit, research, add sections, change tone..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}"></textarea>
         <button class="btn" onclick="sendChatMessage()" id="chat-send-btn" style="height:40px;padding:0 16px;white-space:nowrap">Send</button>
       </div>
@@ -356,6 +390,122 @@ var WF_TOKEN = '9739ddc13b83dbc83edc6bf981bf7804df98e6bee9a29853af92c8b6ec3a89ab
 var WF_COLLECTION = '695be252bae2cf37c3a4b17b';
 var WORKER = 'https://wocult-news-proxy.anmadaan.workers.dev';
 var cards = [];
+
+// Firebase init
+var db = null;
+try {
+  firebase.initializeApp({
+    apiKey: 'AIzaSyBg_ELUjlWMiFKzrykPm9O002tIA-TB1OY',
+    authDomain: 'wocult-tasks.firebaseapp.com',
+    projectId: 'wocult-tasks',
+    storageBucket: 'wocult-tasks.firebasestorage.app',
+    messagingSenderId: '252618445525',
+    appId: '1:252618445525:web:7dbee6310fcc293040c85c'
+  });
+  db = firebase.firestore();
+} catch(e) { console.warn('Firebase init failed:', e.message); }
+var _memoryNotes = [];
+
+function fbToast(msg, ok) {
+  var t = document.getElementById('fb-toast');
+  t.textContent = msg;
+  t.style.borderLeftColor = ok === false ? 'var(--red)' : 'var(--y)';
+  t.style.display = 'block';
+  setTimeout(function(){ t.style.display = 'none'; }, 3000);
+}
+
+// --- MEMORY ---
+function loadMemoryNotes(cb) {
+  if (!db) { if (cb) cb([]); return; }
+  db.collection('editorial_memory').orderBy('createdAt','asc').get()
+    .then(function(snap) {
+      _memoryNotes = [];
+      snap.forEach(function(doc){ _memoryNotes.push({id:doc.id, note:doc.data().note, type:doc.data().type||'manual'}); });
+      if (cb) cb(_memoryNotes);
+    }).catch(function(e){ console.warn('Memory load failed', e); if (cb) cb([]); });
+}
+
+function renderMemoryList() {
+  var list = document.getElementById('memory-list');
+  var count = document.getElementById('memory-count');
+  if (!list) return;
+  if (!_memoryNotes.length) {
+    list.innerHTML = '<div style="color:var(--g3);font-size:13px;text-align:center;padding:24px 0">No memory notes yet. Add your first editorial preference above.</div>';
+    if (count) count.textContent = '0 notes';
+    return;
+  }
+  list.innerHTML = _memoryNotes.map(function(m) {
+    return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:var(--gray);border-radius:8px;border:1px solid var(--bdr)">'
+      +'<div style="flex:1;font-size:13px;line-height:1.5">'+m.note+'</div>'
+      +'<span style="font-size:10px;background:'+(m.type==='auto'?'#EF9F27':'#4CAF50')+';color:#fff;padding:2px 6px;border-radius:4px;white-space:nowrap">'+(m.type==='auto'?'auto':'manual')+'</span>'
+      +'<button onclick="deleteMemoryNote(\''+m.id+'\')" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>'
+      +'</div>';
+  }).join('');
+  if (count) count.textContent = _memoryNotes.length + ' note' + (_memoryNotes.length !== 1 ? 's' : '');
+}
+
+function openMemory() {
+  document.getElementById('memory-modal').style.display = 'flex';
+  loadMemoryNotes(function(){ renderMemoryList(); });
+}
+
+function closeMemory() {
+  document.getElementById('memory-modal').style.display = 'none';
+}
+
+function addMemoryNote() {
+  var input = document.getElementById('memory-input');
+  var note = input.value.trim();
+  if (!note) return;
+  if (!db) { fbToast('Firebase not connected', false); return; }
+  db.collection('editorial_memory').add({note:note, type:'manual', createdAt:firebase.firestore.FieldValue.serverTimestamp()})
+    .then(function(ref){
+      _memoryNotes.push({id:ref.id, note:note, type:'manual'});
+      renderMemoryList();
+      input.value = '';
+      fbToast('✓ Memory note saved');
+    }).catch(function(){ fbToast('Failed to save note', false); });
+}
+
+function deleteMemoryNote(id) {
+  db.collection('editorial_memory').doc(id).delete()
+    .then(function(){
+      _memoryNotes = _memoryNotes.filter(function(m){return m.id!==id;});
+      renderMemoryList();
+      fbToast('Note deleted');
+    }).catch(function(){ fbToast('Delete failed', false); });
+}
+
+function autoSaveMemory(note) {
+  db.collection('editorial_memory').add({note:note, type:'auto', createdAt:firebase.firestore.FieldValue.serverTimestamp()})
+    .then(function(ref){
+      _memoryNotes.push({id:ref.id, note:note, type:'auto'});
+      fbToast('🧠 Learned: '+note.substring(0,50)+'...');
+    }).catch(function(e){ console.warn('Auto memory save failed', e); });
+}
+
+function getMemoryContext() {
+  if (!_memoryNotes.length) return '';
+  return '\n\nEDITOR\'S PERSONAL STYLE NOTES (apply these always):\n' + _memoryNotes.map(function(m,i){return (i+1)+'. '+m.note;}).join('\n') + '\n';
+}
+
+// --- ARTICLE STORAGE ---
+function saveArticleToFirebase(articleData, status) {
+  if (!db) { console.warn('Firebase not connected — article not saved'); return Promise.resolve(null); }
+  var data = Object.assign({}, articleData, {
+    status: status || 'draft',
+    savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    wordCount: (articleData.body||'').replace(/<[^>]+>/g,'').trim().split(/\s+/).length
+  });
+  return db.collection('articles').add(data)
+    .then(function(ref){
+      fbToast('✓ Saved to Firebase — ID: '+ref.id.substring(0,8)+'...');
+      return ref.id;
+    }).catch(function(e){ fbToast('Firebase save failed', false); throw e; });
+}
+
+// Load memory on startup
+loadMemoryNotes(function(){});
 var af = 'all';
 var activeTab = 'cards';
 var currentCard = null;
@@ -736,7 +886,7 @@ function startGeneration() {
     else clearInterval(anim);
   }, 1200);
   var sourceInfo = currentCard._url ? ('Source URL: '+currentCard._url) : ('Source headline (do not copy): '+currentCard.title+'\nSource: '+currentCard.src);
-  var prompt = 'You are a senior editor at Wocult — an independent Indian media platform covering work, culture, and life for modern working professionals. Wocult is building the world\'s first lifestyle destination for the modern professional.\n\nWHO WOCULT IS BUILT FOR:\nThe person who knows life is more than work. Who wakes up on Sunday evening already feeling Monday. Who stays late not because they have to, but because leaving on time feels risky. Who has been told "great question" and then heard something else answered. Who is not burnt out — just bored in a serious way. Smart, slightly cynical about corporate culture, deeply invested in their career and life. Indian. 28-38 years old.\n\nWOCULT\'S EDITORIAL COMMITMENTS:\n1. Lived reality over theory — how work is actually experienced, not abstracted into frameworks\n2. Behavior over hierarchy — what people do, not the titles they hold\n3. Standards over noise — every story earns its place by saying something worth reading\n\nWHAT MAKES A STORY WOCULT:\n- It tells the working professional something true about their own life that they hadn\'t found words for yet\n- It educates, advises, explains — always in service of the reader, never the company\n- It gives voice to experiences that never make it into official narratives\n- It treats the professional as a complete human being — ambition, health, relationships, identity, money, not just their job title\n- It ends with something that makes the reader think, not a corporate call to action\n- The reader should feel: "This is written for me. This platform gets it."\n\nWHAT WOCULT NEVER DOES:\n- No corporate speak. No hustle worship. No glorifying overwork.\n- Never celebrate a layoff as "efficiency" or "streamlining" without naming the human cost\n- Never write breathless press releases disguised as journalism\n- No title worship. No paid rankings. No motivational filler.\n- Never give companies the benefit of the doubt without evidence\n- Never mistake the company\'s story for the worker\'s story\n\nVOICE — study these real Wocult opening lines for tone:\n"Most leaders who rule by fear do not know they are doing it."\n"High performance has a biology. And most organisations are ignoring it."\n"Every transformation has a business case. Very few have a human one."\n"The question most professionals are asking about AI is the wrong one."\n"They have been called lazy, entitled, allergic to feedback. Most of that is projection."\nNotice: Direct. Confident. No hedging in the opening. Names the thing most people feel but don\'t say. Peer-to-peer, never above the reader.\n\nSTORY STRUCTURE FOR NEWS-DERIVED ARTICLES:\nContext — what happened, plainly stated\nThe Worker Angle — what this means for the person actually living through it\nThe Bigger Pattern — what this connects to, what it reveals about work culture\nWhat Next — not a corporate forecast. A human question worth sitting with.\n\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Tell the working professional what this means for their life, their choices, and their sense of self at work. Make them feel seen.')+'\n\nCRITICAL FACTUAL STANDARDS:\n1. Never invent numbers or statistics. Only use figures from the source.\n2. Use ranges when source gives ranges.\n3. Frame analysis as: suggests, indicates, appears to.\n4. If a claim cannot be sourced, remove it.\n5. Use "could" over "will", "targets" over "plans to achieve".\n\nHEADLINE: Original, never copied from source. Sharp, specific, speaks to the working professional\'s experience. Max 12 words. Should make the reader stop scrolling.\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook — human, intriguing, not a news summary","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>article HTML. ALWAYS include 4 h3 subheadings: Context, The Worker Angle, The Bigger Pattern, What Next. Target 800-1000 words. Flowing prose, no bullet points. All statistics attributed. Uncertain claims softened. End with a thought, not a prescription.</p>","readTime":"X min read"}';
+  var prompt = 'You are a senior editor at Wocult — an independent Indian media platform covering work, culture, and life for modern working professionals. Wocult is building the world\'s first lifestyle destination for the modern professional.\n\nWHO WOCULT IS BUILT FOR:\nThe person who knows life is more than work. Who wakes up on Sunday evening already feeling Monday. Who stays late not because they have to, but because leaving on time feels risky. Who has been told "great question" and then heard something else answered. Who is not burnt out — just bored in a serious way. Smart, slightly cynical about corporate culture, deeply invested in their career and life. Indian. 28-38 years old.\n\nWOCULT\'S EDITORIAL COMMITMENTS:\n1. Lived reality over theory — how work is actually experienced, not abstracted into frameworks\n2. Behavior over hierarchy — what people do, not the titles they hold\n3. Standards over noise — every story earns its place by saying something worth reading\n\nWHAT MAKES A STORY WOCULT:\n- It tells the working professional something true about their own life that they hadn\'t found words for yet\n- It educates, advises, explains — always in service of the reader, never the company\n- It gives voice to experiences that never make it into official narratives\n- It treats the professional as a complete human being — ambition, health, relationships, identity, money, not just their job title\n- It ends with something that makes the reader think, not a corporate call to action\n- The reader should feel: "This is written for me. This platform gets it."\n\nWHAT WOCULT NEVER DOES:\n- No corporate speak. No hustle worship. No glorifying overwork.\n- Never celebrate a layoff as "efficiency" or "streamlining" without naming the human cost\n- Never write breathless press releases disguised as journalism\n- No title worship. No paid rankings. No motivational filler.\n- Never give companies the benefit of the doubt without evidence\n- Never mistake the company\'s story for the worker\'s story\n\nVOICE — study these real Wocult opening lines for tone:\n"Most leaders who rule by fear do not know they are doing it."\n"High performance has a biology. And most organisations are ignoring it."\n"Every transformation has a business case. Very few have a human one."\n"The question most professionals are asking about AI is the wrong one."\n"They have been called lazy, entitled, allergic to feedback. Most of that is projection."\nNotice: Direct. Confident. No hedging in the opening. Names the thing most people feel but don\'t say. Peer-to-peer, never above the reader.\n\nSTORY STRUCTURE — 4 h3 subheadings following this arc:\n1. Set the scene (what happened, the context — make the subheading specific to this story, not a generic label)\n2. The human cost or lived reality (what workers are actually experiencing)\n3. The bigger pattern (what this reveals about Indian work culture)\n4. The question worth sitting with (not a forecast — a thought to leave the reader with)\n\nSUBHEADING STYLE: Punchy, specific, alive. Like a great magazine pull quote — not dead labels.\nBAD: "The Worker Angle" / "What Next" / "The Context"\nGOOD: "The 10 PM Message That Never Stops" / "Why Your Calendar Is Someone Else\'s Weapon" / "The Exit That Nobody Announces"\nMake each subheading feel like it could stand alone as a tweet.\n'+getMemoryContext()+'\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Tell the working professional what this means for their life, their choices, and their sense of self at work. Make them feel seen.')+'\n\nCRITICAL FACTUAL STANDARDS:\n1. Never invent numbers or statistics. Only use figures from the source.\n2. Use ranges when source gives ranges.\n3. Frame analysis as: suggests, indicates, appears to.\n4. If a claim cannot be sourced, remove it.\n5. Use "could" over "will", "targets" over "plans to achieve".\n\nHEADLINE: Original, never copied from source. Sharp, specific, speaks to the working professional\'s experience. Max 12 words. Should make the reader stop scrolling.\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook — human, intriguing, not a news summary","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>article HTML. 4 h3 subheadings — punchy, story-specific, never generic labels like Worker Angle or What Next. Target 800-1000 words. Flowing prose, no bullet points. Statistics attributed. Uncertain claims softened. End with a thought, not a prescription.</p>","readTime":"X min read"}';
   fetch(WORKER+'/generate', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -769,7 +919,7 @@ function startGeneration() {
     document.getElementById('chat-messages').innerHTML = '';
     window._versionCount = 1;
     window._chatHistory = [
-      {role:'user', content: 'You are a sharp senior editor at Wocult — an independent Indian media platform for modern working professionals.\n\nWocult\'s north star: Every story must answer — what is in this for the working professional? Does it educate, advise, explain something they\'ve lived but never named? The reader should feel: this platform gets it. This is written for me. Wocult\'s goal is to be the most trusted voice for India\'s working class.\n\nVoice: Direct, confident, peer-to-peer. Reader is smart, slightly cynical about corporate culture, 28-38, Indian. Never preachy. Never corporate. Never above the reader. Study these real Wocult opening lines: "Most leaders who rule by fear do not know they are doing it." / "High performance has a biology. And most organisations are ignoring it." / "Every transformation has a business case. Very few have a human one."\n\nWhat never belongs: hustle worship, title worship, glorifying overwork, treating companies as heroes, press releases dressed as journalism.\n\nYou are helping refine a draft article in a live preview window.\n\nRULES:\n- For ANY editorial change (rewrite, edit, add section, change tone, add subheadings, etc.): respond with a brief 1-line description of what you changed, then wrap the FULL revised article HTML in <version> tags.\n- For research, factual questions, opinions, or anything conversational: reply normally with NO <version> tags. This appears in the chat below.\n- Target 800-1000 words per version. The user may add content beyond this — do not trim user additions.\n- Use web search when asked to find data, statistics, or sources.\n- Be intelligent and confident. Improve the writing substantially, not cosmetically.\n\nExample editorial response:\nRewrote the intro to lead with the worker perspective.\n<version><h2>New Title</h2><p class="short-intro">New intro line</p><p>Full revised article...</p></version>\n\nCurrent article (Version 1):\n'+document.getElementById('chat-article-preview').innerHTML},
+      {role:'user', content: 'You are a sharp senior editor at Wocult — an independent Indian media platform for modern working professionals.\n\nWocult\'s north star: Every story must answer — what is in this for the working professional? Does it educate, advise, explain something they\'ve lived but never named? The reader should feel: this platform gets it. This is written for me. Wocult\'s goal is to be the most trusted voice for India\'s working class.\n\nVoice: Direct, confident, peer-to-peer. Reader is smart, slightly cynical about corporate culture, 28-38, Indian. Never preachy. Never corporate. Never above the reader. Study these real Wocult opening lines: "Most leaders who rule by fear do not know they are doing it." / "High performance has a biology. And most organisations are ignoring it." / "Every transformation has a business case. Very few have a human one."\n\nWhat never belongs: hustle worship, title worship, glorifying overwork, treating companies as heroes, press releases dressed as journalism.\n\nYou are helping refine a draft article in a live preview window.\n\nRULES:\n- For ANY editorial change (rewrite, edit, add section, change tone, add subheadings, etc.): respond with a brief 1-line description of what you changed, then wrap the FULL revised article HTML in <version> tags.\n- For research, factual questions, opinions, or anything conversational: reply normally with NO <version> tags. This appears in the chat below.\n- WORD LIMIT: Keep revised articles under 1200 words. If the user asks to add an angle or new section, make room by tightening other sections — condense, remove redundancy. BUT never alter or remove text the user has written manually. Be wise: retain their thought, make space elsewhere.\n- Use web search when asked to find data, statistics, or sources.\n- Be intelligent and confident. Improve the writing substantially, not cosmetically.\n\nExample editorial response:\nRewrote the intro to lead with the worker perspective.\n<version><h2>New Title</h2><p class="short-intro">New intro line</p><p>Full revised article...</p></version>\n\nCurrent article (Version 1):\n'+document.getElementById('chat-article-preview').innerHTML},
       {role:'assistant', content: 'Ready. Tell me what to change — a section, the tone, the headline — or ask me to research something.'}
     ];
     window.scrollTo(0,0);
@@ -852,6 +1002,23 @@ function proceedToReview() {
   document.getElementById('r-body').value = generatedContent.body||'';
   document.getElementById('r-readtime').value = generatedContent.readTime||'5 min read';
   document.getElementById('img-suggestions').innerHTML = ['india workplace','office workers india','business india','hiring india','workforce india'].map(function(kw){return '<button class="chip" onclick="setImgSearch(\''+kw+'\')" style="font-size:11px">'+kw+'</button>';}).join('');
+  // Save draft to Firebase
+  saveArticleToFirebase({
+    title: generatedContent.title||'',
+    slug: generatedContent.slug||'',
+    shortIntro: generatedContent.shortIntro||'',
+    intro40: generatedContent.intro40||'',
+    excerpt: generatedContent.excerpt||'',
+    introRichText: generatedContent.introRichText||'',
+    body: content,
+    readTime: generatedContent.readTime||'5 min read',
+    versionCount: window._versionCount||1
+  }, 'draft');
+  // Prompt to save any session learnings
+  if (window._chatHistory && window._chatHistory.length > 4) {
+    var learn = prompt('Any editorial preferences to remember from this session?\n(Leave blank to skip — e.g. "Always mention salary impact in layoff stories")');
+    if (learn && learn.trim()) autoSaveMemory(learn.trim());
+  }
   document.getElementById('step3').style.display = 'block';
   document.getElementById('ws2b').className = 'wf-step done';
   document.getElementById('ws3').className = 'wf-step active';
@@ -894,13 +1061,16 @@ function updateDraft() {
 }
 
 function updateWordCount() {
-  var preview = document.getElementById('chat-article-preview');
   var num = document.getElementById('word-count-num');
   var warn = document.getElementById('word-count-warn');
-  if (!preview || !num || !warn) return;
-  var text = preview.innerText || '';
+  if (!num || !warn) return;
+  // Count only the latest version block, not all versions
+  var vNum = window._versionCount || 1;
+  var latestBlock = document.getElementById('version-'+vNum);
+  var target = latestBlock || document.getElementById('chat-article-preview');
+  var text = target ? (target.innerText || '') : '';
   var count = text.trim().split(/\s+/).filter(function(w){return w.length>0;}).length;
-  num.textContent = count + ' words';
+  num.textContent = count + ' words (latest version)';
   num.style.color = count > 1200 ? '#E24B4A' : count > 1000 ? '#EF9F27' : 'var(--g3)';
   warn.style.display = count > 1200 ? 'inline' : 'none';
 }
