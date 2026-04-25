@@ -131,7 +131,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v3.9</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v4.1</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -249,7 +249,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       <div style="font-size:16px;font-weight:600;margin-bottom:2px">Refine your story</div>
       <div style="font-size:12px;color:var(--g3)">Review the draft below. Chat with Claude to refine — change tone, add angles, rewrite sections. Click Proceed when done.</div>
     </div>
-    <div id="chat-preview" style="padding:24px;border-bottom:1px solid var(--bdr);background:#fff;max-height:340px;overflow-y:auto">
+    <div id="chat-preview" style="padding:24px;border-bottom:1px solid var(--bdr);background:#fff;height:500px;overflow-y:scroll;scroll-behavior:smooth">
       <div id="chat-article-preview" style="font-size:14px;line-height:1.7;color:var(--blk)"></div>
     </div>
     <div id="chat-messages" style="padding:16px 24px;display:flex;flex-direction:column;gap:12px;max-height:260px;overflow-y:auto;background:var(--gray)"></div>
@@ -719,7 +719,7 @@ function startGeneration() {
     // Show article preview
     var preview = '<h2 style="font-size:18px;font-weight:700;margin-bottom:8px">'+generatedContent.title+'</h2>';
     preview += '<p style="font-size:12px;color:var(--g3);margin-bottom:16px">'+generatedContent.shortIntro+'</p>';
-    preview += (generatedContent.introRichText||generatedContent.body||'');
+    preview += (generatedContent.introRichText||'') + (generatedContent.body||'');
     document.getElementById('chat-article-preview').innerHTML = preview;
     document.getElementById('chat-messages').innerHTML = '';
     window._chatHistory = [
@@ -763,7 +763,7 @@ function sendChatMessage() {
         generatedContent = JSON.parse(txt.slice(s,e+1));
         var preview = '<h2 style="font-size:18px;font-weight:700;margin-bottom:8px">'+generatedContent.title+'</h2>';
         preview += '<p style="font-size:12px;color:var(--g3);margin-bottom:16px">'+generatedContent.shortIntro+'</p>';
-        preview += (generatedContent.introRichText||generatedContent.body||'');
+        preview += (generatedContent.introRichText||'') + (generatedContent.body||'');
         document.getElementById('chat-article-preview').innerHTML = preview;
         box.innerHTML += '<div class="chat-msg-claude">'+(ack||'✓ Story updated.')+'</div>';
         window._chatHistory.push({role:'assistant', content: txt});
