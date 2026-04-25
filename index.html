@@ -719,10 +719,13 @@ function startGeneration() {
     // Show article preview
     var preview = '<h2 style="font-size:18px;font-weight:700;margin-bottom:8px">'+generatedContent.title+'</h2>';
     preview += '<p style="font-size:12px;color:var(--g3);margin-bottom:16px">'+generatedContent.shortIntro+'</p>';
-    preview += (generatedContent.introRichText||generatedContent.body||'').substring(0,600)+'...';
+    preview += (generatedContent.introRichText||generatedContent.body||'');
     document.getElementById('chat-article-preview').innerHTML = preview;
     document.getElementById('chat-messages').innerHTML = '';
-    window._chatHistory = [{role:'user',content:prompt},{role:'assistant',content:txt}];
+    window._chatHistory = [
+      {role:'user', content: 'You are an editorial assistant helping refine a Wocult article. You have web search capability — use it when asked to research, verify facts, find statistics, or add sourced details to the article.\n\nYou have two modes:\n1. EDIT MODE: If the user gives an editorial instruction (add titles, rewrite section, change tone, make shorter, add research, find data, etc.) — apply it to the article and respond with: one brief sentence describing what you changed, then the complete updated article JSON.\n2. CHAT MODE: If the user asks a question or makes a general comment (word count, what sources, looks good, etc.) — just reply conversationally. No JSON needed.\n\nWhen adding researched facts or statistics, cite the source inline in the article text like: (Source: Economic Times, 2026).\n\nThe article JSON format is: {title, slug, shortIntro, intro40, excerpt, introRichText, body, readTime}\n\nCurrent article:\n'+txt},
+      {role:'assistant', content: 'Got it. I have the article and web search ready. Give me editorial instructions, ask me to research and add facts, or ask anything about the piece.'}
+    ];
     window.scrollTo(0,0);
   }).catch(function(e) {
     clearInterval(anim);
@@ -743,32 +746,34 @@ function sendChatMessage() {
   box.innerHTML += '<div class="chat-msg-thinking" id="chat-thinking">Claude is refining...</div>';
   box.scrollTop = box.scrollHeight;
   document.getElementById('chat-send-btn').disabled = true;
-  window._chatHistory.push({role:'user', content: msg + '\n\nReturn ONLY updated JSON in same format as before, no markdown.'});
+  window._chatHistory.push({role:'user', content: msg});
   fetch(WORKER+'/generate', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, messages: window._chatHistory})
+    body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, tools:[{"type":"web_search_20250305","name":"web_search"}], messages: window._chatHistory})
   }).then(function(r){return r.json();}).then(function(data) {
     var thinking = document.getElementById('chat-thinking');
     if (thinking) thinking.remove();
     if (data.error) { box.innerHTML += '<div class="chat-msg-claude">Error: '+data.error.message+'</div>'; return; }
     var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
     var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
+    var ack = s > 0 ? txt.substring(0, s).trim() : '';
     if (s !== -1) {
       try {
         generatedContent = JSON.parse(txt.slice(s,e+1));
         var preview = '<h2 style="font-size:18px;font-weight:700;margin-bottom:8px">'+generatedContent.title+'</h2>';
         preview += '<p style="font-size:12px;color:var(--g3);margin-bottom:16px">'+generatedContent.shortIntro+'</p>';
-        preview += (generatedContent.introRichText||generatedContent.body||'').substring(0,600)+'...';
+        preview += (generatedContent.introRichText||generatedContent.body||'');
         document.getElementById('chat-article-preview').innerHTML = preview;
-        box.innerHTML += '<div class="chat-msg-claude">✓ Story updated. Review the preview above.</div>';
+        box.innerHTML += '<div class="chat-msg-claude">'+(ack||'✓ Story updated.')+'</div>';
         window._chatHistory.push({role:'assistant', content: txt});
       } catch(err) {
-        box.innerHTML += '<div class="chat-msg-claude">'+txt.substring(0,300)+'</div>';
+        box.innerHTML += '<div class="chat-msg-claude">'+txt+'</div>';
         window._chatHistory.push({role:'assistant', content: txt});
       }
     } else {
-      box.innerHTML += '<div class="chat-msg-claude">'+txt.substring(0,300)+'</div>';
+      // Pure conversational response — no JSON, just show the reply
+      box.innerHTML += '<div class="chat-msg-claude">'+txt+'</div>';
       window._chatHistory.push({role:'assistant', content: txt});
     }
     box.scrollTop = box.scrollHeight;
