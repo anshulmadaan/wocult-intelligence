@@ -129,7 +129,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v3.5</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v3.7</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -534,7 +534,7 @@ function updateCreditsDisplay() {
   el.style.color = left < 20 ? 'var(--red)' : 'var(--g3)';
 }
 
-function fetchRSS(url) {
+function fetchRSS(url, label) {
   return new Promise(function(resolve) {
     var ctrl = new AbortController();
     var t = setTimeout(function(){ctrl.abort();resolve([]);}, 15000);
@@ -548,8 +548,7 @@ function fetchRSS(url) {
           var linkEl = item.querySelector('link');
           var link = linkEl ? (linkEl.textContent || (linkEl.nextSibling||{}).nodeValue || '#') : '#';
           var pub = ((item.querySelector('pubDate')||{}).textContent)||'';
-          var src = strip(((item.querySelector('source')||{}).textContent)||'Economic Times');
-          return {title:title, link:link, pub:pub, src:src};
+          return {title:title, link:link, pub:pub, src:label||'Economic Times'};
         }).filter(function(i){return i.title && i.title.length>10;});
         resolve(items);
       }).catch(function(){clearTimeout(t);resolve([]);});
@@ -563,22 +562,31 @@ function loadAll() {
   btn.disabled = true; dot.classList.add('spin'); err.style.display = 'none';
   document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
   document.getElementById('ts').textContent = 'Refreshing...';
-  Promise.all([
-    fetchRSS('https://economictimes.indiatimes.com/rssfeedstopstories.cms'),
-    fetchRSS('https://economictimes.indiatimes.com/jobs/rssfeedstopstories.cms'),
-    fetchRSS('https://economictimes.indiatimes.com/industry/rssfeedstopstories.cms'),
-    fetchRSS('https://timesofindia.indiatimes.com/rssfeedstopstories.cms'),
-    fetchRSS('https://timesofindia.indiatimes.com/business/rssfeedstopstories.cms')
-  ]).then(function(results) {
+  var feedDefs = [
+    {url:'https://economictimes.indiatimes.com/jobs/rssfeedstopstories.cms',            label:'ET Jobs'},
+    {url:'https://economictimes.indiatimes.com/jobs/fresher-jobs/rssfeedstopstories.cms', label:'ET Fresher Jobs'},
+    {url:'https://economictimes.indiatimes.com/jobs/mid-career-jobs/rssfeedstopstories.cms', label:'ET Mid-Career'},
+    {url:'https://economictimes.indiatimes.com/jobs/c-suite/rssfeedstopstories.cms',     label:'ET C-Suite'},
+    {url:'https://economictimes.indiatimes.com/jobs/hr-policies-trends/rssfeedstopstories.cms', label:'ET HR & Policy'},
+    {url:'https://economictimes.indiatimes.com/jobs/work/rssfeedstopstories.cms',        label:'ET Work'},
+    {url:'https://economictimes.indiatimes.com/industry/rssfeedstopstories.cms',         label:'ET Industry'},
+    {url:'https://economictimes.indiatimes.com/industry/services/rssfeedstopstories.cms', label:'ET Services'},
+    {url:'https://economictimes.indiatimes.com/industry/indl-goods-svs/rssfeedstopstories.cms', label:'ET Industrial'},
+    {url:'https://economictimes.indiatimes.com/small-biz/rssfeedstopstories.cms',        label:'ET Small Biz'},
+    {url:'https://economictimes.indiatimes.com/industry/policy-trends/rssfeedstopstories.cms', label:'ET Policy'},
+    {url:'https://economictimes.indiatimes.com/news/economy/rssfeedstopstories.cms',     label:'ET Economy'}
+  ];
+  Promise.all(feedDefs.map(function(f){ return fetchRSS(f.url, f.label); })).then(function(results) {
     var items = results.reduce(function(a,b){return a.concat(b);}, []);
     var seen = {};
+    var WORKFORCE_KW = /hire|hiring|layoff|job|jobs|employ|workforce|salary|pay|appraisal|recruit|retrench|resign|fired|attrition|fresher|campus|intern|startup|invest|capex|expansion|plant|factory|policy|labour|labor|gig|remote|work from home|wfh|skill|reskilling|promotion|increment|ctc|hike|pink slip|redundan|downsiz|headcount/i;
     var fresh = items.map(function(i) {
       var cat = catFromTitle(i.title);
-      var src = i.link && i.link.includes('timesofindia') ? 'Times of India' : 'Economic Times';
-      return {title:i.title, src:src, cat:cat, pub:i.pub, link:i.link, sent:sentiment(i.title), heat:heatScore(i.pub,cat), ago:ago(i.pub)};
+      return {title:i.title, src:'Economic Times', cat:cat, pub:i.pub, link:i.link, sent:sentiment(i.title), heat:heatScore(i.pub,cat), ago:ago(i.pub)};
     }).filter(function(i) {
       if (!i.title || seen[i.title]) return false;
       seen[i.title] = true;
+      if (!WORKFORCE_KW.test(i.title)) return false;
       return true;
     }).sort(function(a,b){return b.heat-a.heat;}).slice(0,40);
     if (fresh.length) { cards = fresh; render(); document.getElementById('ts').textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
