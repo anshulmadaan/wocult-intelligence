@@ -93,6 +93,10 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .wf-textarea{width:100%;padding:10px 14px;border:1px solid var(--g2);border-radius:8px;font-size:13px;background:var(--w);color:var(--blk);outline:none;font-family:inherit;resize:vertical;min-height:80px;line-height:1.6}
 .wf-textarea:focus{border-color:var(--yd)}
 .wf-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+#chat-article-preview h2{font-size:22px;font-weight:700;line-height:1.3;margin-bottom:12px}
+#chat-article-preview h3{font-size:16px;font-weight:600;margin-top:24px;margin-bottom:8px}
+#chat-article-preview p{font-size:14px;line-height:1.8;margin-bottom:16px;color:#1a1a1a}
+#chat-article-preview .short-intro{font-size:13px;color:var(--g3);margin-bottom:20px;font-style:italic}
 .chat-msg-user{background:var(--y);color:var(--blk);padding:8px 12px;border-radius:12px 12px 2px 12px;font-size:13px;align-self:flex-end;max-width:80%}
 .chat-msg-claude{background:#fff;border:1px solid var(--bdr);padding:8px 12px;border-radius:12px 12px 12px 2px;font-size:13px;align-self:flex-start;max-width:90%;line-height:1.5}
 .chat-msg-thinking{color:var(--g3);font-size:12px;font-style:italic;align-self:flex-start}
@@ -131,7 +135,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v4.1</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v4.2</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -254,7 +258,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     </div>
     <div id="chat-messages" style="padding:16px 24px;display:flex;flex-direction:column;gap:12px;max-height:260px;overflow-y:auto;background:var(--gray)"></div>
     <div style="padding:12px 24px;border-top:1px solid var(--bdr);display:flex;gap:8px;align-items:flex-end;background:#fff">
-      <textarea id="chat-input" class="wf-textarea" style="margin:0;flex:1;min-height:44px;max-height:120px;resize:vertical;font-size:13px" placeholder="e.g. Make the headline punchier, focus on the impact on mid-career professionals, rewrite the intro..."></textarea>
+      <textarea id="chat-input" class="wf-textarea" style="margin:0;flex:1;min-height:44px;max-height:120px;resize:vertical;font-size:13px" placeholder="e.g. Make the headline punchier, focus on the impact on mid-career professionals, rewrite the intro..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}"></textarea>
       <button class="btn-lg btn-y" style="white-space:nowrap;padding:10px 18px;height:44px" onclick="sendChatMessage()" id="chat-send-btn">Send</button>
     </div>
     <div class="wf-actions" style="border-top:1px solid var(--bdr)">
@@ -717,8 +721,8 @@ function startGeneration() {
     document.getElementById('ws2').className = 'wf-step done';
     document.getElementById('ws2b').className = 'wf-step active';
     // Show article preview
-    var preview = '<h2 style="font-size:18px;font-weight:700;margin-bottom:8px">'+generatedContent.title+'</h2>';
-    preview += '<p style="font-size:12px;color:var(--g3);margin-bottom:16px">'+generatedContent.shortIntro+'</p>';
+    var preview = '<h2>'+generatedContent.title+'</h2>';
+    preview += '<p class="short-intro">'+generatedContent.shortIntro+'</p>';
     preview += (generatedContent.introRichText||'') + (generatedContent.body||'');
     document.getElementById('chat-article-preview').innerHTML = preview;
     document.getElementById('chat-messages').innerHTML = '';
@@ -761,8 +765,8 @@ function sendChatMessage() {
     if (s !== -1) {
       try {
         generatedContent = JSON.parse(txt.slice(s,e+1));
-        var preview = '<h2 style="font-size:18px;font-weight:700;margin-bottom:8px">'+generatedContent.title+'</h2>';
-        preview += '<p style="font-size:12px;color:var(--g3);margin-bottom:16px">'+generatedContent.shortIntro+'</p>';
+        var preview = '<h2>'+generatedContent.title+'</h2>';
+        preview += '<p class="short-intro">'+generatedContent.shortIntro+'</p>';
         preview += (generatedContent.introRichText||'') + (generatedContent.body||'');
         document.getElementById('chat-article-preview').innerHTML = preview;
         box.innerHTML += '<div class="chat-msg-claude">'+(ack||'✓ Story updated.')+'</div>';
