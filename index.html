@@ -135,29 +135,6 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 <!-- Firebase Toast -->
 <div id="fb-toast" style="display:none;position:fixed;bottom:24px;right:24px;background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;border-left:3px solid var(--y)"></div>
 
-<!-- Memory Modal -->
-<div id="memory-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9000;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:12px;width:600px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
-    <div style="padding:20px 24px;border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div style="font-size:16px;font-weight:600">🧠 Editorial Memory</div>
-        <div style="font-size:12px;color:var(--g3);margin-top:2px">These notes are injected into every story generation. Teach the AI your preferences.</div>
-      </div>
-      <button onclick="closeMemory()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--g3)">×</button>
-    </div>
-    <div style="padding:16px 24px;border-bottom:1px solid var(--bdr);display:flex;gap:8px">
-      <input id="memory-input" class="wf-input" style="flex:1;margin:0" placeholder="e.g. Never open with a rhetorical question. Always anchor salary to numbers Indians recognise." onkeydown="if(event.key==='Enter')addMemoryNote()" />
-      <button class="btn-lg btn-y" onclick="addMemoryNote()" style="padding:8px 16px;white-space:nowrap">Add Note</button>
-    </div>
-    <div id="memory-list" style="padding:16px 24px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:8px">
-      <div style="color:var(--g3);font-size:13px;text-align:center;padding:24px 0">Loading memory...</div>
-    </div>
-    <div style="padding:12px 24px;border-top:1px solid var(--bdr);font-size:11px;color:var(--g3)">
-      <span id="memory-count">0 notes</span> · Stored in Firebase · Injected into every generation
-    </div>
-  </div>
-</div>
-
 
 <div class="topbar">
   <svg height="34" viewBox="0 0 220 34" xmlns="http://www.w3.org/2000/svg">
@@ -166,11 +143,10 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v5.7</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v5.8</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
-    <button class="btn btn-ghost" onclick="openMemory()" style="font-size:11px">🧠 Memory</button>
     <button class="btn" id="rbtn" onclick="loadAll()">Refresh</button>
   </div>
 </div>
@@ -425,47 +401,10 @@ function loadMemoryNotes(cb) {
     }).catch(function(e){ console.warn('Memory load failed', e); if (cb) cb([]); });
 }
 
-function renderMemoryList() {
-  var list = document.getElementById('memory-list');
-  var count = document.getElementById('memory-count');
-  if (!list) return;
-  if (!_memoryNotes.length) {
-    list.innerHTML = '<div style="color:var(--g3);font-size:13px;text-align:center;padding:24px 0">No memory notes yet. Add your first editorial preference above.</div>';
-    if (count) count.textContent = '0 notes';
-    return;
-  }
-  list.innerHTML = _memoryNotes.map(function(m) {
-    return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:var(--gray);border-radius:8px;border:1px solid var(--bdr)">'
-      +'<div style="flex:1;font-size:13px;line-height:1.5">'+m.note+'</div>'
-      +'<span style="font-size:10px;background:'+(m.type==='auto'?'#EF9F27':'#4CAF50')+';color:#fff;padding:2px 6px;border-radius:4px;white-space:nowrap">'+(m.type==='auto'?'auto':'manual')+'</span>'
-      +'<button onclick="deleteMemoryNote(\''+m.id+'\')" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>'
-      +'</div>';
-  }).join('');
-  if (count) count.textContent = _memoryNotes.length + ' note' + (_memoryNotes.length !== 1 ? 's' : '');
-}
-
-function openMemory() {
-  document.getElementById('memory-modal').style.display = 'flex';
-  loadMemoryNotes(function(){ renderMemoryList(); });
-}
-
-function closeMemory() {
-  document.getElementById('memory-modal').style.display = 'none';
-}
-
-function addMemoryNote() {
-  var input = document.getElementById('memory-input');
-  var note = input.value.trim();
-  if (!note) return;
-  if (!db) { fbToast('Firebase not connected', false); return; }
-  db.collection('editorial_memory').add({note:note, type:'manual', createdAt:firebase.firestore.FieldValue.serverTimestamp()})
-    .then(function(ref){
-      _memoryNotes.push({id:ref.id, note:note, type:'manual'});
-      renderMemoryList();
-      input.value = '';
-      fbToast('✓ Memory note saved');
-    }).catch(function(){ fbToast('Failed to save note', false); });
-}
+function openMemory() {}
+function closeMemory() {}
+function addMemoryNote() {}
+function renderMemoryList() {}
 
 function deleteMemoryNote(id) {
   db.collection('editorial_memory').doc(id).delete()
@@ -887,10 +826,13 @@ function startGeneration() {
   }, 1200);
   var sourceInfo = currentCard._url ? ('Source URL: '+currentCard._url) : ('Source headline (do not copy): '+currentCard.title+'\nSource: '+currentCard.src);
   var prompt = 'You are a senior editor at Wocult — an independent Indian media platform covering work, culture, and life for modern working professionals. Wocult is building the world\'s first lifestyle destination for the modern professional.\n\nWHO WOCULT IS BUILT FOR:\nThe person who knows life is more than work. Who wakes up on Sunday evening already feeling Monday. Who stays late not because they have to, but because leaving on time feels risky. Who has been told "great question" and then heard something else answered. Who is not burnt out — just bored in a serious way. Smart, slightly cynical about corporate culture, deeply invested in their career and life. Indian. 28-38 years old.\n\nWOCULT\'S EDITORIAL COMMITMENTS:\n1. Lived reality over theory — how work is actually experienced, not abstracted into frameworks\n2. Behavior over hierarchy — what people do, not the titles they hold\n3. Standards over noise — every story earns its place by saying something worth reading\n\nWHAT MAKES A STORY WOCULT:\n- It tells the working professional something true about their own life that they hadn\'t found words for yet\n- It educates, advises, explains — always in service of the reader, never the company\n- It gives voice to experiences that never make it into official narratives\n- It treats the professional as a complete human being — ambition, health, relationships, identity, money, not just their job title\n- It ends with something that makes the reader think, not a corporate call to action\n- The reader should feel: "This is written for me. This platform gets it."\n\nWHAT WOCULT NEVER DOES:\n- No corporate speak. No hustle worship. No glorifying overwork.\n- Never celebrate a layoff as "efficiency" or "streamlining" without naming the human cost\n- Never write breathless press releases disguised as journalism\n- No title worship. No paid rankings. No motivational filler.\n- Never give companies the benefit of the doubt without evidence\n- Never mistake the company\'s story for the worker\'s story\n\nVOICE — study these real Wocult opening lines for tone:\n"Most leaders who rule by fear do not know they are doing it."\n"High performance has a biology. And most organisations are ignoring it."\n"Every transformation has a business case. Very few have a human one."\n"The question most professionals are asking about AI is the wrong one."\n"They have been called lazy, entitled, allergic to feedback. Most of that is projection."\nNotice: Direct. Confident. No hedging in the opening. Names the thing most people feel but don\'t say. Peer-to-peer, never above the reader.\n\nSTORY STRUCTURE — 4 h3 subheadings following this arc:\n1. Set the scene (what happened, the context — make the subheading specific to this story, not a generic label)\n2. The human cost or lived reality (what workers are actually experiencing)\n3. The bigger pattern (what this reveals about Indian work culture)\n4. The question worth sitting with (not a forecast — a thought to leave the reader with)\n\nSUBHEADING STYLE: Punchy, specific, alive. Like a great magazine pull quote — not dead labels.\nBAD: "The Worker Angle" / "What Next" / "The Context"\nGOOD: "The 10 PM Message That Never Stops" / "Why Your Calendar Is Someone Else\'s Weapon" / "The Exit That Nobody Announces"\nMake each subheading feel like it could stand alone as a tweet.\n'+getMemoryContext()+'\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Tell the working professional what this means for their life, their choices, and their sense of self at work. Make them feel seen.')+'\n\nCRITICAL FACTUAL STANDARDS:\n1. Never invent numbers or statistics. Only use figures from the source.\n2. Use ranges when source gives ranges.\n3. Frame analysis as: suggests, indicates, appears to.\n4. If a claim cannot be sourced, remove it.\n5. Use "could" over "will", "targets" over "plans to achieve".\n\nHEADLINE: Original, never copied from source. Sharp, specific, speaks to the working professional\'s experience. Max 12 words. Should make the reader stop scrolling.\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook — human, intriguing, not a news summary","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>article HTML. 4 h3 subheadings — punchy, story-specific, never generic labels like Worker Angle or What Next. Target 800-1000 words. Flowing prose, no bullet points. Statistics attributed. Uncertain claims softened. End with a thought, not a prescription.</p>","readTime":"X min read"}';
+  var hasUrl = !!currentCard._url;
+  var genTools = hasUrl ? [{"type":"web_search_20250305","name":"web_search"}] : [];
+  var urlInstruction = hasUrl ? 'First use web search to fetch and read this article URL, then write the Wocult story based on its content.\n' : '';
   fetch(WORKER+'/generate', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, messages:[{role:'user',content:prompt}]})
+    body:JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, tools: genTools.length ? genTools : undefined, messages:[{role:'user',content:urlInstruction+prompt}]})
   }).then(function(r){return r.json();}).then(function(data) {
     clearInterval(anim);
     steps.forEach(function(s){var el=document.getElementById(s);el.classList.remove('active');el.classList.add('done');});
@@ -1014,10 +956,30 @@ function proceedToReview() {
     readTime: generatedContent.readTime||'5 min read',
     versionCount: window._versionCount||1
   }, 'draft');
-  // Prompt to save any session learnings
-  if (window._chatHistory && window._chatHistory.length > 4) {
-    var learn = prompt('Any editorial preferences to remember from this session?\n(Leave blank to skip — e.g. "Always mention salary impact in layoff stories")');
-    if (learn && learn.trim()) autoSaveMemory(learn.trim());
+  // Auto-learn from editorial changes: compare version 1 vs latest
+  var v1Block = document.getElementById('version-1');
+  var vLatestBlock = document.getElementById('version-'+(window._versionCount||1));
+  if (v1Block && vLatestBlock && window._versionCount > 1) {
+    var v1Text = v1Block.innerText || '';
+    var vLatestText = vLatestBlock.innerText || '';
+    // Only learn if content changed significantly (>50 word difference)
+    var diff = Math.abs(v1Text.split(/\s+/).length - vLatestText.split(/\s+/).length);
+    if (diff > 20 || v1Text.substring(0,200) !== vLatestText.substring(0,200)) {
+      var learnPrompt = 'You are analyzing editorial changes made to a Wocult article draft.\n\nVersion 1 (AI original):\n'+v1Text.substring(0,3000)+'\n\nFinal version (editor approved):\n'+vLatestText.substring(0,3000)+'\n\nCompare these versions carefully. Extract 1-3 SPECIFIC editorial preferences the editor demonstrated through their changes. Be specific and actionable — not generic advice.\nReturn ONLY a JSON array of strings. Example: ["Always start with a specific real situation, not a general observation","Avoid corporate jargon like \'leverage\' or \'ecosystem\' — use plain words"]\nReturn [] if changes are too minor to reveal clear preferences.';
+      fetch(WORKER+'/generate', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:500, messages:[{role:'user',content:learnPrompt}]})
+      }).then(function(r){return r.json();}).then(function(data){
+        var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+        var s = txt.indexOf('['); var e = txt.lastIndexOf(']');
+        if (s !== -1) {
+          try {
+            var notes = JSON.parse(txt.slice(s,e+1));
+            notes.forEach(function(note){ if(note && note.length>10) autoSaveMemory(note); });
+          } catch(err) {}
+        }
+      }).catch(function(){});
+    }
   }
   document.getElementById('step3').style.display = 'block';
   document.getElementById('ws2b').className = 'wf-step done';
