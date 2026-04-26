@@ -143,7 +143,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v5.8</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v5.9</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -176,6 +176,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   <button onclick="toggleSaved()" style="font-size:12px;color:var(--yd);background:none;border:none;cursor:pointer;font-weight:500" id="toggle-saved-btn">+ Save for later</button>
 </div>
 
+<div id="main">
 <div class="tabs">
   <div class="tab on" id="tab-cards" onclick="switchTab('cards')">Cards</div>
   <div class="tab" id="tab-heatmap" onclick="switchTab('heatmap')">Heatmap</div>
@@ -208,7 +209,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   </div>
   <div class="hmap-grid" id="hmap-grid"></div>
 </div>
-</div>
+</div><!-- /main -->
 
 <div id="workflow">
 <div class="wf-header">
@@ -801,10 +802,15 @@ function closeWorkflow() {
   document.getElementById('main').style.display = 'block';
 }
 function goStep(n) {
+  ['step1','step2','step2b','step3','step4','step5'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  var target = document.getElementById('step'+n);
+  if (target) target.style.display = 'block';
   for (var i=1; i<=5; i++) {
-    document.getElementById('step'+i).style.display = i===n ? 'block' : 'none';
     var ws = document.getElementById('ws'+i);
-    ws.className = 'wf-step'+(i<n?' done':i===n?' active':'');
+    if (ws) ws.className = 'wf-step'+(i<n?' done':i===n?' active':'');
   }
   if (n===5) buildFinalPreview();
   window.scrollTo(0,0);
