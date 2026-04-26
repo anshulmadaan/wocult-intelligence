@@ -143,7 +143,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v6.3</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v6.4</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -869,8 +869,9 @@ function startGeneration() {
     document.getElementById('r-excerpt').value = generatedContent.excerpt||'';
     document.getElementById('r-intro-rt').value = generatedContent.introRichText||'';
     document.getElementById('r-body').value = generatedContent.body||'';
+    var rBodyRender = document.getElementById('r-body-render');
+    if (rBodyRender) rBodyRender.innerHTML = generatedContent.body||'';
     document.getElementById('r-readtime').value = generatedContent.readTime||'5 min read';
-    document.getElementById('img-suggestions').innerHTML = ['india workplace','office workers india','business india','hiring india','workforce india'].map(function(kw){return '<button class="chip" onclick="setImgSearch(\''+kw+'\')" style="font-size:11px">'+kw+'</button>';}).join('');
     document.getElementById('step2').style.display = 'none';
     document.getElementById('step2b').style.display = 'block';
     document.getElementById('ws2').className = 'wf-step done';
@@ -1075,32 +1076,15 @@ function savePreview() {}
 function handleImgUpload(e) {
   var file = e.target.files[0];
   if (!file) return;
-  var reader = new FileReader();
-  reader.onload = function(ev) {
-    document.getElementById('img-url').value = '';
-    document.getElementById('img-preview-el').src = ev.target.result;
-    document.getElementById('img-preview').style.display = 'block';
-  };
-  reader.readAsDataURL(file);
+  // legacy - use handleReviewImg
 }
-function previewImg() {
-  var url = document.getElementById('img-url').value.trim();
-  document.getElementById('img-preview-el').src = url;
-  document.getElementById('img-preview').style.display = url ? 'block' : 'none';
-}
+function previewImg() {}
 function setImgSearch(kw) { window.open('https://unsplash.com/s/photos/'+encodeURIComponent(kw)+'?orientation=landscape','_blank'); }
 function searchImages() {
   var t = document.getElementById('r-title').value||'india workplace';
   window.open('https://unsplash.com/s/photos/'+encodeURIComponent(t.split(' ').slice(0,3).join(' '))+'?orientation=landscape','_blank');
 }
-function buildFinalPreview() {
-  var title = document.getElementById('r-title').value;
-  var excerpt = document.getElementById('r-excerpt').value;
-  var imgUrl = document.getElementById('img-url').value;
-  var date = document.getElementById('r-date').value;
-  var rt = document.getElementById('r-readtime').value;
-  document.getElementById('final-preview').innerHTML = (imgUrl?'<img src="'+imgUrl+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin-bottom:16px" />':'<div style="width:100%;height:80px;background:var(--g2);border-radius:6px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--g3)">No image selected</div>')+'<div style="font-size:11px;color:var(--g3);margin-bottom:6px">Affairs &middot; Wocult Team &middot; '+rt+' &middot; '+date+'</div><div style="font-size:18px;font-weight:600;margin-bottom:8px;line-height:1.3">'+title+'</div><div style="font-size:13px;color:var(--g3);line-height:1.6">'+excerpt.slice(0,200)+(excerpt.length>200?'...':'')+'</div>';
-}
+function buildFinalPreview() {}
 function exportCSV() {
   var fields = [
     ['Post Title',document.getElementById('r-title').value],
@@ -1120,7 +1104,7 @@ function exportCSV() {
     ['Unwind Type',''],['HOT',''],['Featured',''],['Signal',''],
     ['Editor Pick',''],['Opinion',''],['In focus',''],['Trending',''],
     ['Publish date',document.getElementById('r-date').value],
-    ['Post Image',document.getElementById('img-url').value],
+    ['Post Image', document.getElementById('r-img-url') ? document.getElementById('r-img-url').value : ''],
     ['Writer','Wocult Team'],['Voice Type','']
   ];
   function esc(v) { v=String(v||'').replace(/\r?\n/g,' '); if(v.indexOf('"')>=0||v.indexOf(',')>=0) return '"'+v.replace(/"/g,'""')+'"'; return v; }
