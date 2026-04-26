@@ -143,7 +143,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v5.9</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v6.0</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -846,7 +846,45 @@ function startGeneration() {
     var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
     var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
     if (s===-1) throw new Error('No JSON in response');
-    generatedContent = JSON.parse(txt.slice(s,e+1));
+    var raw = txt.slice(s,e+1);
+    // Robust parse: fix unescaped newlines inside JSON strings
+    var cleaned = raw.replace(/("(?:[^"\\]|\\.)*")|(\n)/g, function(m, str, nl) {
+      if (str) return str; // inside a string — keep as is
+      return '\\n'; // outside a string — escape it
+    });
+    try {
+      generatedContent = JSON.parse(cleaned);
+    } catch(parseErr) {
+      // Fallback: extract fields individually using regex
+      var extract = function(key) {
+        var r = new RegExp('"'+key+'"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"');
+        var m = raw.match(r);
+        return m ? m[1].replace(/\\n/g,'\n') : '';
+      };
+      var extractHtml = function(key) {
+        var idx = raw.indexOf('"'+key+'"');
+        if (idx === -1) return '';
+        var start = raw.indexOf('"', idx + key.length + 3) + 1;
+        // Find the closing quote that's not escaped
+        var pos = start, result = '';
+        while (pos < raw.length) {
+          if (raw[pos] === '\\') { result += raw[pos] + raw[pos+1]; pos += 2; continue; }
+          if (raw[pos] === '"') break;
+          result += raw[pos]; pos++;
+        }
+        return result;
+      };
+      generatedContent = {
+        title: extract('title'),
+        slug: extract('slug'),
+        shortIntro: extract('shortIntro'),
+        intro40: extract('intro40'),
+        excerpt: extract('excerpt'),
+        introRichText: extractHtml('introRichText'),
+        body: extractHtml('body'),
+        readTime: extract('readTime')
+      };
+    }
     document.getElementById('r-title').value = generatedContent.title||'';
     document.getElementById('r-slug').value = generatedContent.slug||'';
     document.getElementById('r-short').value = generatedContent.shortIntro||'';
