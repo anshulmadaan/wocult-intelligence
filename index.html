@@ -79,7 +79,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--g2);border-top-color:var(--y);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
 #workflow{display:none;min-height:100vh;background:#f5f0e8}
-.wf-header{background:var(--blk);padding:0 24px;height:52px;display:flex;align-items:center;gap:16px;border-bottom:3px solid var(--y)}
+.wf-header{background:var(--blk);padding:0 24px;height:52px;display:flex;align-items:center;gap:16px;border-bottom:3px solid var(--y);position:sticky;top:0;z-index:150}
 .wf-back{background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px}
 .wf-back:hover{color:#fff}
 .wf-steps{display:flex;margin-left:24px}
@@ -143,7 +143,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v6.0</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v6.3</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
@@ -218,9 +218,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <div class="wf-step active" id="ws1">1. Brief</div>
     <div class="wf-step" id="ws2">2. Generate</div>
     <div class="wf-step" id="ws2b">3. Refine</div>
-    <div class="wf-step" id="ws3">4. Review</div>
-    <div class="wf-step" id="ws4">5. Image</div>
-    <div class="wf-step" id="ws5">6. Publish</div>
+    <div class="wf-step" id="ws3">4. Review & Submit</div>
   </div>
 </div>
 <div id="step1" class="wf-body">
@@ -285,7 +283,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   </div>
   <!-- Content area -->
   <div style="max-width:820px;margin:0 auto">
-    <div id="chat-article-preview" contenteditable="true" style="padding:24px;background:#fff;min-height:400px;outline:none;cursor:text;font-size:14px;line-height:1.8;border-bottom:1px solid var(--bdr)" oninput="updateWordCount()"></div>
+    <div id="chat-article-preview" contenteditable="true" style="padding:24px;background:#fff;height:700px;overflow-y:scroll;outline:none;cursor:text;font-size:14px;line-height:1.8;border-bottom:1px solid var(--bdr)" oninput="updateWordCount()"></div>
     <div id="word-count-bar" style="padding:6px 24px;background:#fff;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--g3)">
       <span id="word-count-num">0 words</span>
       <span id="word-count-warn" style="display:none;color:#E24B4A;font-weight:500">⚠ Over 1200 words — recommended max exceeded</span>
@@ -301,63 +299,43 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 </div>
 <div id="step3" class="wf-body" style="display:none">
   <div class="wf-section">
-    <div style="font-size:16px;font-weight:600;margin-bottom:16px">Review and edit</div>
+    <div style="font-size:20px;font-weight:700;margin-bottom:4px">Review & Submit</div>
+    <div style="font-size:13px;color:var(--g3);margin-bottom:24px">Edit any field before submitting. Body renders as rich text — edit directly.</div>
     <div class="wf-field"><label class="wf-label">Post Title</label><input class="wf-input" id="r-title" /></div>
     <div class="wf-field"><label class="wf-label">Slug</label><input class="wf-input" id="r-slug" /></div>
     <div class="wf-field"><label class="wf-label">Short Story Intro <span class="field-badge">15-20 words</span></label><input class="wf-input" id="r-short" /></div>
     <div class="wf-field"><label class="wf-label">40 Word Intro</label><textarea class="wf-textarea" id="r-40" style="min-height:60px"></textarea></div>
     <div class="wf-field"><label class="wf-label">Excerpt <span class="field-badge">100 words</span></label><textarea class="wf-textarea" id="r-excerpt"></textarea></div>
-    <div class="wf-field"><label class="wf-label">Story Intro Rich Text</label><textarea class="wf-textarea" id="r-intro-rt" style="min-height:120px;font-family:monospace;font-size:12px"></textarea></div>
-    <div class="wf-field"><label class="wf-label">Body</label><textarea class="wf-textarea" id="r-body" style="min-height:300px;font-family:monospace;font-size:12px"></textarea></div>
+    <div class="wf-field"><label class="wf-label">Story Intro</label><textarea class="wf-textarea" id="r-intro-rt" style="min-height:80px"></textarea></div>
+    <div class="wf-field">
+      <label class="wf-label">Body <span class="field-badge" id="r-body-wc">0 words</span></label>
+      <div id="r-body-render" contenteditable="true" style="border:1px solid var(--bdr);border-radius:8px;padding:16px;min-height:400px;font-size:14px;line-height:1.8;background:#fff;outline:none" oninput="updateReviewWordCount()"></div>
+      <textarea id="r-body" style="display:none"></textarea>
+    </div>
     <div class="wf-row">
       <div class="wf-field"><label class="wf-label">Read Time</label><input class="wf-input" id="r-readtime" /></div>
       <div class="wf-field"><label class="wf-label">Publish Date</label><input class="wf-input" type="date" id="r-date" /></div>
     </div>
-  </div>
-  <div class="wf-actions">
-    <button class="btn-lg" onclick="goStep(1)" style="background:var(--gray);border:none;cursor:pointer">Back</button>
-    <button class="btn-lg btn-y" onclick="goStep(4)">Choose image</button>
-  </div>
-</div>
-<div id="step4" class="wf-body" style="display:none">
-  <div class="wf-section">
-    <div style="font-size:16px;font-weight:600;margin-bottom:4px">Select image</div>
-    <div style="font-size:13px;color:var(--g3);margin-bottom:16px">Paste a URL or upload from device</div>
-    <div class="img-url-row">
-      <input class="wf-input" id="img-url" placeholder="Paste image URL here..." style="flex:1" oninput="previewImg()" />
-      <button class="btn" onclick="searchImages()">Search Unsplash</button>
+    <div class="wf-field">
+      <label class="wf-label">Cover Image</label>
+      <div style="display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray)">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="wf-input" id="r-img-url" placeholder="Paste image URL..." style="flex:1;margin:0" oninput="document.getElementById('r-img-name').textContent=this.value?'✓ URL set':''" />
+          <button class="btn" onclick="var q=encodeURIComponent((document.getElementById('r-title').value||'india workplace').substring(0,50));window.open('https://unsplash.com/search/photos/'+q,'_blank')" style="white-space:nowrap;font-size:12px">🔍 Unsplash</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <label style="font-size:12px;color:var(--g3);white-space:nowrap">Or upload file:</label>
+          <input type="file" id="r-img-file" accept="image/*" onchange="handleReviewImg(event)" style="font-size:12px;flex:1" />
+        </div>
+        <div id="r-img-name" style="font-size:12px;color:var(--g3)"></div>
+      </div>
     </div>
-    <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
-      <label style="font-size:12px;color:var(--g3)">Or upload:</label>
-      <input type="file" id="img-file" accept="image/*" onchange="handleImgUpload(event)" style="font-size:12px" />
-    </div>
-    <div id="img-preview" style="margin-top:12px;display:none">
-      <img id="img-preview-el" style="width:100%;max-height:240px;object-fit:cover;border-radius:8px;border:3px solid var(--y)" />
-    </div>
-    <div style="margin-top:16px">
-      <div class="wf-label">Suggested searches</div>
-      <div id="img-suggestions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
-    </div>
-  </div>
-  <div class="wf-actions">
-    <button class="btn-lg" onclick="goStep(3)" style="background:var(--gray);border:none;cursor:pointer">Back</button>
-    <button class="btn-lg btn-y" onclick="goStep(5)">Review and publish</button>
-  </div>
-</div>
-<div id="step5" class="wf-body" style="display:none">
-  <div class="wf-section">
-    <div style="font-size:16px;font-weight:600;margin-bottom:16px">Final review</div>
-    <div id="final-preview" style="border:1px solid var(--g2);border-radius:8px;padding:16px;background:var(--gray)"></div>
-  </div>
-  <div class="wf-section" style="background:#FFF8F0;border-color:#FAC775">
-    <div style="font-size:13px;font-weight:500;margin-bottom:4px">Publishing to Webflow CMS as draft</div>
-    <div style="font-size:12px;color:var(--g3)">Review and publish from your Webflow dashboard.</div>
   </div>
   <div id="publish-result" style="display:none"></div>
   <div class="wf-actions" id="publish-actions">
-    <button class="btn-lg" onclick="goStep(4)" style="background:var(--gray);border:none;cursor:pointer">Back</button>
+    <button class="btn-lg" onclick="proceedToReview()" style="background:var(--gray);border:none;cursor:pointer">← Back to Refine</button>
     <button class="btn-lg" onclick="exportCSV()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Export CSV</button>
-    <button class="btn-lg btn-dark" id="publish-btn" onclick="publishToWebflow()">Publish to Webflow</button>
+    <button class="btn-lg btn-y" id="publish-btn" onclick="submitArticle()">Submit</button>
   </div>
 </div>
 </div>
@@ -802,17 +780,16 @@ function closeWorkflow() {
   document.getElementById('main').style.display = 'block';
 }
 function goStep(n) {
-  ['step1','step2','step2b','step3','step4','step5'].forEach(function(id){
+  ['step1','step2','step2b','step3'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
   var target = document.getElementById('step'+n);
   if (target) target.style.display = 'block';
-  for (var i=1; i<=5; i++) {
-    var ws = document.getElementById('ws'+i);
-    if (ws) ws.className = 'wf-step'+(i<n?' done':i===n?' active':'');
-  }
-  if (n===5) buildFinalPreview();
+  ['ws1','ws2','ws2b','ws3'].forEach(function(id, i){
+    var ws = document.getElementById(id);
+    if (ws) ws.className = 'wf-step'+(i+1<n?' done':i+1===n?' active':'');
+  });
   window.scrollTo(0,0);
 }
 function startGeneration() {
@@ -831,7 +808,7 @@ function startGeneration() {
     else clearInterval(anim);
   }, 1200);
   var sourceInfo = currentCard._url ? ('Source URL: '+currentCard._url) : ('Source headline (do not copy): '+currentCard.title+'\nSource: '+currentCard.src);
-  var prompt = 'You are a senior editor at Wocult — an independent Indian media platform covering work, culture, and life for modern working professionals. Wocult is building the world\'s first lifestyle destination for the modern professional.\n\nWHO WOCULT IS BUILT FOR:\nThe person who knows life is more than work. Who wakes up on Sunday evening already feeling Monday. Who stays late not because they have to, but because leaving on time feels risky. Who has been told "great question" and then heard something else answered. Who is not burnt out — just bored in a serious way. Smart, slightly cynical about corporate culture, deeply invested in their career and life. Indian. 28-38 years old.\n\nWOCULT\'S EDITORIAL COMMITMENTS:\n1. Lived reality over theory — how work is actually experienced, not abstracted into frameworks\n2. Behavior over hierarchy — what people do, not the titles they hold\n3. Standards over noise — every story earns its place by saying something worth reading\n\nWHAT MAKES A STORY WOCULT:\n- It tells the working professional something true about their own life that they hadn\'t found words for yet\n- It educates, advises, explains — always in service of the reader, never the company\n- It gives voice to experiences that never make it into official narratives\n- It treats the professional as a complete human being — ambition, health, relationships, identity, money, not just their job title\n- It ends with something that makes the reader think, not a corporate call to action\n- The reader should feel: "This is written for me. This platform gets it."\n\nWHAT WOCULT NEVER DOES:\n- No corporate speak. No hustle worship. No glorifying overwork.\n- Never celebrate a layoff as "efficiency" or "streamlining" without naming the human cost\n- Never write breathless press releases disguised as journalism\n- No title worship. No paid rankings. No motivational filler.\n- Never give companies the benefit of the doubt without evidence\n- Never mistake the company\'s story for the worker\'s story\n\nVOICE — study these real Wocult opening lines for tone:\n"Most leaders who rule by fear do not know they are doing it."\n"High performance has a biology. And most organisations are ignoring it."\n"Every transformation has a business case. Very few have a human one."\n"The question most professionals are asking about AI is the wrong one."\n"They have been called lazy, entitled, allergic to feedback. Most of that is projection."\nNotice: Direct. Confident. No hedging in the opening. Names the thing most people feel but don\'t say. Peer-to-peer, never above the reader.\n\nSTORY STRUCTURE — 4 h3 subheadings following this arc:\n1. Set the scene (what happened, the context — make the subheading specific to this story, not a generic label)\n2. The human cost or lived reality (what workers are actually experiencing)\n3. The bigger pattern (what this reveals about Indian work culture)\n4. The question worth sitting with (not a forecast — a thought to leave the reader with)\n\nSUBHEADING STYLE: Punchy, specific, alive. Like a great magazine pull quote — not dead labels.\nBAD: "The Worker Angle" / "What Next" / "The Context"\nGOOD: "The 10 PM Message That Never Stops" / "Why Your Calendar Is Someone Else\'s Weapon" / "The Exit That Nobody Announces"\nMake each subheading feel like it could stand alone as a tweet.\n'+getMemoryContext()+'\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Tell the working professional what this means for their life, their choices, and their sense of self at work. Make them feel seen.')+'\n\nCRITICAL FACTUAL STANDARDS:\n1. Never invent numbers or statistics. Only use figures from the source.\n2. Use ranges when source gives ranges.\n3. Frame analysis as: suggests, indicates, appears to.\n4. If a claim cannot be sourced, remove it.\n5. Use "could" over "will", "targets" over "plans to achieve".\n\nHEADLINE: Original, never copied from source. Sharp, specific, speaks to the working professional\'s experience. Max 12 words. Should make the reader stop scrolling.\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook — human, intriguing, not a news summary","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>article HTML. 4 h3 subheadings — punchy, story-specific, never generic labels like Worker Angle or What Next. Target 800-1000 words. Flowing prose, no bullet points. Statistics attributed. Uncertain claims softened. End with a thought, not a prescription.</p>","readTime":"X min read"}';
+  var prompt = 'You are a senior editor at Wocult — an independent Indian media platform covering work, culture, and life for modern working professionals. Wocult is building the world\'s first lifestyle destination for the modern professional.\n\nWHO WOCULT IS BUILT FOR:\nThe person who knows life is more than work. Who wakes up on Sunday evening already feeling Monday. Who stays late not because they have to, but because leaving on time feels risky. Who has been told "great question" and then heard something else answered. Who is not burnt out — just bored in a serious way. Smart, slightly cynical about corporate culture, deeply invested in their career and life. Indian. 28-38 years old.\n\nWOCULT\'S EDITORIAL COMMITMENTS:\n1. Lived reality over theory — how work is actually experienced, not abstracted into frameworks\n2. Behavior over hierarchy — what people do, not the titles they hold\n3. Standards over noise — every story earns its place by saying something worth reading\n\nWHAT MAKES A STORY WOCULT:\n- It tells the working professional something true about their own life that they hadn\'t found words for yet\n- It educates, advises, explains — always in service of the reader, never the company\n- It gives voice to experiences that never make it into official narratives\n- It treats the professional as a complete human being — ambition, health, relationships, identity, money, not just their job title\n- It ends with something that makes the reader think, not a corporate call to action\n- The reader should feel: "This is written for me. This platform gets it."\n\nWHAT WOCULT NEVER DOES:\n- No corporate speak. No hustle worship. No glorifying overwork.\n- Never celebrate a layoff as "efficiency" or "streamlining" without naming the human cost\n- Never write breathless press releases disguised as journalism\n- No title worship. No paid rankings. No motivational filler.\n- Never give companies the benefit of the doubt without evidence\n- Never mistake the company\'s story for the worker\'s story\n\nVOICE — study these real Wocult opening lines for tone:\n"Most leaders who rule by fear do not know they are doing it."\n"High performance has a biology. And most organisations are ignoring it."\n"Every transformation has a business case. Very few have a human one."\n"The question most professionals are asking about AI is the wrong one."\n"They have been called lazy, entitled, allergic to feedback. Most of that is projection."\nNotice: Direct. Confident. No hedging in the opening. Names the thing most people feel but don\'t say. Peer-to-peer, never above the reader.\n\nSTORY STRUCTURE — 4 h3 subheadings following this arc:\n1. Set the scene (what happened, the context — make the subheading specific to this story, not a generic label)\n2. The human cost or lived reality (what workers are actually experiencing)\n3. The bigger pattern (what this reveals about Indian work culture)\n4. The question worth sitting with (not a forecast — a thought to leave the reader with)\n\nSUBHEADING STYLE: Punchy, specific, alive. Like a great magazine pull quote — not dead labels.\nBAD: "The Worker Angle" / "What Next" / "The Context"\nGOOD: "The 10 PM Message That Never Stops" / "Why Your Calendar Is Someone Else\'s Weapon" / "The Exit That Nobody Announces"\nMake each subheading feel like it could stand alone as a tweet.\n'+getMemoryContext()+'\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Tell the working professional what this means for their life, their choices, and their sense of self at work. Make them feel seen.')+'\n\nCRITICAL FACTUAL STANDARDS:\n1. Never invent numbers or statistics. Only use figures from the source.\n2. Use ranges when source gives ranges.\n3. Frame analysis as: suggests, indicates, appears to.\n4. If a claim cannot be sourced, remove it.\n5. Use "could" over "will", "targets" over "plans to achieve".\n\nFORMATTING RULES (non-negotiable):\n- All titles and subheadings must be in sentence case (only first word and proper nouns capitalised)\n- Never use italics except for direct quotes from a person\n- No bold text in body copy\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook — human, intriguing, not a news summary","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>article HTML. 4 h3 subheadings — punchy, story-specific, never generic labels like Worker Angle or What Next. Target 800-1000 words. Flowing prose, no bullet points. Statistics attributed. Uncertain claims softened. End with a thought, not a prescription.</p>","readTime":"X min read"}';
   var hasUrl = !!currentCard._url;
   var genTools = hasUrl ? [{"type":"web_search_20250305","name":"web_search"}] : [];
   var urlInstruction = hasUrl ? 'First use web search to fetch and read this article URL, then write the Wocult story based on its content.\n' : '';
@@ -905,7 +882,7 @@ function startGeneration() {
     document.getElementById('chat-messages').innerHTML = '';
     window._versionCount = 1;
     window._chatHistory = [
-      {role:'user', content: 'You are a sharp senior editor at Wocult — an independent Indian media platform for modern working professionals.\n\nWocult\'s north star: Every story must answer — what is in this for the working professional? Does it educate, advise, explain something they\'ve lived but never named? The reader should feel: this platform gets it. This is written for me. Wocult\'s goal is to be the most trusted voice for India\'s working class.\n\nVoice: Direct, confident, peer-to-peer. Reader is smart, slightly cynical about corporate culture, 28-38, Indian. Never preachy. Never corporate. Never above the reader. Study these real Wocult opening lines: "Most leaders who rule by fear do not know they are doing it." / "High performance has a biology. And most organisations are ignoring it." / "Every transformation has a business case. Very few have a human one."\n\nWhat never belongs: hustle worship, title worship, glorifying overwork, treating companies as heroes, press releases dressed as journalism.\n\nYou are helping refine a draft article in a live preview window.\n\nRULES:\n- For ANY editorial change (rewrite, edit, add section, change tone, add subheadings, etc.): respond with a brief 1-line description of what you changed, then wrap the FULL revised article HTML in <version> tags.\n- For research, factual questions, opinions, or anything conversational: reply normally with NO <version> tags. This appears in the chat below.\n- WORD LIMIT: Keep revised articles under 1200 words. If the user asks to add an angle or new section, make room by tightening other sections — condense, remove redundancy. BUT never alter or remove text the user has written manually. Be wise: retain their thought, make space elsewhere.\n- Use web search when asked to find data, statistics, or sources.\n- Be intelligent and confident. Improve the writing substantially, not cosmetically.\n\nExample editorial response:\nRewrote the intro to lead with the worker perspective.\n<version><h2>New Title</h2><p class="short-intro">New intro line</p><p>Full revised article...</p></version>\n\nCurrent article (Version 1):\n'+document.getElementById('chat-article-preview').innerHTML},
+      {role:'user', content: 'You are a sharp senior editor at Wocult — an independent Indian media platform for modern working professionals.\n\nWocult\'s north star: Every story must answer — what is in this for the working professional? Does it educate, advise, explain something they\'ve lived but never named? The reader should feel: this platform gets it. This is written for me. Wocult\'s goal is to be the most trusted voice for India\'s working class.\n\nVoice: Direct, confident, peer-to-peer. Reader is smart, slightly cynical about corporate culture, 28-38, Indian. Never preachy. Never corporate. Never above the reader. Study these real Wocult opening lines: "Most leaders who rule by fear do not know they are doing it." / "High performance has a biology. And most organisations are ignoring it." / "Every transformation has a business case. Very few have a human one."\n\nWhat never belongs: hustle worship, title worship, glorifying overwork, treating companies as heroes, press releases dressed as journalism.\n\nYou are helping refine a draft article in a live preview window.\n\nRULES:\n- For ANY editorial change (rewrite, edit, add section, change tone, add subheadings, etc.): respond with a brief 1-line description of what you changed, then wrap the FULL revised article HTML in <version> tags.\n- For research, factual questions, opinions, or anything conversational: reply normally with NO <version> tags. This appears in the chat below.\n- FORMATTING: All titles and subheadings in sentence case. No italics except direct quotes from a person. No bold in body copy.\\n- WORD LIMIT: Keep revised articles under 1200 words. If the user asks to add an angle or new section, make room by tightening other sections — condense, remove redundancy. BUT never alter or remove text the user has written manually. Be wise: retain their thought, make space elsewhere.\n- Use web search when asked to find data, statistics, or sources.\n- Be intelligent and confident. Improve the writing substantially, not cosmetically.\n\nExample editorial response:\nRewrote the intro to lead with the worker perspective.\n<version><h2>New Title</h2><p class="short-intro">New intro line</p><p>Full revised article...</p></version>\n\nCurrent article (Version 1):\n'+document.getElementById('chat-article-preview').innerHTML},
       {role:'assistant', content: 'Ready. Tell me what to change — a section, the tone, the headline — or ask me to research something.'}
     ];
     window.scrollTo(0,0);
@@ -986,8 +963,20 @@ function proceedToReview() {
   document.getElementById('r-excerpt').value = generatedContent.excerpt||'';
   document.getElementById('r-intro-rt').value = generatedContent.introRichText||'';
   document.getElementById('r-body').value = generatedContent.body||'';
+  document.getElementById('r-body-render').innerHTML = generatedContent.body||'';
   document.getElementById('r-readtime').value = generatedContent.readTime||'5 min read';
-  document.getElementById('img-suggestions').innerHTML = ['india workplace','office workers india','business india','hiring india','workforce india'].map(function(kw){return '<button class="chip" onclick="setImgSearch(\''+kw+'\')" style="font-size:11px">'+kw+'</button>';}).join('');
+  document.getElementById('r-img-name').textContent = '';
+  if (document.getElementById('r-img-url')) document.getElementById('r-img-url').value = '';
+  updateReviewWordCount();
+  // Navigate to step3 as a clean new page
+  ['step1','step2','step2b','step3'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  document.getElementById('step3').style.display = 'block';
+  document.getElementById('ws2b').className = 'wf-step done';
+  document.getElementById('ws3').className = 'wf-step active';
+  window.scrollTo(0,0);
   // Save draft to Firebase
   saveArticleToFirebase({
     title: generatedContent.title||'',
@@ -1141,19 +1130,75 @@ function exportCSV() {
   a.download = (document.getElementById('r-slug').value||'wocult-story')+'.csv';
   a.click();
 }
-function publishToWebflow() {
+function updateReviewWordCount() {
+  var el = document.getElementById('r-body-render');
+  var wc = document.getElementById('r-body-wc');
+  if (!el || !wc) return;
+  var count = (el.innerText||'').trim().split(/\s+/).filter(function(w){return w.length>0;}).length;
+  wc.textContent = count + ' words';
+  wc.style.color = count > 1200 ? '#E24B4A' : count > 1000 ? '#EF9F27' : '';
+}
+
+var _reviewImgFile = null;
+function handleReviewImg(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  _reviewImgFile = file;
+  document.getElementById('r-img-name').textContent = '✓ ' + file.name + ' (' + (file.size/1024).toFixed(0) + ' KB)';
+}
+
+function submitArticle() {
   var btn = document.getElementById('publish-btn');
-  btn.disabled = true; btn.textContent = 'Publishing...';
-  var dateVal = document.getElementById('r-date').value;
-  var fieldData = {
-    name: document.getElementById('r-title').value,
+  btn.disabled = true; btn.textContent = 'Submitting...';
+  // Sync body from rendered div back to hidden textarea
+  var bodyHtml = document.getElementById('r-body-render').innerHTML;
+  document.getElementById('r-body').value = bodyHtml;
+  var articleData = {
+    title: document.getElementById('r-title').value,
     slug: document.getElementById('r-slug').value,
+    shortIntro: document.getElementById('r-short').value,
+    intro40: document.getElementById('r-40').value,
     excerpt: document.getElementById('r-excerpt').value,
-    'story-intro-para': document.getElementById('r-short').value,
-    'short-story-intro': document.getElementById('r-short').value,
-    '40-word-intro': document.getElementById('r-40').value,
-    body: document.getElementById('r-body').value,
-    'read-time': document.getElementById('r-readtime').value,
+    introRichText: document.getElementById('r-intro-rt').value,
+    body: bodyHtml,
+    readTime: document.getElementById('r-readtime').value,
+    publishDate: document.getElementById('r-date').value,
+    imageName: _reviewImgFile ? _reviewImgFile.name : '',
+    imageUrl: document.getElementById('r-img-url').value||''
+  };
+  // Save/update in Firebase
+  saveArticleToFirebase(articleData, 'submitted').then(function(){
+    // Also publish to Webflow
+    publishToWebflow(articleData);
+  }).catch(function(){
+    // Still try Webflow even if Firebase fails
+    publishToWebflow(articleData);
+  });
+}
+
+function publishToWebflow(data) {
+  var btn = document.getElementById('publish-btn');
+  var d = data || {
+    title: document.getElementById('r-title').value,
+    slug: document.getElementById('r-slug').value,
+    shortIntro: document.getElementById('r-short').value,
+    intro40: document.getElementById('r-40').value,
+    excerpt: document.getElementById('r-excerpt').value,
+    introRichText: document.getElementById('r-intro-rt').value,
+    body: document.getElementById('r-body-render').innerHTML,
+    readTime: document.getElementById('r-readtime').value,
+    publishDate: document.getElementById('r-date').value
+  };
+  var dateVal = d.publishDate || document.getElementById('r-date').value;
+  var fieldData = {
+    name: d.title,
+    slug: d.slug,
+    excerpt: d.excerpt,
+    'story-intro-para': d.shortIntro,
+    'short-story-intro': d.shortIntro,
+    '40-word-intro': d.intro40,
+    body: d.body,
+    'read-time': d.readTime,
     'publish-date': dateVal ? new Date(dateVal).toISOString() : new Date().toISOString()
   };
   fetch(WORKER+'/webflow', {
@@ -1163,12 +1208,13 @@ function publishToWebflow() {
   }).then(function(r){return r.json().then(function(d){return {ok:r.ok,data:d};});}).then(function(res) {
     if (res.ok && res.data.id) {
       document.getElementById('publish-result').style.display = 'block';
-      document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Published as draft!</div><div class="publish-sub">Review and publish from your Webflow dashboard.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
+      document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Submitted!</div><div class="publish-sub">Saved to Firebase and published to Webflow as draft.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
       document.getElementById('publish-actions').style.display = 'none';
+      if (btn) { btn.disabled=false; btn.textContent='Submit'; }
     } else {
       throw new Error(res.data.message||JSON.stringify(res.data).substring(0,200));
     }
-  }).catch(function(e){btn.disabled=false;btn.textContent='Publish to Webflow';alert('Publish failed: '+e.message);});
+  }).catch(function(e){ if(btn){btn.disabled=false;btn.textContent='Submit';} fbToast('Webflow: '+e.message.substring(0,60), false); });
 }
 
 renderSaved();
