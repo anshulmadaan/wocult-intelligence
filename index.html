@@ -7,6 +7,15 @@
 body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-height:100vh}
 :root{--y:#FAC775;--yd:#BA7517;--ydeep:#412402;--blk:#1a1a1a;--gray:#f0ebe0;--g2:#e0d8c8;--g3:#888;--w:#fff;--red:#E24B4A;--grn:#639922;--blu:#378ADD;--bdr:rgba(0,0,0,0.1)}
 .topbar{background:var(--blk);color:#fff;padding:0 24px;display:flex;align-items:center;gap:16px;height:52px;border-bottom:3px solid var(--y);position:sticky;top:0;z-index:50}
+.landing{min-height:calc(100vh - 52px);background:#f5f0e8;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:48px 24px}
+.landing-hero{text-align:center;margin-bottom:48px}.landing-hero h1{font-size:26px;font-weight:700;color:var(--blk);margin-bottom:8px;font-family:Georgia,serif}.landing-hero p{font-size:15px;color:var(--g3);max-width:500px;margin:0 auto;line-height:1.6}
+.landing-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:880px;width:100%}
+.lcard{background:#fff;border-radius:12px;padding:28px 22px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;display:flex;flex-direction:column;gap:10px}.lcard:hover{border-color:var(--y);box-shadow:0 4px 20px rgba(0,0,0,0.09);transform:translateY(-2px)}.lcard-icon{font-size:30px}.lcard-title{font-size:16px;font-weight:700;color:var(--blk);font-family:Georgia,serif}.lcard-desc{font-size:13px;color:var(--g3);line-height:1.6}.lcard-cta{font-size:12px;font-weight:600;color:var(--yd);margin-top:8px}
+.scratch-screen{max-width:680px;width:100%;margin:0 auto}.scratch-screen h2{font-size:22px;font-weight:700;margin-bottom:4px;font-family:Georgia,serif}.scratch-screen .sub{font-size:14px;color:var(--g3);margin-bottom:28px;line-height:1.6}
+.sfield{margin-bottom:20px}.sfield label{font-size:13px;font-weight:600;color:var(--blk);display:block;margin-bottom:6px}.sfield .hint{font-size:12px;color:var(--g3);margin-bottom:6px}
+.sfield input,.sfield textarea{width:100%;border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;font-size:14px;font-family:system-ui,sans-serif;outline:none;background:#fff;resize:vertical;box-sizing:border-box}.sfield input:focus,.sfield textarea:focus{border-color:var(--y)}
+.radio-grid,.check-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.radio-opt,.check-opt{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--bdr);border-radius:8px;cursor:pointer;font-size:13px;background:#fff;user-select:none}.radio-opt:hover,.check-opt:hover{border-color:var(--y);background:#fffbf0}.radio-opt.sel,.check-opt.sel{border-color:var(--y);background:#fffbf0;font-weight:600}
+.url-entry{max-width:560px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding:32px 0}.url-entry h2{font-size:20px;font-weight:700;font-family:Georgia,serif}.url-entry p{font-size:14px;color:var(--g3)}
 .tbar-sub{font-size:13px;color:rgba(255,255,255,0.5);border-left:1px solid rgba(255,255,255,0.2);padding-left:16px}
 .tbar-r{margin-left:auto;display:flex;align-items:center;gap:12px}
 .dot{width:7px;height:7px;border-radius:50%;background:#4CAF50;display:inline-block;margin-right:5px}
@@ -145,11 +154,12 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v6.4</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v6.6</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
-    <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px">+ Draft from URL</button>
-    <button class="btn" id="rbtn" onclick="loadAll()">Refresh</button>
+    <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
+    <button class="btn btn-ghost" onclick="goToLanding()" style="font-size:11px;display:none" id="btn-back-landing">← Home</button>
+    <button class="btn" id="rbtn" onclick="loadAll()" style="display:none">Refresh</button>
   </div>
 </div>
 
@@ -178,7 +188,116 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   <button onclick="toggleSaved()" style="font-size:12px;color:var(--yd);background:none;border:none;cursor:pointer;font-weight:500" id="toggle-saved-btn">+ Save for later</button>
 </div>
 
-<div id="main">
+<!-- LANDING SCREEN -->
+<div id="landing">
+
+  <!-- Card selection screen -->
+  <div id="landing-cards" class="landing">
+    <div class="landing-hero">
+      <h1>What would you like to do today?</h1>
+      <p>Wocult Intelligence helps you find stories that matter and shape them into something worth reading.</p>
+    </div>
+    <div class="landing-cards">
+      <div class="lcard" onclick="showMain()">
+        <div class="lcard-icon">📰</div>
+        <div class="lcard-title">Browse trending stories</div>
+        <div class="lcard-desc">Explore live news from Indian workplaces. Find a story that matters and draft a Wocult piece from it.</div>
+        <div class="lcard-cta">Open dashboard →</div>
+      </div>
+      <div class="lcard" onclick="showUrlEntry()">
+        <div class="lcard-icon">🔗</div>
+        <div class="lcard-title">Draft from a URL</div>
+        <div class="lcard-desc">Paste any article URL. The AI will read it and draft a Wocult story — with your editorial angle.</div>
+        <div class="lcard-cta">Paste a URL →</div>
+      </div>
+      <div class="lcard" onclick="showScratchForm()">
+        <div class="lcard-icon">✍️</div>
+        <div class="lcard-title">Write from scratch</div>
+        <div class="lcard-desc">Share your own story, experience, or perspective. We'll help you shape it into a Wocult piece.</div>
+        <div class="lcard-cta">Start writing →</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- URL entry screen -->
+  <div id="landing-url" class="landing" style="display:none">
+    <div class="url-entry">
+      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;align-self:flex-start;padding:0">← Back</button>
+      <h2>Draft from a URL</h2>
+      <p>Paste the URL of any article. The AI will read it and draft an original Wocult story based on the content.</p>
+      <input class="wf-input" id="landing-url-input" placeholder="https://economictimes.com/..." style="font-size:14px" onkeydown="if(event.key==='Enter')startFromUrl()" />
+      <button class="btn-lg btn-y" onclick="startFromUrl()" style="align-self:flex-start;padding:12px 28px">Draft this story →</button>
+    </div>
+  </div>
+
+  <!-- Write from scratch screen -->
+  <div id="landing-scratch" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen">
+      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back</button>
+      <h2>Tell us your story</h2>
+      <p class="sub">Share your experience, perspective, or idea. Write freely — we'll shape it into a Wocult piece. Your voice, our edit.</p>
+
+      <div class="sfield">
+        <label>Your name and email</label>
+        <input id="sc-name" placeholder="Name · email@example.com" />
+      </div>
+
+      <div class="sfield">
+        <label>What do you want to write about?</label>
+        <div class="hint">A personal experience, a lesson from work, advice for younger professionals, burnout, health, leadership, money, ambition, relationships, parenting, failure, reinvention...</div>
+        <textarea id="sc-topic" rows="3" placeholder="Describe your topic or story idea"></textarea>
+      </div>
+
+      <div class="sfield">
+        <label>What kind of story is this?</label>
+        <div class="radio-grid" id="sc-type-grid">
+          <div class="radio-opt" onclick="selectRadio(this,'sc-type')">Personal experience</div>
+          <div class="radio-opt" onclick="selectRadio(this,'sc-type')">Opinion / perspective</div>
+          <div class="radio-opt" onclick="selectRadio(this,'sc-type')">Career lesson</div>
+          <div class="radio-opt" onclick="selectRadio(this,'sc-type')">Life lesson</div>
+          <div class="radio-opt" onclick="selectRadio(this,'sc-type')">Advice</div>
+          <div class="radio-opt" onclick="selectRadio(this,'sc-type')">Open letter</div>
+          <div class="radio-opt" onclick="selectRadio(this,'sc-type')">Something else</div>
+        </div>
+        <input id="sc-type" type="hidden" value="" />
+      </div>
+
+      <div class="sfield">
+        <label>Which themes does it fit? <span style="font-weight:400;color:var(--g3)">(choose all that apply)</span></label>
+        <div class="check-grid" id="sc-themes-grid">
+          <div class="check-opt" onclick="toggleCheck(this)">Work culture</div>
+          <div class="check-opt" onclick="toggleCheck(this)">Leadership</div>
+          <div class="check-opt" onclick="toggleCheck(this)">Career growth</div>
+          <div class="check-opt" onclick="toggleCheck(this)">Health and wellbeing</div>
+          <div class="check-opt" onclick="toggleCheck(this)">Money and ambition</div>
+          <div class="check-opt" onclick="toggleCheck(this)">Relationships and family</div>
+          <div class="check-opt" onclick="toggleCheck(this)">Identity and self-worth</div>
+          <div class="check-opt" onclick="toggleCheck(this)">Life outside work</div>
+          <div class="check-opt" onclick="toggleCheck(this)">Failure and reinvention</div>
+          <div class="check-opt" onclick="toggleCheck(this)">Something else</div>
+        </div>
+      </div>
+
+      <div class="sfield">
+        <label>Tell us your story</label>
+        <div class="hint">Write freely — a full draft, rough notes, or just the idea. Tell us what happened, what it taught you, and why other working professionals may relate.</div>
+        <textarea id="sc-story" rows="8" placeholder="Start writing here..."></textarea>
+      </div>
+
+      <div class="sfield">
+        <label style="display:flex;align-items:flex-start;gap:10px;font-weight:400;cursor:pointer">
+          <input type="checkbox" id="sc-consent" style="width:auto;margin-top:2px" />
+          <span style="font-size:12px;color:var(--g3);line-height:1.5">I confirm this is my original experience or perspective, and I'm comfortable with Wocult editing it for clarity and style before publishing.</span>
+        </label>
+      </div>
+
+      <button class="btn-lg btn-y" onclick="startFromScratch()" style="padding:14px 32px;font-size:15px;width:100%">Generate my story →</button>
+    </div>
+  </div>
+
+</div><!-- /landing -->
+
+<div id="main" style="display:none">
 <div class="tabs">
   <div class="tab on" id="tab-cards" onclick="switchTab('cards')">Cards</div>
   <div class="tab" id="tab-heatmap" onclick="switchTab('heatmap')">Heatmap</div>
@@ -372,7 +491,121 @@ function fbToast(msg, ok) {
   setTimeout(function(){ t.style.display = 'none'; }, 3000);
 }
 
-// --- MEMORY ---
+// --- LANDING SCREEN ---
+function goToLanding() {
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('landing').style.display = 'block';
+  document.getElementById('btn-draft-url').style.display = 'none';
+  document.getElementById('btn-back-landing').style.display = 'none';
+  document.getElementById('rbtn').style.display = 'none';
+  backToCards();
+}
+function showMain() {
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('main').style.display = 'block';
+  document.getElementById('btn-draft-url').style.display = 'inline-flex';
+  document.getElementById('btn-back-landing').style.display = 'inline-flex';
+  document.getElementById('rbtn').style.display = 'inline-flex';
+}
+function backToCards() {
+  document.getElementById('landing-url').style.display = 'none';
+  document.getElementById('landing-scratch').style.display = 'none';
+  document.getElementById('landing-cards').style.display = 'flex';
+  document.getElementById('btn-back-landing').style.display = 'none';
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-url').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('landing-url-input').focus(); }, 100);
+}
+function showScratchForm() {
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-scratch').style.display = 'flex';
+}
+function startFromUrl() {
+  var url = document.getElementById('landing-url-input').value.trim();
+  if (!url) return;
+  document.getElementById('landing').style.display = 'none';
+  var host = 'link';
+  try { host = new URL(url).hostname.replace('www.',''); } catch(e) {}
+  setWorkflowCard({title:url, src:host, cat:'general', heat:8, ago:'now', link:url, _url:url});
+}
+function selectRadio(el, hiddenId) {
+  el.closest('.radio-grid').querySelectorAll('.radio-opt').forEach(function(o){ o.classList.remove('sel'); });
+  el.classList.add('sel');
+  document.getElementById(hiddenId).value = el.textContent;
+}
+function toggleCheck(el) {
+  el.classList.toggle('sel');
+}
+function startFromScratch() {
+  var name = document.getElementById('sc-name').value.trim();
+  var topic = document.getElementById('sc-topic').value.trim();
+  var type = document.getElementById('sc-type').value;
+  var story = document.getElementById('sc-story').value.trim();
+  var themes = Array.from(document.getElementById('sc-themes-grid').querySelectorAll('.sel')).map(function(e){return e.textContent;}).join(', ');
+  if (!story) { alert('Please tell us your story before generating.'); return; }
+  // Build source info from scratch form
+  var sourceInfo = 'This is a first-person submission from a working professional.\n'
+    + (name ? 'Contributor: '+name+'\n' : '')
+    + 'Story type: '+(type||'Personal experience')+'\n'
+    + (themes ? 'Themes: '+themes+'\n' : '')
+    + 'What they want to write about: '+topic+'\n\n'
+    + 'Their story / draft:\n'+story;
+  // Set up currentCard with scratch data
+  currentCard = {title: topic||'Personal story', src:'Submission', cat:'general', heat:8, ago:'now', link:'', _url:'', _scratch: true, _sourceInfo: sourceInfo};
+  // Hide landing
+  document.getElementById('landing').style.display = 'none';
+  // Go straight to generation (skip step1/brief)
+  document.getElementById('workflow').style.display = 'block';
+  document.getElementById('main').style.display = 'none';
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+  goStep(2);
+  document.getElementById('ws1').className = 'wf-step done';
+  document.getElementById('ws2').className = 'wf-step active';
+  startGenerationDirect(sourceInfo);
+}
+function startGenerationDirect(sourceInfo) {
+  var steps = ['gs1','gs2','gs3','gs4'];
+  var si = 0;
+  var anim = setInterval(function() {
+    if (si>0) { var prev=document.getElementById(steps[si-1]); if(prev){prev.classList.remove('active');prev.classList.add('done');} }
+    if (si<steps.length) { var el=document.getElementById(steps[si]); if(el) el.classList.add('active'); si++; }
+    else clearInterval(anim);
+  }, 1200);
+  var prompt = 'You are a senior editor at Wocult — an independent Indian media platform covering work, culture, and life for modern working professionals.\n\nThis is a FIRST-PERSON SUBMISSION from a reader. Your job is to shape their raw story into a polished Wocult piece in their voice — not rewrite it as journalism. Preserve their perspective, their specific details, their emotional truth. Add structure, clarity, and Wocult editorial quality. Do not generalise or abstract what they have shared — the specificity is the value.\n\nWocult voice: Direct, warm, honest. Peer-to-peer with a smart Indian professional. Never preachy.\n\nFormatting: Sentence case titles and subheadings. No italics except quotes. No bold in body.\n\n'+sourceInfo+'\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook — human, intriguing","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>article HTML. 4 punchy h3 subheadings. 800-1000 words. Flowing prose. First-person voice preserved. End with a thought not a prescription.</p>","readTime":"X min read"}';
+  fetch(WORKER+'/generate', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, tools:[{"type":"web_search_20250305","name":"web_search"}], messages:[{role:'user',content:prompt}]})
+  }).then(function(r){return r.json();}).then(function(data){
+    clearInterval(anim);
+    steps.forEach(function(s){var el=document.getElementById(s);if(el){el.classList.remove('active');el.classList.add('done');}});
+    if (data.error) throw new Error(data.error.message);
+    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
+    if (s===-1) throw new Error('No JSON in response');
+    var raw = txt.slice(s,e+1);
+    var cleaned = raw.replace(/("(?:[^"\\]|\\.)*")|(\n)/g, function(m,str,nl){ return str ? str : '\\n'; });
+    try { generatedContent = JSON.parse(cleaned); } catch(pe) {
+      var extr = function(k){ var r=new RegExp('"'+k+'"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"'); var m=raw.match(r); return m?m[1].replace(/\\n/g,'\n'):''; };
+      generatedContent = {title:extr('title'),slug:extr('slug'),shortIntro:extr('shortIntro'),intro40:extr('intro40'),excerpt:extr('excerpt'),introRichText:extr('introRichText'),body:extr('body'),readTime:extr('readTime')};
+    }
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step2b').style.display = 'block';
+    document.getElementById('ws2').className = 'wf-step done';
+    document.getElementById('ws2b').className = 'wf-step active';
+    document.getElementById('chat-article-preview').innerHTML = '<div class="version-block" id="version-1">'+renderPreview(generatedContent)+'</div>';
+    window._versionCount = 1;
+    updateWordCount();
+    window._chatHistory = [
+      {role:'user', content:'You are a Wocult senior editor. You have a first-person submission. Keep the contributor\'s voice and specific details. Shape, don\'t rewrite.\n\nRULES:\n- Editorial changes: brief description + <version>full HTML</version>\n- Conversational: reply normally, no tags\n- Sentence case. No italics except quotes. No bold body.\n- Under 1200 words unless user asks otherwise\n\nCurrent article:\n'+document.getElementById('chat-article-preview').innerHTML},
+      {role:'assistant', content:'Ready. This is their story — I\'ll preserve their voice. What would you like to refine?'}
+    ];
+    window.scrollTo(0,0);
+  }).catch(function(err){
+    clearInterval(anim);
+    document.getElementById('step2').innerHTML += '<div style="color:var(--red);padding:16px">Generation failed: '+err.message+'</div>';
+  });
+}
 function loadMemoryNotes(cb) {
   if (!db) { if (cb) cb([]); return; }
   db.collection('editorial_memory').orderBy('createdAt','asc').get()
@@ -780,7 +1013,17 @@ function openDraftFromUrl() {
 }
 function closeWorkflow() {
   document.getElementById('workflow').style.display = 'none';
-  document.getElementById('main').style.display = 'block';
+  document.documentElement.style.overflow = 'auto';
+  document.body.style.overflow = 'auto';
+  // Return to wherever user came from
+  if (document.getElementById('main').style.display === 'block') {
+    document.getElementById('main').style.display = 'block';
+  } else {
+    document.getElementById('landing').style.display = 'block';
+    document.getElementById('btn-draft-url').style.display = 'none';
+    document.getElementById('rbtn').style.display = 'none';
+    backToCards();
+  }
 }
 function goStep(n) {
   ['step1','step2','step2b','step3'].forEach(function(id){
@@ -1155,9 +1398,10 @@ function submitArticle() {
     imageName: _reviewImgFile ? _reviewImgFile.name : '',
     status: 'submitted'
   };
-  // Step 1: Save to Firebase
+  // 1. Auto-download CSV backup immediately
+  autoDownloadCSV(articleData);
+  // 2. Save to Firebase, get docId, trigger Webflow
   saveArticleToFirebase(articleData, 'submitted').then(function(docId) {
-    // Step 2: Trigger Webflow via Worker — Worker fetches from Firebase by docId
     var endpoint = docId ? '/webflow-from-firebase' : '/webflow';
     var body = docId
       ? JSON.stringify({docId: docId})
@@ -1166,7 +1410,7 @@ function submitArticle() {
   }).then(function(r){ return r.json().then(function(d){return {ok:r.ok,data:d};}); }).then(function(res){
     if (res.ok && (res.data.id || res.data._id || res.data.fieldData)) {
       document.getElementById('publish-result').style.display = 'block';
-      document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Submitted!</div><div class="publish-sub">Saved to Firebase and sent to Webflow as draft.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
+      document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Submitted!</div><div class="publish-sub">Saved to Firebase · Published to Webflow as draft · CSV downloaded.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
       document.getElementById('publish-actions').style.display = 'none';
     } else { throw new Error((res.data&&res.data.message)||JSON.stringify(res.data).substring(0,200)); }
     btn.disabled=false; btn.textContent='Submit';
@@ -1182,7 +1426,31 @@ function buildFieldData(d) {
   };
 }
 
+function autoDownloadCSV(data) {
+  var rows = [
+    ['Field','Value'],
+    ['Title', data.title],
+    ['Slug', data.slug],
+    ['Short Intro', data.shortIntro],
+    ['40 Word Intro', data.intro40],
+    ['Excerpt', data.excerpt],
+    ['Story Intro', data.introRichText.replace(/<[^>]+>/g,'')],
+    ['Body', data.body.replace(/<[^>]+>/g,'')],
+    ['Read Time', data.readTime],
+    ['Publish Date', data.publishDate],
+    ['Image URL', data.imageUrl],
+    ['Status', data.status]
+  ];
+  var csv = rows.map(function(r){ return r.map(function(c){ return '"'+String(c||'').replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
+  var blob = new Blob([csv], {type:'text/csv'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (data.slug||'article')+'-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
 renderSaved();
+// Start on landing screen — load news in background
 loadAll();
 </script>
 </body>
