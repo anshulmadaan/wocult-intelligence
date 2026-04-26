@@ -154,7 +154,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v6.6</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v6.7</div>
   <div class="tbar-r">
     <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -163,7 +163,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   </div>
 </div>
 
-<div class="stats">
+<div class="stats" id="stats-bar" style="display:none">
   <div class="stat hl"><div class="sn" id="s0">0</div><div class="sl">Stories tracked</div></div>
   <div class="stat"><div class="sn" id="s1">-</div><div class="sl">Hottest sector</div></div>
   <div class="stat"><div class="sn" id="s2">0</div><div class="sl">Hiring signals</div></div>
@@ -184,7 +184,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   </div>
 </div>
 
-<div style="padding:8px 24px 0;display:flex;justify-content:flex-end">
+<div id="saved-toggle-bar" style="padding:8px 24px 0;display:none;justify-content:flex-end">
   <button onclick="toggleSaved()" style="font-size:12px;color:var(--yd);background:none;border:none;cursor:pointer;font-weight:500" id="toggle-saved-btn">+ Save for later</button>
 </div>
 
@@ -492,9 +492,15 @@ function fbToast(msg, ok) {
 }
 
 // --- LANDING SCREEN ---
+var _workflowSource = 'landing';
+
 function goToLanding() {
   document.getElementById('main').style.display = 'none';
+  document.getElementById('workflow').style.display = 'none';
   document.getElementById('landing').style.display = 'block';
+  document.getElementById('stats-bar').style.display = 'none';
+  document.getElementById('saved-toggle-bar').style.display = 'none';
+  document.getElementById('saved-section').style.display = 'none';
   document.getElementById('btn-draft-url').style.display = 'none';
   document.getElementById('btn-back-landing').style.display = 'none';
   document.getElementById('rbtn').style.display = 'none';
@@ -503,6 +509,8 @@ function goToLanding() {
 function showMain() {
   document.getElementById('landing').style.display = 'none';
   document.getElementById('main').style.display = 'block';
+  document.getElementById('stats-bar').style.display = 'grid';
+  document.getElementById('saved-toggle-bar').style.display = 'flex';
   document.getElementById('btn-draft-url').style.display = 'inline-flex';
   document.getElementById('btn-back-landing').style.display = 'inline-flex';
   document.getElementById('rbtn').style.display = 'inline-flex';
@@ -511,8 +519,10 @@ function backToCards() {
   document.getElementById('landing-url').style.display = 'none';
   document.getElementById('landing-scratch').style.display = 'none';
   document.getElementById('landing-cards').style.display = 'flex';
-  document.getElementById('btn-back-landing').style.display = 'none';
+}
+function showUrlEntry() {
   document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-scratch').style.display = 'none';
   document.getElementById('landing-url').style.display = 'flex';
   setTimeout(function(){ document.getElementById('landing-url-input').focus(); }, 100);
 }
@@ -523,6 +533,7 @@ function showScratchForm() {
 function startFromUrl() {
   var url = document.getElementById('landing-url-input').value.trim();
   if (!url) return;
+  _workflowSource = 'landing';
   document.getElementById('landing').style.display = 'none';
   var host = 'link';
   try { host = new URL(url).hostname.replace('www.',''); } catch(e) {}
@@ -552,6 +563,7 @@ function startFromScratch() {
     + 'Their story / draft:\n'+story;
   // Set up currentCard with scratch data
   currentCard = {title: topic||'Personal story', src:'Submission', cat:'general', heat:8, ago:'now', link:'', _url:'', _scratch: true, _sourceInfo: sourceInfo};
+  _workflowSource = 'landing';
   // Hide landing
   document.getElementById('landing').style.display = 'none';
   // Go straight to generation (skip step1/brief)
@@ -733,6 +745,7 @@ function deleteSaved(idx) {
 
 function draftSaved(idx) {
   var s = saved[idx];
+  _workflowSource = 'main';
   setWorkflowCard({title:s.title||s.url, src:s.src, cat:'general', heat:8, ago:s.savedAt, link:s.url, _url:s.url});
 }
 
@@ -753,9 +766,10 @@ function renderSaved() {
   var count = document.getElementById('saved-count');
   var btn = document.getElementById('toggle-saved-btn');
   var sec = document.getElementById('saved-section');
+  var inMain = document.getElementById('main').style.display === 'block';
   count.textContent = saved.length + ' saved';
   btn.textContent = saved.length > 0 ? 'Saved (' + saved.length + ')' : '+ Save for later';
-  if (!saved.length) { sec.style.display = 'none'; return; }
+  if (!saved.length || !inMain) { sec.style.display = 'none'; return; }
   sec.style.display = 'block';
   grid.innerHTML = saved.map(function(s, i) {
     var display = s.title || s.url;
@@ -1003,10 +1017,11 @@ function setWorkflowCard(card) {
   document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
   goStep(1);
 }
-function openDraft(idx) { setWorkflowCard(cards[idx]); }
+function openDraft(idx) { _workflowSource = 'main'; setWorkflowCard(cards[idx]); }
 function openDraftFromUrl() {
   var url = prompt('Paste the article URL:');
   if (!url) return;
+  _workflowSource = 'main';
   var host = 'link';
   try { host = new URL(url).hostname.replace('www.',''); } catch(e) {}
   setWorkflowCard({title:url, src:host, cat:'general', heat:8, ago:'now', link:url, _url:url});
@@ -1015,14 +1030,10 @@ function closeWorkflow() {
   document.getElementById('workflow').style.display = 'none';
   document.documentElement.style.overflow = 'auto';
   document.body.style.overflow = 'auto';
-  // Return to wherever user came from
-  if (document.getElementById('main').style.display === 'block') {
-    document.getElementById('main').style.display = 'block';
+  if (_workflowSource === 'main') {
+    showMain();
   } else {
-    document.getElementById('landing').style.display = 'block';
-    document.getElementById('btn-draft-url').style.display = 'none';
-    document.getElementById('rbtn').style.display = 'none';
-    backToCards();
+    goToLanding();
   }
 }
 function goStep(n) {
