@@ -191,8 +191,28 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   <button onclick="toggleSaved()" style="font-size:12px;color:var(--yd);background:none;border:none;cursor:pointer;font-weight:500" id="toggle-saved-btn">+ Save for later</button>
 </div>
 
+<!-- ACCESS SCREEN -->
+<div id="access-screen" class="landing">
+  <div class="url-entry">
+    <h2>Wocult Intelligence</h2>
+    <p>Enter your access key to continue.</p>
+    <input class="wf-input" id="access-key-input" placeholder="Access key" style="font-size:14px;text-transform:uppercase" onkeydown="if(event.key==='Enter')submitAccessKey()" />
+    <div id="access-error" style="display:none;color:var(--red);font-size:13px;line-height:1.5"></div>
+    <button class="btn-lg btn-y" onclick="submitAccessKey()" style="align-self:flex-start;padding:12px 28px">Continue</button>
+  </div>
+</div>
+
+<!-- GUEST PLACEHOLDER -->
+<div id="guest-placeholder" class="landing" style="display:none">
+  <div class="url-entry">
+    <h2>Interview access found</h2>
+    <p>This interview response page will be available here.</p>
+    <div style="font-size:13px;color:var(--g3);padding:10px 12px;border:1px solid var(--bdr);border-radius:8px;background:#fff">Key: <span id="guest-key-display"></span></div>
+  </div>
+</div>
+
 <!-- LANDING SCREEN -->
-<div id="landing">
+<div id="landing" style="display:none">
 
   <!-- Card selection screen -->
   <div id="landing-cards" class="landing">
@@ -219,6 +239,12 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
         <div class="lcard-desc">Share your own story, experience, or perspective. We'll help you shape it into a Wocult piece.</div>
         <div class="lcard-cta">Start writing →</div>
       </div>
+      <div class="lcard" onclick="showPrepareInterview()">
+        <div class="lcard-icon">🎙️</div>
+        <div class="lcard-title">Prepare interview</div>
+        <div class="lcard-desc">Create sharp Wocult-style interview questions from a topic brief.</div>
+        <div class="lcard-cta">Prepare questions →</div>
+      </div>
     </div>
   </div>
 
@@ -230,6 +256,39 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       <p>Paste the URL of any article. The AI will read it and draft an original Wocult story based on the content.</p>
       <input class="wf-input" id="landing-url-input" placeholder="https://economictimes.com/..." style="font-size:14px" onkeydown="if(event.key==='Enter')startFromUrl()" />
       <button class="btn-lg btn-y" onclick="startFromUrl()" style="align-self:flex-start;padding:12px 28px">Draft this story →</button>
+    </div>
+  </div>
+
+  <!-- Prepare interview screen -->
+  <div id="landing-prepare-interview" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen">
+      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back</button>
+      <h2>Prepare interview</h2>
+      <p class="sub">Add a brief and choose how many questions you want.</p>
+
+      <div class="sfield">
+        <label>Interview title</label>
+        <input id="interview-title" placeholder="Example: Founder interview on workplace burnout" />
+      </div>
+
+      <div class="sfield">
+        <label>Interview/topic brief</label>
+        <textarea id="interview-brief" rows="8" placeholder="Add the context, person, topic, angle, and what you want to learn from the interview..."></textarea>
+      </div>
+
+      <div class="sfield">
+        <label>Number of questions</label>
+        <input id="interview-count" type="number" min="3" max="20" value="8" />
+      </div>
+
+      <button class="btn-lg btn-y" id="interview-generate-btn" onclick="generateInterviewQuestions()" style="padding:14px 32px;font-size:15px;width:100%">Generate questions</button>
+      <div id="interview-status" class="hint" style="margin-top:12px"></div>
+      <div id="interview-questions" style="display:flex;flex-direction:column;gap:12px;margin-top:24px"></div>
+      <div id="interview-actions" style="display:none;gap:10px;margin-top:16px;flex-wrap:wrap">
+        <button class="btn-lg" onclick="addInterviewQuestion()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Add question</button>
+        <button class="btn-lg btn-y" id="interview-link-btn" onclick="saveInterviewSession()">Generate guest link</button>
+      </div>
+      <div id="interview-link-result" style="display:none;margin-top:16px;padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff"></div>
     </div>
   </div>
 
@@ -539,10 +598,85 @@ var currentWorkflowStep = '';
 var maxWorkflowStepReached = 0;
 var workflowHasBriefStep = true;
 var workflowPreviousLandingScreen = '';
+var currentAccessMode = '';
+var currentAccessKey = '';
 
+function hideAllAppScreens() {
+  ['access-screen','guest-placeholder','landing','main','workflow','stats-bar','saved-section','saved-toggle-bar'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  document.getElementById('btn-draft-url').style.display = 'none';
+  document.getElementById('btn-back-landing').style.display = 'none';
+  document.getElementById('rbtn').style.display = 'none';
+}
+function showAccessScreen() {
+  hideAllAppScreens();
+  document.getElementById('access-screen').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('access-key-input').focus(); }, 100);
+}
+function submitAccessKey() {
+  handleAccessKey(document.getElementById('access-key-input').value);
+}
+function saveAccessSession(mode, key) {
+  sessionStorage.setItem('wocultAccessMode', mode);
+  sessionStorage.setItem('wocultAccessKey', key);
+}
+function clearAccessSession() {
+  sessionStorage.removeItem('wocultAccessMode');
+  sessionStorage.removeItem('wocultAccessKey');
+  currentAccessMode = '';
+  currentAccessKey = '';
+  showAccessScreen();
+}
+function restoreAccessSession() {
+  var mode = sessionStorage.getItem('wocultAccessMode') || '';
+  var key = sessionStorage.getItem('wocultAccessKey') || '';
+  if ((mode === 'staff' && key === 'WOCSTAFF26') || (mode === 'guest' && key.indexOf('INT-') === 0)) {
+    return handleAccessKey(key);
+  }
+  return false;
+}
+function handleAccessKey(key) {
+  var cleaned = (key||'').trim().toUpperCase();
+  currentAccessKey = cleaned;
+  document.getElementById('access-key-input').value = cleaned;
+  document.getElementById('access-error').style.display = 'none';
+  if (cleaned === 'WOCSTAFF26') {
+    currentAccessMode = 'staff';
+    saveAccessSession(currentAccessMode, currentAccessKey);
+    hideAllAppScreens();
+    goToLanding();
+    return true;
+  }
+  if (cleaned.indexOf('INT-') === 0) {
+    currentAccessMode = 'guest';
+    saveAccessSession(currentAccessMode, currentAccessKey);
+    hideAllAppScreens();
+    showGuestPlaceholder(cleaned);
+    return true;
+  }
+  currentAccessMode = '';
+  showAccessScreen();
+  document.getElementById('access-key-input').value = cleaned;
+  document.getElementById('access-error').textContent = 'Invalid access key. Please check and try again.';
+  document.getElementById('access-error').style.display = 'block';
+  return false;
+}
+function showGuestPlaceholder(key) {
+  hideAllAppScreens();
+  currentAccessMode = 'guest';
+  currentAccessKey = (key||currentAccessKey||'').trim().toUpperCase();
+  document.getElementById('guest-key-display').textContent = currentAccessKey;
+  document.getElementById('guest-placeholder').style.display = 'flex';
+}
 function goToLanding() {
+  if (currentAccessMode === 'guest') { showGuestPlaceholder(currentAccessKey); return; }
+  if (currentAccessMode !== 'staff') { showAccessScreen(); return; }
   document.getElementById('main').style.display = 'none';
   document.getElementById('workflow').style.display = 'none';
+  document.getElementById('access-screen').style.display = 'none';
+  document.getElementById('guest-placeholder').style.display = 'none';
   document.getElementById('landing').style.display = 'block';
   document.getElementById('stats-bar').style.display = 'none';
   document.getElementById('saved-toggle-bar').style.display = 'none';
@@ -566,6 +700,7 @@ function backToCards() {
   document.getElementById('landing-scratch').style.display = 'none';
   document.getElementById('landing-scratch-choice').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'none';
+  document.getElementById('landing-prepare-interview').style.display = 'none';
   document.getElementById('landing-cards').style.display = 'flex';
 }
 function showUrlEntry() {
@@ -573,14 +708,25 @@ function showUrlEntry() {
   document.getElementById('landing-scratch').style.display = 'none';
   document.getElementById('landing-scratch-choice').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'none';
+  document.getElementById('landing-prepare-interview').style.display = 'none';
   document.getElementById('landing-url').style.display = 'flex';
   setTimeout(function(){ document.getElementById('landing-url-input').focus(); }, 100);
+}
+function showPrepareInterview() {
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-url').style.display = 'none';
+  document.getElementById('landing-scratch').style.display = 'none';
+  document.getElementById('landing-scratch-choice').style.display = 'none';
+  document.getElementById('landing-existing-draft').style.display = 'none';
+  document.getElementById('landing-prepare-interview').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('interview-title').focus(); }, 100);
 }
 function showScratchChoice() {
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-url').style.display = 'none';
   document.getElementById('landing-scratch').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'none';
+  document.getElementById('landing-prepare-interview').style.display = 'none';
   document.getElementById('landing-scratch-choice').style.display = 'flex';
 }
 function showExistingDraftForm() {
@@ -588,6 +734,7 @@ function showExistingDraftForm() {
   document.getElementById('landing-url').style.display = 'none';
   document.getElementById('landing-scratch').style.display = 'none';
   document.getElementById('landing-scratch-choice').style.display = 'none';
+  document.getElementById('landing-prepare-interview').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'flex';
   setTimeout(function(){ document.getElementById('existing-draft-text').focus(); }, 100);
 }
@@ -596,6 +743,7 @@ function showScratchForm() {
   document.getElementById('landing-url').style.display = 'none';
   document.getElementById('landing-scratch-choice').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'none';
+  document.getElementById('landing-prepare-interview').style.display = 'none';
   document.getElementById('landing-scratch').style.display = 'flex';
 }
 function startFromUrl() {
@@ -614,6 +762,188 @@ function selectRadio(el, hiddenId) {
 }
 function toggleCheck(el) {
   el.classList.toggle('sel');
+}
+function syncInterviewQuestion(idx, value) {
+  if (interviewQuestionState.questions[idx]) interviewQuestionState.questions[idx].question = value;
+}
+function deleteInterviewQuestion(idx) {
+  interviewQuestionState.questions.splice(idx, 1);
+  renderInterviewQuestions();
+}
+function addInterviewQuestion() {
+  interviewQuestionState.questions.push({id:'q'+(interviewQuestionState.questions.length+1), question:''});
+  renderInterviewQuestions();
+}
+function syncRenderedInterviewQuestions() {
+  var fields = document.querySelectorAll('#interview-questions textarea');
+  interviewQuestionState.questions = Array.from(fields).map(function(field, i) {
+    var existing = interviewQuestionState.questions[i] || {};
+    return {id:existing.id||('q'+(i+1)), question:field.value.trim()};
+  });
+}
+function generateGuestInterviewKey() {
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var part = function() {
+    var out = '';
+    for (var i=0; i<4; i++) out += chars[Math.floor(Math.random()*chars.length)];
+    return out;
+  };
+  return 'INT-' + part() + '-' + part();
+}
+function buildGuestInterviewLink(key) {
+  return window.location.origin + window.location.pathname + '?key=' + encodeURIComponent(key);
+}
+function copyGuestInterviewLink() {
+  var link = interviewQuestionState.guestLink || '';
+  var msg = document.getElementById('interview-copy-status');
+  if (!link) return;
+  navigator.clipboard.writeText(link).then(function() {
+    if (msg) msg.textContent = 'Link copied.';
+  }).catch(function() {
+    if (msg) msg.textContent = 'Could not copy. Select and copy the link manually.';
+  });
+}
+function saveInterviewSession() {
+  var btn = document.getElementById('interview-link-btn');
+  var status = document.getElementById('interview-status');
+  var result = document.getElementById('interview-link-result');
+  var title = document.getElementById('interview-title').value.trim();
+  var brief = document.getElementById('interview-brief').value.trim();
+  syncRenderedInterviewQuestions();
+  var questions = interviewQuestionState.questions.map(function(q, i) {
+    return {id:'q'+(i+1), order:i+1, question:(q.question||'').trim()};
+  });
+  if (!db) { status.textContent = 'Firebase is not connected. Could not create guest link.'; return; }
+  if (!title) { alert('Please enter an interview title.'); document.getElementById('interview-title').focus(); return; }
+  if (!brief) { alert('Please enter an interview brief.'); document.getElementById('interview-brief').focus(); return; }
+  if (!questions.length) { alert('Please generate or add at least one question.'); return; }
+  if (questions.some(function(q){return !q.question;})) { alert('Please fill in every question before generating a guest link.'); return; }
+  var guestKey = generateGuestInterviewKey();
+  var guestLink = buildGuestInterviewLink(guestKey);
+  var data = {
+    guestKey: guestKey,
+    guestLink: guestLink,
+    status: 'sent',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy: 'staff',
+    interviewTitle: title,
+    topicBrief: brief,
+    questionCount: questions.length,
+    questions: questions,
+    guestName: '',
+    guestEmail: '',
+    rawAnswers: [],
+    refinedAnswers: [],
+    submittedAt: '',
+    finalSubmittedAt: ''
+  };
+  btn.disabled = true;
+  btn.textContent = 'Creating link...';
+  status.textContent = 'Creating guest link...';
+  db.collection('interview_sessions').doc(guestKey).set(data).then(function() {
+    interviewQuestionState.title = title;
+    interviewQuestionState.brief = brief;
+    interviewQuestionState.count = questions.length;
+    interviewQuestionState.questions = questions;
+    interviewQuestionState.guestKey = guestKey;
+    interviewQuestionState.guestLink = guestLink;
+    result.style.display = 'block';
+    result.innerHTML = '<div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--grn)">Guest link created</div>'
+      + '<div style="font-size:12px;color:var(--g3);margin-bottom:8px">Guest key: '+guestKey+'</div>'
+      + '<input class="wf-input" readonly value="'+guestLink+'" style="margin-bottom:8px" />'
+      + '<button class="btn" onclick="copyGuestInterviewLink()">Copy link</button>'
+      + '<span id="interview-copy-status" style="font-size:12px;color:var(--g3);margin-left:8px"></span>';
+    status.textContent = 'Guest link saved. Share it with the interviewee.';
+  }).catch(function(err) {
+    status.textContent = 'Could not save interview session: '+err.message;
+  }).finally(function() {
+    btn.disabled = false;
+    btn.textContent = 'Generate guest link';
+  });
+}
+function renderInterviewQuestions() {
+  var wrap = document.getElementById('interview-questions');
+  var actions = document.getElementById('interview-actions');
+  if (!wrap || !actions) return;
+  wrap.innerHTML = interviewQuestionState.questions.map(function(q, i) {
+    return '<div class="sfield" style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
+      + '<label style="display:flex;justify-content:space-between;align-items:center"><span>Question '+(i+1)+'</span><button onclick="deleteInterviewQuestion('+i+')" style="background:none;border:1px solid var(--g2);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--red)">Delete</button></label>'
+      + '<textarea rows="3" oninput="syncInterviewQuestion('+i+', this.value)">'+(q.question||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</textarea>'
+      + '</div>';
+  }).join('');
+  actions.style.display = interviewQuestionState.questions.length ? 'flex' : 'none';
+}
+function generateInterviewQuestions() {
+  var title = document.getElementById('interview-title').value.trim();
+  var brief = document.getElementById('interview-brief').value.trim();
+  var questionCount = parseInt(document.getElementById('interview-count').value, 10);
+  var btn = document.getElementById('interview-generate-btn');
+  var status = document.getElementById('interview-status');
+  if (!brief) { alert('Please enter an interview brief.'); document.getElementById('interview-brief').focus(); return; }
+  if (!questionCount || questionCount < 3 || questionCount > 20) { alert('Please choose between 3 and 20 questions.'); document.getElementById('interview-count').focus(); return; }
+  interviewQuestionState.title = title;
+  interviewQuestionState.brief = brief;
+  interviewQuestionState.count = questionCount;
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  status.textContent = 'Generating interview questions...';
+var prompt = `Use the editorial brief provided before this prompt for Wocult interview style and question quality.
+
+Create interview questions based on this brief.
+
+Interview title:
+${title}
+
+Interview brief:
+${brief}
+
+Number of questions:
+${questionCount}
+
+Requirements:
+- Return exactly ${questionCount} questions.
+- Questions must be direct, clear, specific, and useful.
+- Avoid generic PR questions.
+- Avoid flattery.
+- Avoid jargon.
+- Ask questions that bring out truth, tension, decisions, trade-offs, lived experience, mistakes, lessons, and useful insight.
+- Do not include answers.
+- Do not number questions inside the question text.
+
+Return ONLY valid JSON:
+{
+  "questions": [
+    {"id":"q1","question":"Question text here"},
+    {"id":"q2","question":"Question text here"}
+  ]
+}`;
+  fetch(WORKER+'/generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      briefType:'interviewQuestions',
+      model:'claude-sonnet-4-20250514',
+      max_tokens:2000,
+      messages:[{role:'user',content:prompt}]
+    })
+  }).then(function(r){return r.json();}).then(function(data) {
+    if (data.error) throw new Error(data.error.message);
+    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
+    if (s===-1) throw new Error('No JSON in response');
+    var parsed = JSON.parse(txt.slice(s,e+1));
+    interviewQuestionState.questions = (parsed.questions||[]).slice(0, questionCount).map(function(q, i) {
+      return {id:q.id||('q'+(i+1)), question:q.question||''};
+    });
+    renderInterviewQuestions();
+    status.textContent = 'Questions generated. Review and edit them below.';
+  }).catch(function(err) {
+    status.textContent = 'Could not generate questions: '+err.message;
+  }).finally(function() {
+    btn.disabled = false;
+    btn.textContent = 'Generate questions';
+  });
 }
 function handleExistingDraftUpload(file) {
   var status = document.getElementById('existing-draft-upload-status');
@@ -945,6 +1275,14 @@ var af = 'all';
 var activeTab = 'cards';
 var currentCard = null;
 var generatedContent = {};
+var interviewQuestionState = {
+  title: '',
+  brief: '',
+  count: 0,
+  questions: [],
+  guestKey: '',
+  guestLink: ''
+};
 
 var saved = [];
 var _lsOk = false;
@@ -1888,8 +2226,10 @@ function autoDownloadCSV(data) {
 }
 
 renderSaved();
-// Start on landing screen — load news in background
 loadAll();
+var accessKeyFromUrl = new URLSearchParams(window.location.search).get('key');
+if (accessKeyFromUrl) handleAccessKey(accessKeyFromUrl);
+else if (!restoreAccessSession()) showAccessScreen();
 </script>
 </body>
 </html>
