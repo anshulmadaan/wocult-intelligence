@@ -987,33 +987,57 @@ function loadAll() {
   btn.disabled = true; dot.classList.add('spin'); err.style.display = 'none';
   document.getElementById('grid').innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div>';
   document.getElementById('ts').textContent = 'Refreshing...';
-  var feedDefs = [
-    {url:'https://economictimes.indiatimes.com/jobs/rssfeedstopstories.cms',            label:'ET Jobs'},
-    {url:'https://economictimes.indiatimes.com/jobs/fresher-jobs/rssfeedstopstories.cms', label:'ET Fresher Jobs'},
-    {url:'https://economictimes.indiatimes.com/jobs/mid-career-jobs/rssfeedstopstories.cms', label:'ET Mid-Career'},
-    {url:'https://economictimes.indiatimes.com/jobs/c-suite/rssfeedstopstories.cms',     label:'ET C-Suite'},
-    {url:'https://economictimes.indiatimes.com/jobs/hr-policies-trends/rssfeedstopstories.cms', label:'ET HR & Policy'},
-    {url:'https://economictimes.indiatimes.com/jobs/work/rssfeedstopstories.cms',        label:'ET Work'},
-    {url:'https://economictimes.indiatimes.com/industry/rssfeedstopstories.cms',         label:'ET Industry'},
-    {url:'https://economictimes.indiatimes.com/industry/services/rssfeedstopstories.cms', label:'ET Services'},
-    {url:'https://economictimes.indiatimes.com/industry/indl-goods-svs/rssfeedstopstories.cms', label:'ET Industrial'},
-    {url:'https://economictimes.indiatimes.com/small-biz/rssfeedstopstories.cms',        label:'ET Small Biz'},
-    {url:'https://economictimes.indiatimes.com/industry/policy-trends/rssfeedstopstories.cms', label:'ET Policy'},
-    {url:'https://economictimes.indiatimes.com/news/economy/rssfeedstopstories.cms',     label:'ET Economy'}
-  ];
-  Promise.all(feedDefs.map(function(f){ return fetchRSS(f.url, f.label); })).then(function(results) {
+  var feeds = [
+  // Economic Times jobs/work feeds
+  {url:'https://economictimes.indiatimes.com/jobs/rssfeedstopstories.cms', label:'ET Jobs'},
+  {url:'https://economictimes.indiatimes.com/jobs/fresher-jobs/rssfeedstopstories.cms', label:'ET Fresher Jobs'},
+  {url:'https://economictimes.indiatimes.com/jobs/mid-career-jobs/rssfeedstopstories.cms', label:'ET Mid-Career'},
+  {url:'https://economictimes.indiatimes.com/jobs/c-suite/rssfeedstopstories.cms', label:'ET C-Suite'},
+  {url:'https://economictimes.indiatimes.com/jobs/hr-policies-trends/rssfeedstopstories.cms', label:'ET HR & Policy'},
+  {url:'https://economictimes.indiatimes.com/jobs/work/rssfeedstopstories.cms', label:'ET Work'},
+
+  // HRKatha — strongest relevance
+  {url:'https://www.hrkatha.com/category/news/feed/', label:'HRKatha News'},
+  {url:'https://www.hrkatha.com/category/hiring-firing/feed/', label:'HRKatha Hiring & Firing'},
+  {url:'https://www.hrkatha.com/category/global-hr-news/feed/', label:'HRKatha Global HR'},
+  {url:'https://www.hrkatha.com/category/news/ir-labour-laws-news/feed/', label:'HRKatha Labour Laws'},
+  {url:'https://www.hrkatha.com/category/news/work-life-balance/feed/', label:'HRKatha Work-Life Balance'},
+  {url:'https://www.hrkatha.com/category/performance-management/feed/', label:'HRKatha Performance'},
+  {url:'https://www.hrkatha.com/category/talent-management/feed/', label:'HRKatha Talent'},
+
+  // ETHRWorld — confirmed working
+  {url:'https://hr.economictimes.indiatimes.com/rss/topstories', label:'ETHRWorld Top Stories'}
+];
+  Promise.all(feeds.map(function(f){ return fetchRSS(f.url, f.label); })).then(function(results) {
     var items = results.reduce(function(a,b){return a.concat(b);}, []);
     var seen = {};
     var WORKFORCE_KW = /hire|hiring|layoff|job|jobs|employ|workforce|salary|pay|appraisal|recruit|retrench|resign|fired|attrition|fresher|campus|intern|startup|invest|capex|expansion|plant|factory|policy|labour|labor|gig|remote|work from home|wfh|skill|reskilling|promotion|increment|ctc|hike|pink slip|redundan|downsiz|headcount/i;
     var fresh = items.map(function(i) {
-      var cat = catFromTitle(i.title);
-      return {title:i.title, src:'Economic Times', cat:cat, pub:i.pub, link:i.link, sent:sentiment(i.title), heat:heatScore(i.pub,cat), ago:ago(i.pub)};
-    }).filter(function(i) {
-      if (!i.title || seen[i.title]) return false;
-      seen[i.title] = true;
-      if (!WORKFORCE_KW.test(i.title)) return false;
-      return true;
-    }).sort(function(a,b){return b.heat-a.heat;}).slice(0,40);
+  var cat = catFromTitle(i.title);
+
+  return {
+    title: i.title,
+    src: i.src || 'RSS',
+    cat: cat,
+    pub: i.pub,
+    link: i.link,
+    sent: sentiment(i.title),
+    heat: heatScore(i.pub, cat),
+    ago: ago(i.pub)
+  };
+}).filter(function(i) {
+  if (!i.title) return false;
+
+  var key = i.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (seen[key]) return false;
+  seen[key] = true;
+
+  var trustedWorkSource = /HRKatha|ET Jobs|ET Fresher|ET Mid-Career|ET C-Suite|ET HR|ET Work|ETHRWorld/i.test(i.src || '');
+
+  return i.title.length > 10 && (
+    WORKFORCE_KW.test(i.title) || trustedWorkSource
+  );
+}).sort(function(a,b){return b.heat-a.heat;}).slice(0,40);
     if (fresh.length) { cards = fresh; render(); document.getElementById('ts').textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
     else loadFallback();
   }).catch(function(){loadFallback();}).then(function(){
