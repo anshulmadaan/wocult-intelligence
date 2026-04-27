@@ -92,8 +92,10 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .wf-back{background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px}
 .wf-back:hover{color:#fff}
 .wf-steps{display:flex;margin-left:24px}
-.wf-step{padding:6px 16px;font-size:12px;color:rgba(255,255,255,0.4);border-bottom:2px solid transparent}
+.wf-step{padding:6px 16px;font-size:12px;color:rgba(255,255,255,0.4);border-bottom:2px solid transparent;cursor:default}
 .wf-step.done{color:rgba(255,255,255,0.6)}.wf-step.active{color:var(--y);border-bottom-color:var(--y)}
+.wf-step.nav-ok{cursor:pointer}.wf-step.nav-ok:hover{color:#fff}
+.wf-step.disabled{color:rgba(255,255,255,0.25)}
 .wf-body{max-width:800px;margin:0 auto;padding:32px 24px}
 .wf-section{background:var(--w);border-radius:12px;border:1px solid var(--bdr);padding:24px;margin-bottom:20px}
 .wf-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--g3);margin-bottom:8px;display:block}
@@ -140,6 +142,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
 </head>
 <body>
 
@@ -210,7 +213,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
         <div class="lcard-desc">Paste any article URL. The AI will read it and draft a Wocult story — with your editorial angle.</div>
         <div class="lcard-cta">Paste a URL →</div>
       </div>
-      <div class="lcard" onclick="showScratchForm()">
+      <div class="lcard" onclick="showScratchChoice()">
         <div class="lcard-icon">✍️</div>
         <div class="lcard-title">Write from scratch</div>
         <div class="lcard-desc">Share your own story, experience, or perspective. We'll help you shape it into a Wocult piece.</div>
@@ -227,6 +230,46 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       <p>Paste the URL of any article. The AI will read it and draft an original Wocult story based on the content.</p>
       <input class="wf-input" id="landing-url-input" placeholder="https://economictimes.com/..." style="font-size:14px" onkeydown="if(event.key==='Enter')startFromUrl()" />
       <button class="btn-lg btn-y" onclick="startFromUrl()" style="align-self:flex-start;padding:12px 28px">Draft this story →</button>
+    </div>
+  </div>
+
+  <!-- Write from scratch choice screen -->
+  <div id="landing-scratch-choice" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen">
+      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back</button>
+      <h2>How would you like to start?</h2>
+      <p class="sub">Choose the path that best matches where your story is right now.</p>
+      <div class="landing-cards" style="grid-template-columns:1fr;gap:14px">
+        <div class="lcard" onclick="showExistingDraftForm()">
+          <div class="lcard-title">Start with an existing draft</div>
+          <div class="lcard-desc">Already have something written? Paste it here and we’ll help refine it.</div>
+          <div class="lcard-cta">Paste draft →</div>
+        </div>
+        <div class="lcard" onclick="showScratchForm()">
+          <div class="lcard-title">Start a new draft</div>
+          <div class="lcard-desc">Answer a few prompts and we’ll help shape your story.</div>
+          <div class="lcard-cta">Answer prompts →</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Existing draft paste screen -->
+  <div id="landing-existing-draft" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen">
+      <button onclick="showScratchChoice()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back</button>
+      <h2>Start with an existing draft</h2>
+      <p class="sub">Paste your draft below. We’ll refine it into a polished Wocult piece while preserving your voice and intent.</p>
+      <div class="sfield">
+        <label>Upload a draft file <span style="font-weight:400;color:var(--g3)">(.txt, .md, .docx)</span></label>
+        <input id="existing-draft-file" type="file" accept=".txt,.md,.docx" onchange="handleExistingDraftUpload(this.files[0])" />
+        <div id="existing-draft-upload-status" class="hint"></div>
+      </div>
+      <div class="sfield">
+        <label>Your draft</label>
+        <textarea id="existing-draft-text" rows="14" placeholder="Paste your draft here..."></textarea>
+      </div>
+      <button class="btn-lg btn-y" onclick="startFromExistingDraft()" style="padding:14px 32px;font-size:15px;width:100%">Refine my draft</button>
     </div>
   </div>
 
@@ -334,12 +377,13 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 
 <div id="workflow">
 <div class="wf-header">
-  <button class="wf-back" onclick="closeWorkflow()">Back</button>
+  <button class="wf-back" onclick="goWorkflowBack()">Back</button>
+  <button class="wf-back" onclick="goWorkflowHome()">Home</button>
   <div class="wf-steps">
-    <div class="wf-step active" id="ws1">1. Brief</div>
-    <div class="wf-step" id="ws2">2. Generate</div>
-    <div class="wf-step" id="ws2b">3. Refine</div>
-    <div class="wf-step" id="ws3">4. Review & Submit</div>
+    <div class="wf-step active" id="ws1" onclick="navigateWorkflowStep('brief')">1. Brief</div>
+    <div class="wf-step" id="ws2" onclick="navigateWorkflowStep('generate')">2. Generate</div>
+    <div class="wf-step" id="ws2b" onclick="navigateWorkflowStep('refine')">3. Refine</div>
+    <div class="wf-step" id="ws3" onclick="navigateWorkflowStep('review')">4. Review & Submit</div>
   </div>
 </div>
 <div id="step1" class="wf-body">
@@ -354,10 +398,6 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <div class="wf-field">
       <label class="wf-label">Editorial angle and notes</label>
       <textarea class="wf-textarea" id="b-angle" placeholder="What is the Wocult angle? Who does this impact?"></textarea>
-    </div>
-    <div class="wf-row">
-      <div class="wf-field"><label class="wf-label">Category</label><input class="wf-input" value="Affairs" readonly style="background:var(--gray);color:var(--g3)" /></div>
-      <div class="wf-field"><label class="wf-label">Writer</label><input class="wf-input" value="Wocult Team" readonly style="background:var(--gray);color:var(--g3)" /></div>
     </div>
   </div>
   <div class="wf-actions"><button class="btn-lg btn-y" onclick="startGeneration()">Generate story</button></div>
@@ -441,6 +481,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       <div class="wf-field"><label class="wf-label">Read Time</label><input class="wf-input" id="r-readtime" /></div>
       <div class="wf-field"><label class="wf-label">Publish Date</label><input class="wf-input" type="date" id="r-date" /></div>
     </div>
+    <div class="wf-field"><label class="wf-label">Writer’s name</label><input class="wf-input" id="r-writer-name" placeholder="Enter writer’s full name" required /></div>
     <div class="wf-field">
       <label class="wf-label">Cover Image</label>
       <div style="display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray)">
@@ -455,7 +496,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   </div>
   <div id="publish-result" style="display:none"></div>
   <div class="wf-actions" id="publish-actions">
-    <button class="btn-lg" onclick="proceedToReview()" style="background:var(--gray);border:none;cursor:pointer">← Back to Refine</button>
+    <button class="btn-lg" onclick="showWorkflowStep('refine')" style="background:var(--gray);border:none;cursor:pointer">← Back to Refine</button>
     <button class="btn-lg" onclick="exportCSV()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Export CSV</button>
     <button class="btn-lg btn-y" id="publish-btn" onclick="submitArticle()">Submit</button>
   </div>
@@ -493,6 +534,11 @@ function fbToast(msg, ok) {
 
 // --- LANDING SCREEN ---
 var _workflowSource = 'landing';
+var DEFAULT_ARTICLE_CATEGORY = 'Affairs';
+var currentWorkflowStep = '';
+var maxWorkflowStepReached = 0;
+var workflowHasBriefStep = true;
+var workflowPreviousLandingScreen = '';
 
 function goToLanding() {
   document.getElementById('main').style.display = 'none';
@@ -518,16 +564,38 @@ function showMain() {
 function backToCards() {
   document.getElementById('landing-url').style.display = 'none';
   document.getElementById('landing-scratch').style.display = 'none';
+  document.getElementById('landing-scratch-choice').style.display = 'none';
+  document.getElementById('landing-existing-draft').style.display = 'none';
   document.getElementById('landing-cards').style.display = 'flex';
 }
 function showUrlEntry() {
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-scratch').style.display = 'none';
+  document.getElementById('landing-scratch-choice').style.display = 'none';
+  document.getElementById('landing-existing-draft').style.display = 'none';
   document.getElementById('landing-url').style.display = 'flex';
   setTimeout(function(){ document.getElementById('landing-url-input').focus(); }, 100);
 }
+function showScratchChoice() {
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-url').style.display = 'none';
+  document.getElementById('landing-scratch').style.display = 'none';
+  document.getElementById('landing-existing-draft').style.display = 'none';
+  document.getElementById('landing-scratch-choice').style.display = 'flex';
+}
+function showExistingDraftForm() {
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-url').style.display = 'none';
+  document.getElementById('landing-scratch').style.display = 'none';
+  document.getElementById('landing-scratch-choice').style.display = 'none';
+  document.getElementById('landing-existing-draft').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('existing-draft-text').focus(); }, 100);
+}
 function showScratchForm() {
   document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-url').style.display = 'none';
+  document.getElementById('landing-scratch-choice').style.display = 'none';
+  document.getElementById('landing-existing-draft').style.display = 'none';
   document.getElementById('landing-scratch').style.display = 'flex';
 }
 function startFromUrl() {
@@ -547,6 +615,169 @@ function selectRadio(el, hiddenId) {
 function toggleCheck(el) {
   el.classList.toggle('sel');
 }
+function handleExistingDraftUpload(file) {
+  var status = document.getElementById('existing-draft-upload-status');
+  var textarea = document.getElementById('existing-draft-text');
+  var fail = function() {
+    if (status) status.textContent = 'Could not read this file. Please paste the draft text manually.';
+  };
+  if (!file) {
+    if (status) status.textContent = '';
+    return;
+  }
+  var name = (file.name||'').toLowerCase();
+  if (!/\.(txt|md|docx)$/.test(name)) {
+    fail();
+    return;
+  }
+  if (status) status.textContent = 'Reading draft...';
+  if (/\.(txt|md)$/.test(name)) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      textarea.value = e.target.result || '';
+      if (status) status.textContent = 'Draft uploaded. Review the text below before refining.';
+    };
+    reader.onerror = fail;
+    reader.readAsText(file);
+    return;
+  }
+  if (!window.mammoth) {
+    fail();
+    return;
+  }
+  file.arrayBuffer().then(function(buffer) {
+    return mammoth.extractRawText({arrayBuffer:buffer});
+  }).then(function(result) {
+    textarea.value = result.value || '';
+    if (status) status.textContent = 'Draft uploaded. Review the text below before refining.';
+  }).catch(fail);
+}
+function startFromExistingDraft() {
+  var draftText = document.getElementById('existing-draft-text').value.trim();
+  if (!draftText) { alert('Please paste your draft before refining.'); return; }
+
+  currentCard = {title:'Existing draft', src:'Submission', cat:'general', heat:8, ago:'now', link:'', _url:'', _scratch: true, _sourceInfo: draftText};
+  _workflowSource = 'landing';
+  workflowHasBriefStep = false;
+  workflowPreviousLandingScreen = 'landing-existing-draft';
+  currentWorkflowStep = '';
+  maxWorkflowStepReached = 1;
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('workflow').style.display = 'block';
+  document.getElementById('main').style.display = 'none';
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+  showWorkflowStep('generate');
+
+  var steps = ['gs1','gs2','gs3','gs4'];
+  steps.forEach(function(s){ var el=document.getElementById(s); if(el){el.classList.remove('active');el.classList.remove('done');} });
+  var si = 0;
+  var anim = setInterval(function() {
+    if (si>0) { var prev=document.getElementById(steps[si-1]); if(prev){prev.classList.remove('active');prev.classList.add('done');} }
+    if (si<steps.length) { var el=document.getElementById(steps[si]); if(el) el.classList.add('active'); si++; }
+    else clearInterval(anim);
+  }, 1200);
+
+var prompt = `Use the editorial brief provided before this prompt for Wocult voice, reader, tone, and editorial principles.
+
+The user already has a draft. Refine it into a polished Wocult piece without changing the core meaning or erasing the writer’s voice.
+
+Preserve:
+- the writer’s point of view
+- specific examples
+- emotional truth
+- personal details
+- the original argument or experience
+
+Improve:
+- structure
+- clarity
+- flow
+- headline
+- introduction
+- subheadings
+- ending
+
+Use plain English. Remove jargon, corporate language, management-speak, consultant language, and buzzwords. If a sentence sounds like it belongs in a company deck, rewrite it in human language.
+
+Do not invent facts, examples, numbers, claims, or personal details that are not present in the draft.
+
+Important: introRichText and body are rendered separately. Do not repeat introRichText inside body. The body must start after the intro, preferably with the first <h3> subheading. body must not repeat shortIntro, intro40, excerpt, or title. Do not repeat the same paragraph twice.
+
+Draft:
+${draftText}
+
+Return ONLY valid JSON, no markdown:
+{
+  "title":"original headline max 12 words",
+  "slug":"url-slug",
+  "shortIntro":"15-20 word hook",
+  "intro40":"exactly 40 word intro",
+  "excerpt":"100 word summary",
+  "introRichText":"<p>first 100 words as HTML</p>",
+  "body":"<p>article HTML with story-specific h3 subheadings</p>",
+  "readTime":"X min read"
+}`;
+
+  fetch(WORKER+'/generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      briefType:'existingDraft',
+      model:'claude-sonnet-4-20250514',
+      max_tokens:3000,
+      messages:[{role:'user',content:prompt}]
+    })
+  }).then(function(r){return r.json();}).then(function(data){
+    clearInterval(anim);
+    steps.forEach(function(s){var el=document.getElementById(s);if(el){el.classList.remove('active');el.classList.add('done');}});
+    if (data.error) throw new Error(data.error.message);
+    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
+    if (s===-1) throw new Error('No JSON in response');
+    var raw = txt.slice(s,e+1);
+    var cleaned = raw.replace(/("(?:[^"\\]|\\.)*")|(\n)/g, function(m,str,nl){ return str ? str : '\\n'; });
+    try { generatedContent = JSON.parse(cleaned); } catch(pe) {
+      var extr = function(k){ var r=new RegExp('"'+k+'"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"'); var m=raw.match(r); return m?m[1].replace(/\\n/g,'\n'):''; };
+      generatedContent = {title:extr('title'),slug:extr('slug'),shortIntro:extr('shortIntro'),intro40:extr('intro40'),excerpt:extr('excerpt'),introRichText:extr('introRichText'),body:extr('body'),readTime:extr('readTime')};
+    }
+    if (generatedContent.introRichText && generatedContent.body) {
+      var textOnly = function(html) {
+        return (html||'')
+          .replace(/<[^>]+>/g,' ')
+          .replace(/&nbsp;/g,' ')
+          .replace(/&amp;/g,'&')
+          .replace(/\s+/g,' ')
+          .trim()
+          .toLowerCase();
+      };
+      var firstParagraph = function(html) {
+        var match = (html||'').match(/<p[^>]*>[\s\S]*?<\/p>/i);
+        return match ? match[0] : '';
+      };
+      var introFirst = firstParagraph(generatedContent.introRichText);
+      var bodyFirst = firstParagraph(generatedContent.body);
+      var introText = textOnly(introFirst || generatedContent.introRichText);
+      var bodyText = textOnly(bodyFirst || generatedContent.body).slice(0, introText.length);
+      if (introText && bodyText && (introText === bodyText || introText.indexOf(bodyText) === 0 || bodyText.indexOf(introText) === 0)) {
+        generatedContent.body = generatedContent.body.replace(/^\s*<p[^>]*>[\s\S]*?<\/p>\s*/i, '');
+      }
+    }
+    showWorkflowStep('refine');
+    document.getElementById('chat-article-preview').innerHTML = '<div class="version-block" id="version-1">'+renderPreview(generatedContent)+'</div>';
+    window._versionCount = 1;
+    updateWordCount();
+    document.getElementById('chat-messages').innerHTML = '';
+    window._chatHistory = [
+      {role:'user', content:'You are a Wocult senior editor. The user pasted an existing draft. Preserve their voice, meaning, specific examples, and personal details while improving structure, clarity, and flow.\n\nRULES:\n- Editorial changes: brief description + <version>full HTML</version>\n- Conversational: reply normally, no tags\n- Sentence case. No italics except quotes. No bold body.\n- Under 1200 words unless user asks otherwise\n\nCurrent article:\n'+document.getElementById('chat-article-preview').innerHTML},
+      {role:'assistant', content:'Ready. I refined the draft while preserving the writer’s voice. What would you like to change?'}
+    ];
+    window.scrollTo(0,0);
+  }).catch(function(err){
+    clearInterval(anim);
+    document.getElementById('step2').innerHTML += '<div style="color:var(--red);padding:16px">Generation failed: '+err.message+'</div>';
+  });
+}
 function startFromScratch() {
   var name = document.getElementById('sc-name').value.trim();
   var topic = document.getElementById('sc-topic').value.trim();
@@ -564,6 +795,10 @@ function startFromScratch() {
   // Set up currentCard with scratch data
   currentCard = {title: topic||'Personal story', src:'Submission', cat:'general', heat:8, ago:'now', link:'', _url:'', _scratch: true, _sourceInfo: sourceInfo};
   _workflowSource = 'landing';
+  workflowHasBriefStep = false;
+  workflowPreviousLandingScreen = 'landing-scratch';
+  currentWorkflowStep = '';
+  maxWorkflowStepReached = 1;
   // Hide landing
   document.getElementById('landing').style.display = 'none';
   // Go straight to generation (skip step1/brief)
@@ -571,9 +806,7 @@ function startFromScratch() {
   document.getElementById('main').style.display = 'none';
   document.documentElement.style.overflow = 'hidden';
   document.body.style.overflow = 'hidden';
-  goStep(2);
-  document.getElementById('ws1').className = 'wf-step done';
-  document.getElementById('ws2').className = 'wf-step active';
+  showWorkflowStep('generate');
   startGenerationDirect(sourceInfo);
 }
 function startGenerationDirect(sourceInfo) {
@@ -640,10 +873,7 @@ Return ONLY valid JSON, no markdown:
       var extr = function(k){ var r=new RegExp('"'+k+'"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"'); var m=raw.match(r); return m?m[1].replace(/\\n/g,'\n'):''; };
       generatedContent = {title:extr('title'),slug:extr('slug'),shortIntro:extr('shortIntro'),intro40:extr('intro40'),excerpt:extr('excerpt'),introRichText:extr('introRichText'),body:extr('body'),readTime:extr('readTime')};
     }
-    document.getElementById('step2').style.display = 'none';
-    document.getElementById('step2b').style.display = 'block';
-    document.getElementById('ws2').className = 'wf-step done';
-    document.getElementById('ws2b').className = 'wf-step active';
+    showWorkflowStep('refine');
     document.getElementById('chat-article-preview').innerHTML = '<div class="version-block" id="version-1">'+renderPreview(generatedContent)+'</div>';
     window._versionCount = 1;
     updateWordCount();
@@ -1069,6 +1299,10 @@ function loadFallback() {
 
 function setWorkflowCard(card) {
   currentCard = card;
+  workflowHasBriefStep = true;
+  workflowPreviousLandingScreen = _workflowSource === 'main' ? 'main' : 'landing-url';
+  currentWorkflowStep = '';
+  maxWorkflowStepReached = 0;
   document.getElementById('main').style.display = 'none';
   document.getElementById('workflow').style.display = 'block';
   document.documentElement.style.overflow = 'auto';
@@ -1078,7 +1312,7 @@ function setWorkflowCard(card) {
   document.getElementById('b-title').value = '';
   document.getElementById('b-angle').value = '';
   document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
-  goStep(1);
+  showWorkflowStep('brief');
 }
 function openDraft(idx) { _workflowSource = 'main'; setWorkflowCard(cards[idx]); }
 function openDraftFromUrl() {
@@ -1099,27 +1333,93 @@ function closeWorkflow() {
     goToLanding();
   }
 }
-function goStep(n) {
+function workflowStepIndex(stepKey) {
+  return {brief:1, generate:2, refine:3, review:4}[stepKey] || 0;
+}
+function workflowStepId(stepKey) {
+  return {brief:'step1', generate:'step2', refine:'step2b', review:'step3'}[stepKey] || '';
+}
+function workflowNavId(stepKey) {
+  return {brief:'ws1', generate:'ws2', refine:'ws2b', review:'ws3'}[stepKey] || '';
+}
+function canNavigateWorkflowStep(stepKey) {
+  if (stepKey === currentWorkflowStep) return true;
+  if (stepKey === 'brief') return workflowHasBriefStep && maxWorkflowStepReached >= 1;
+  if (stepKey === 'refine') return maxWorkflowStepReached >= 3;
+  if (stepKey === 'review') return maxWorkflowStepReached >= 4;
+  return false;
+}
+function updateWorkflowStepNav() {
+  ['brief','generate','refine','review'].forEach(function(stepKey) {
+    var el = document.getElementById(workflowNavId(stepKey));
+    if (!el) return;
+    var idx = workflowStepIndex(stepKey);
+    var cls = 'wf-step';
+    if (stepKey === currentWorkflowStep) cls += ' active';
+    else if (idx <= maxWorkflowStepReached) cls += ' done';
+    else cls += ' disabled';
+    if (canNavigateWorkflowStep(stepKey) && stepKey !== 'generate') cls += ' nav-ok';
+    if (stepKey === 'brief' && !workflowHasBriefStep) cls = 'wf-step disabled';
+    if (stepKey === 'generate' && stepKey !== currentWorkflowStep) cls = cls.replace(' nav-ok','') + ' disabled';
+    el.className = cls;
+  });
+}
+function showWorkflowStep(stepKey) {
   ['step1','step2','step2b','step3'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  var target = document.getElementById('step'+n);
+  var target = document.getElementById(workflowStepId(stepKey));
   if (target) target.style.display = 'block';
-  ['ws1','ws2','ws2b','ws3'].forEach(function(id, i){
-    var ws = document.getElementById(id);
-    if (ws) ws.className = 'wf-step'+(i+1<n?' done':i+1===n?' active':'');
-  });
+  currentWorkflowStep = stepKey;
+  maxWorkflowStepReached = Math.max(maxWorkflowStepReached, workflowStepIndex(stepKey));
+  updateWorkflowStepNav();
   window.scrollTo(0,0);
+}
+function navigateWorkflowStep(stepKey) {
+  if (!canNavigateWorkflowStep(stepKey) || stepKey === 'generate') return;
+  showWorkflowStep(stepKey);
+}
+function showPreviousWorkflowScreen() {
+  document.getElementById('workflow').style.display = 'none';
+  document.documentElement.style.overflow = 'auto';
+  document.body.style.overflow = 'auto';
+  if (workflowPreviousLandingScreen === 'main') { showMain(); return; }
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('landing').style.display = 'block';
+  if (workflowPreviousLandingScreen === 'landing-url') { showUrlEntry(); return; }
+  if (workflowPreviousLandingScreen === 'landing-scratch-choice') { showScratchChoice(); return; }
+  if (workflowPreviousLandingScreen === 'landing-scratch') { showScratchForm(); return; }
+  if (workflowPreviousLandingScreen === 'landing-existing-draft') { showExistingDraftForm(); return; }
+  if (confirm('Go home? Your current draft may be lost.')) goToLanding();
+}
+function goWorkflowBack() {
+  if (currentWorkflowStep === 'review') { showWorkflowStep('refine'); return; }
+  if (currentWorkflowStep === 'refine') {
+    if (workflowHasBriefStep) showWorkflowStep('brief');
+    else showPreviousWorkflowScreen();
+    return;
+  }
+  if (currentWorkflowStep === 'generate') {
+    if (workflowHasBriefStep) showWorkflowStep('brief');
+    else showPreviousWorkflowScreen();
+    return;
+  }
+  if (currentWorkflowStep === 'brief') { showPreviousWorkflowScreen(); return; }
+  if (confirm('Go home? Your current draft may be lost.')) goToLanding();
+}
+function goWorkflowHome() {
+  var preview = document.getElementById('chat-article-preview');
+  var hasDraft = (generatedContent && Object.keys(generatedContent).length > 0) || (preview && preview.innerText.trim());
+  if (!hasDraft || confirm('Go home? Your current draft may be lost.')) goToLanding();
+}
+function goStep(n) {
+  showWorkflowStep(n === 1 ? 'brief' : n === 2 ? 'generate' : n === 3 ? 'review' : 'brief');
 }
 function startGeneration() {
   var angle = document.getElementById('b-angle').value;
   var titleHint = document.getElementById('b-title').value.trim();
-  document.getElementById('step1').style.display = 'none';
-  document.getElementById('step2').style.display = 'block';
-  document.getElementById('ws1').className = 'wf-step done';
-  document.getElementById('ws2').className = 'wf-step active';
-  window.scrollTo(0,0);
+  showWorkflowStep('generate');
   var steps = ['gs1','gs2','gs3','gs4'];
   var si = 0;
   var anim = setInterval(function() {
@@ -1246,10 +1546,7 @@ var hasUrl = !!currentCard._url;
     var rBodyRender = document.getElementById('r-body-render');
     if (rBodyRender) rBodyRender.innerHTML = generatedContent.body||'';
     document.getElementById('r-readtime').value = generatedContent.readTime||'5 min read';
-    document.getElementById('step2').style.display = 'none';
-    document.getElementById('step2b').style.display = 'block';
-    document.getElementById('ws2').className = 'wf-step done';
-    document.getElementById('ws2b').className = 'wf-step active';
+    showWorkflowStep('refine');
     // Show article preview
     document.getElementById('chat-article-preview').innerHTML = '<div class="version-block" id="version-1">'+renderPreview(generatedContent)+'</div>';
     window._versionCount = 1;
@@ -1263,10 +1560,7 @@ var hasUrl = !!currentCard._url;
     window.scrollTo(0,0);
   }).catch(function(e) {
     clearInterval(anim);
-    document.getElementById('step2').style.display = 'none';
-    document.getElementById('step1').style.display = 'block';
-    document.getElementById('ws2').className = 'wf-step';
-    document.getElementById('ws1').className = 'wf-step active';
+    showWorkflowStep(workflowHasBriefStep ? 'brief' : 'refine');
     alert('Generation failed: '+e.message);
   });
 }
@@ -1349,15 +1643,7 @@ function proceedToReview() {
   document.getElementById('r-img-name').textContent = '';
   if (document.getElementById('r-img-url')) document.getElementById('r-img-url').value = '';
   updateReviewWordCount();
-  // Navigate to step3 as a clean new page
-  ['step1','step2','step2b','step3'].forEach(function(id){
-    var el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
-  document.getElementById('step3').style.display = 'block';
-  document.getElementById('ws2b').className = 'wf-step done';
-  document.getElementById('ws3').className = 'wf-step active';
-  window.scrollTo(0,0);
+  showWorkflowStep('review');
   // Save draft to Firebase
   saveArticleToFirebase({
     title: generatedContent.title||'',
@@ -1368,6 +1654,7 @@ function proceedToReview() {
     introRichText: generatedContent.introRichText||'',
     body: content,
     readTime: generatedContent.readTime||'5 min read',
+    writerName: document.getElementById('r-writer-name') ? document.getElementById('r-writer-name').value.trim() : '',
     versionCount: window._versionCount||1
   }, 'draft');
   // Auto-learn from editorial changes: compare version 1 vs latest
@@ -1400,10 +1687,6 @@ function proceedToReview() {
       }).catch(function(){});
     }
   }
-  document.getElementById('step3').style.display = 'block';
-  document.getElementById('ws2b').className = 'wf-step done';
-  document.getElementById('ws3').className = 'wf-step active';
-  window.scrollTo(0,0);
 }
 function updateDraft() {
   var preview = document.getElementById('chat-article-preview');
@@ -1476,13 +1759,14 @@ function searchImages() {
 }
 function buildFinalPreview() {}
 function exportCSV() {
+  var writerName = document.getElementById('r-writer-name') ? document.getElementById('r-writer-name').value.trim() : '';
   var fields = [
     ['Post Title',document.getElementById('r-title').value],
     ['Slug',document.getElementById('r-slug').value],
     ['Collection ID','695be252bae2cf37c3a4b17b'],
     ['Locale ID',''],['Item ID',''],['Archived','false'],['Draft','true'],
     ['Created On',''],['Updated On',''],['Published On',''],
-    ['Sub-Title-Heading',''],['Category','Affairs'],
+    ['Sub-Title-Heading',''],['Category',DEFAULT_ARTICLE_CATEGORY],
     ['Excerpt',document.getElementById('r-excerpt').value],
     ['Summary Rich Text',''],
     ['Story Intro Para',document.getElementById('r-short').value],
@@ -1495,7 +1779,7 @@ function exportCSV() {
     ['Editor Pick',''],['Opinion',''],['In focus',''],['Trending',''],
     ['Publish date',document.getElementById('r-date').value],
     ['Post Image', document.getElementById('r-img-url') ? document.getElementById('r-img-url').value : ''],
-    ['Writer','Wocult Team'],['Voice Type','']
+    ['Writer',writerName||'Wocult Team'],['Voice Type','']
   ];
   function esc(v) { v=String(v||'').replace(/\r?\n/g,' '); if(v.indexOf('"')>=0||v.indexOf(',')>=0) return '"'+v.replace(/"/g,'""')+'"'; return v; }
   var csv = fields.map(function(f){return esc(f[0])+','+esc(f[1]);}).join('\n');
@@ -1522,6 +1806,13 @@ function handleReviewImg(e) {
 }
 
 function submitArticle() {
+  var writerField = document.getElementById('r-writer-name');
+  var writerName = writerField ? writerField.value.trim() : '';
+  if (!writerName) {
+    alert('Please enter the writer’s name before submitting.');
+    if (writerField) writerField.focus();
+    return;
+  }
   var btn = document.getElementById('publish-btn');
   btn.disabled = true; btn.textContent = 'Submitting...';
   var bodyHtml = document.getElementById('r-body-render').innerHTML;
@@ -1538,6 +1829,7 @@ function submitArticle() {
     body: bodyHtml,
     readTime: document.getElementById('r-readtime').value,
     publishDate: document.getElementById('r-date').value,
+    writerName: writerName,
     imageUrl: document.getElementById('r-img-url').value||'',
     imageName: _reviewImgFile ? _reviewImgFile.name : '',
     status: 'submitted'
@@ -1563,6 +1855,7 @@ function submitArticle() {
 
 function buildFieldData(d) {
   return {
+    // TODO: Map writerName to Webflow once the CMS field slug is confirmed.
     name: d.title, slug: d.slug, excerpt: d.excerpt,
     'story-intro-para': d.shortIntro, 'short-story-intro': d.shortIntro,
     '40-word-intro': d.intro40, body: d.body, 'read-time': d.readTime,
@@ -1582,6 +1875,7 @@ function autoDownloadCSV(data) {
     ['Body', data.body.replace(/<[^>]+>/g,'')],
     ['Read Time', data.readTime],
     ['Publish Date', data.publishDate],
+    ['Writer', data.writerName],
     ['Image URL', data.imageUrl],
     ['Status', data.status]
   ];
