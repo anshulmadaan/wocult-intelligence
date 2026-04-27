@@ -207,15 +207,17 @@ if (editorialBrief && body.messages?.length) {
 
     // /debug — local check for env values without exposing keys
     if (url.pathname === '/debug') {
-      return jsonResponse({
-        hasAnthropicKey: Boolean(env.ANTHROPIC_API_KEY),
-        hasWebflowToken: Boolean(env.WEBFLOW_TOKEN),
-        hasNewsDataKey: Boolean(env.NEWSDATA_API_KEY),
-        newsDataKeyStartsWithPub: env.NEWSDATA_API_KEY
-          ? env.NEWSDATA_API_KEY.startsWith('pub_')
-          : false,
-      });
-    }
+  return jsonResponse({
+    workerVersion: 'firebase-brief-v1',
+    updatedAt: '2026-04-27',
+    hasAnthropicKey: Boolean(env.ANTHROPIC_API_KEY),
+    hasWebflowToken: Boolean(env.WEBFLOW_TOKEN),
+    hasNewsDataKey: Boolean(env.NEWSDATA_API_KEY),
+    newsDataKeyStartsWithPub: env.NEWSDATA_API_KEY
+      ? env.NEWSDATA_API_KEY.startsWith('pub_')
+      : false,
+  });
+}
 
     // Default route — NewsData.io
     const rawQ = url.searchParams.get('q');
