@@ -584,7 +584,40 @@ function startGenerationDirect(sourceInfo) {
     if (si<steps.length) { var el=document.getElementById(steps[si]); if(el) el.classList.add('active'); si++; }
     else clearInterval(anim);
   }, 1200);
-  var prompt = 'You are a senior editor at Wocult — an independent Indian media platform covering work, culture, and life for modern working professionals.\n\nThis is a FIRST-PERSON SUBMISSION from a reader. Your job is to shape their raw story into a polished Wocult piece in their voice — not rewrite it as journalism. Preserve their perspective, their specific details, their emotional truth. Add structure, clarity, and Wocult editorial quality. Do not generalise or abstract what they have shared — the specificity is the value.\n\nWocult voice: Direct, warm, honest. Peer-to-peer with a smart Indian professional. Never preachy.\n\nFormatting: Sentence case titles and subheadings. No italics except quotes. No bold in body.\n\n'+sourceInfo+'\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook — human, intriguing","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>article HTML. 4 punchy h3 subheadings. 800-1000 words. Flowing prose. First-person voice preserved. End with a thought not a prescription.</p>","readTime":"X min read"}';
+var prompt = `Use the editorial brief provided before this prompt for Wocult voice, reader, tone, and editorial principles.
+
+This is a first-person submission from a reader. Shape it into a polished Wocult piece without erasing the contributor’s voice.
+
+Preserve:
+- their perspective
+- their specific details
+- their emotional truth
+- their lived experience
+
+Do not turn it into generic advice or journalism.
+
+Submission:
+${sourceInfo}
+
+Formatting:
+- Title and subheadings must be in sentence case.
+- No italics except direct quotes.
+- No bold text in the body.
+- Body must be valid HTML.
+- Target 800-1000 words.
+- End with reflection, not a forced lesson.
+
+Return ONLY valid JSON, no markdown:
+{
+  "title":"original headline max 12 words",
+  "slug":"url-slug",
+  "shortIntro":"15-20 word hook — human, intriguing",
+  "intro40":"exactly 40 word intro",
+  "excerpt":"100 word summary",
+  "introRichText":"<p>first 100 words as HTML</p>",
+  "body":"<p>article HTML with story-specific h3 subheadings</p>",
+  "readTime":"X min read"
+}`;
   fetch(WORKER+'/generate', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
@@ -1071,8 +1104,56 @@ function startGeneration() {
     else clearInterval(anim);
   }, 1200);
   var sourceInfo = currentCard._url ? ('Source URL: '+currentCard._url) : ('Source headline (do not copy): '+currentCard.title+'\nSource: '+currentCard.src);
-  var prompt = 'You are a senior editor at Wocult — an independent Indian media platform covering work, culture, and life for modern working professionals. Wocult is building the world\'s first lifestyle destination for the modern professional.\n\nWHO WOCULT IS BUILT FOR:\nThe person who knows life is more than work. Who wakes up on Sunday evening already feeling Monday. Who stays late not because they have to, but because leaving on time feels risky. Who has been told "great question" and then heard something else answered. Who is not burnt out — just bored in a serious way. Smart, slightly cynical about corporate culture, deeply invested in their career and life. Indian. 28-38 years old.\n\nWOCULT\'S EDITORIAL COMMITMENTS:\n1. Lived reality over theory — how work is actually experienced, not abstracted into frameworks\n2. Behavior over hierarchy — what people do, not the titles they hold\n3. Standards over noise — every story earns its place by saying something worth reading\n\nWHAT MAKES A STORY WOCULT:\n- It tells the working professional something true about their own life that they hadn\'t found words for yet\n- It educates, advises, explains — always in service of the reader, never the company\n- It gives voice to experiences that never make it into official narratives\n- It treats the professional as a complete human being — ambition, health, relationships, identity, money, not just their job title\n- It ends with something that makes the reader think, not a corporate call to action\n- The reader should feel: "This is written for me. This platform gets it."\n\nWHAT WOCULT NEVER DOES:\n- No corporate speak. No hustle worship. No glorifying overwork.\n- Never celebrate a layoff as "efficiency" or "streamlining" without naming the human cost\n- Never write breathless press releases disguised as journalism\n- No title worship. No paid rankings. No motivational filler.\n- Never give companies the benefit of the doubt without evidence\n- Never mistake the company\'s story for the worker\'s story\n\nVOICE — study these real Wocult opening lines for tone:\n"Most leaders who rule by fear do not know they are doing it."\n"High performance has a biology. And most organisations are ignoring it."\n"Every transformation has a business case. Very few have a human one."\n"The question most professionals are asking about AI is the wrong one."\n"They have been called lazy, entitled, allergic to feedback. Most of that is projection."\nNotice: Direct. Confident. No hedging in the opening. Names the thing most people feel but don\'t say. Peer-to-peer, never above the reader.\n\nSTORY STRUCTURE — 4 h3 subheadings following this arc:\n1. Set the scene (what happened, the context — make the subheading specific to this story, not a generic label)\n2. The human cost or lived reality (what workers are actually experiencing)\n3. The bigger pattern (what this reveals about Indian work culture)\n4. The question worth sitting with (not a forecast — a thought to leave the reader with)\n\nSUBHEADING STYLE: Punchy, specific, alive. Like a great magazine pull quote — not dead labels.\nBAD: "The Worker Angle" / "What Next" / "The Context"\nGOOD: "The 10 PM Message That Never Stops" / "Why Your Calendar Is Someone Else\'s Weapon" / "The Exit That Nobody Announces"\nMake each subheading feel like it could stand alone as a tweet.\n'+getMemoryContext()+'\n'+sourceInfo+'\n'+(titleHint?'Editor headline idea: '+titleHint+'\n':'')+'Editorial angle: '+(angle||'Tell the working professional what this means for their life, their choices, and their sense of self at work. Make them feel seen.')+'\n\nCRITICAL FACTUAL STANDARDS:\n1. Never invent numbers or statistics. Only use figures from the source.\n2. Use ranges when source gives ranges.\n3. Frame analysis as: suggests, indicates, appears to.\n4. If a claim cannot be sourced, remove it.\n5. Use "could" over "will", "targets" over "plans to achieve".\n\nFORMATTING RULES (non-negotiable):\n- All titles and subheadings must be in sentence case (only first word and proper nouns capitalised)\n- Never use italics except for direct quotes from a person\n- No bold text in body copy\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook — human, intriguing, not a news summary","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>article HTML. 4 h3 subheadings — punchy, story-specific, never generic labels like Worker Angle or What Next. Target 800-1000 words. Flowing prose, no bullet points. Statistics attributed. Uncertain claims softened. End with a thought, not a prescription.</p>","readTime":"X min read"}';
-  var hasUrl = !!currentCard._url;
+var sourceInfo = currentCard._url ? ('Source URL: '+currentCard._url) : ('Source headline (do not copy): '+currentCard.title+'\nSource: '+currentCard.src);
+
+var prompt = `Use the editorial brief provided before this prompt for Wocult voice, reader, tone, and editorial principles.
+
+You are drafting a Wocult story from a source article or news signal.
+
+Source:
+${sourceInfo}
+${titleHint ? 'Editor headline idea: ' + titleHint + '\n' : ''}
+Editorial angle:
+${angle || 'Tell the working professional what this means for their life, choices, and experience of work.'}
+
+${getMemoryContext()}
+
+Factual rules:
+1. Do not invent numbers, quotes, claims, examples, or company details.
+2. Use only facts from the source or clearly available context.
+3. If something is uncertain, use words like “could”, “suggests”, or “appears”.
+4. Do not write like a company announcement or press release.
+5. Do not treat the company’s story as the worker’s story.
+
+Structure:
+Write a complete article with four story-specific h3 subheadings.
+The article should explain:
+1. What happened
+2. Why it matters to working professionals
+3. The larger workplace pattern
+4. The question worth thinking about
+
+Formatting:
+- Title and subheadings must be in sentence case.
+- No italics except direct quotes.
+- No bold text in the body.
+- Body must be valid HTML.
+- Target 800-1000 words.
+- Use flowing prose, not bullet points.
+
+Return ONLY valid JSON, no markdown:
+{
+  "title":"original headline max 12 words",
+  "slug":"url-slug",
+  "shortIntro":"15-20 word hook — human, intriguing, not a news summary",
+  "intro40":"exactly 40 word intro",
+  "excerpt":"100 word summary",
+  "introRichText":"<p>first 100 words as HTML</p>",
+  "body":"<p>article HTML with 4 story-specific h3 subheadings. End with a thought, not a prescription.</p>",
+  "readTime":"X min read"
+}`;
+
+var hasUrl = !!currentCard._url;
   var genTools = hasUrl ? [{"type":"web_search_20250305","name":"web_search"}] : [];
   var urlInstruction = hasUrl ? 'First use web search to fetch and read this article URL, then write the Wocult story based on its content.\n' : '';
   fetch(WORKER+'/generate', {
