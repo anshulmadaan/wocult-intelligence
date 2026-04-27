@@ -248,6 +248,12 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
         <div class="lcard-desc">Create sharp Wocult-style interview questions from a topic brief.</div>
         <div class="lcard-cta">Prepare questions →</div>
       </div>
+      <div class="lcard" onclick="showInterviewSubmissions()">
+        <div class="lcard-icon">IN</div>
+        <div class="lcard-title">Staff submissions</div>
+        <div class="lcard-desc">Review guest interview responses and final Q&A submissions.</div>
+        <div class="lcard-cta">Review submissions →</div>
+      </div>
     </div>
   </div>
 
@@ -301,6 +307,35 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
         <button class="btn-lg btn-y" id="interview-link-btn" onclick="saveInterviewSession()">Generate guest link</button>
       </div>
       <div id="interview-link-result" style="display:none;margin-top:16px;padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff"></div>
+    </div>
+  </div>
+
+  <!-- Staff submissions screen -->
+  <div id="landing-interview-submissions" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:980px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
+        <button class="btn" onclick="loadInterviewSubmissions()">Refresh</button>
+      </div>
+      <h2>Staff submissions</h2>
+      <p class="sub">Review guest interview responses submitted through Wocult Intelligence.</p>
+
+      <div id="interview-submissions-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:16px"></div>
+
+      <div id="interview-submissions-filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+        <button class="chip on" data-submission-filter="all" onclick="filterInterviewSubmissions('all')">all</button>
+        <button class="chip" data-submission-filter="sent" onclick="filterInterviewSubmissions('sent')">sent</button>
+        <button class="chip" data-submission-filter="in_progress" onclick="filterInterviewSubmissions('in_progress')">in_progress</button>
+        <button class="chip" data-submission-filter="submitted" onclick="filterInterviewSubmissions('submitted')">submitted</button>
+        <button class="chip" data-submission-filter="refined" onclick="filterInterviewSubmissions('refined')">refined</button>
+        <button class="chip" data-submission-filter="final" onclick="filterInterviewSubmissions('final')">final</button>
+      </div>
+
+      <div id="interview-submissions-status" class="hint" style="margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:16px;align-items:start">
+        <div id="interview-submissions-list" style="display:flex;flex-direction:column;gap:10px"></div>
+        <div id="interview-submission-detail" style="min-height:180px;padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:14px;line-height:1.6">Select a submission to review the Q&A.</div>
+      </div>
     </div>
   </div>
 
@@ -688,6 +723,226 @@ function showGuestPlaceholder(key) {
 function escapeHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function stripHtml(s) {
+  var div = document.createElement('div');
+  div.innerHTML = String(s||'');
+  return div.innerText.trim();
+}
+function formatFirestoreDate(value) {
+  if (!value) return '-';
+  var d = null;
+  if (value.toDate) d = value.toDate();
+  else if (value.seconds) d = new Date(value.seconds * 1000);
+  else d = new Date(value);
+  if (!d || isNaN(d.getTime())) return '-';
+  return d.toLocaleString('en-IN', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
+}
+function statusLabel(status) {
+  var map = {
+    sent: 'Sent',
+    in_progress: 'In progress',
+    submitted: 'Submitted',
+    refined: 'Refined',
+    final: 'Final'
+  };
+  return map[status] || (status ? String(status).replace(/_/g, ' ') : 'Unknown');
+}
+function showInterviewSubmissions() {
+  if (currentAccessMode !== 'staff') {
+    showAccessScreen();
+    return;
+  }
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-url').style.display = 'none';
+  document.getElementById('landing-scratch').style.display = 'none';
+  document.getElementById('landing-scratch-choice').style.display = 'none';
+  document.getElementById('landing-existing-draft').style.display = 'none';
+  document.getElementById('landing-prepare-interview').style.display = 'none';
+  document.getElementById('landing-interview-submissions').style.display = 'flex';
+  loadInterviewSubmissions();
+}
+function loadInterviewSubmissions() {
+  var status = document.getElementById('interview-submissions-status');
+  var list = document.getElementById('interview-submissions-list');
+  var summary = document.getElementById('interview-submissions-summary');
+  var detail = document.getElementById('interview-submission-detail');
+  if (currentAccessMode !== 'staff') { showAccessScreen(); return; }
+  if (status) status.textContent = 'Loading submissions...';
+  if (summary) summary.innerHTML = '';
+  if (list) list.innerHTML = '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:13px">Loading...</div>';
+  if (detail) detail.innerHTML = 'Select a submission to review the Q&A.';
+  if (!db) {
+    if (status) status.textContent = 'Firebase is not connected. Could not load submissions.';
+    if (list) list.innerHTML = '';
+    return;
+  }
+  db.collection('interview_sessions').orderBy('updatedAt', 'desc').get().then(function(snapshot) {
+    window._interviewSubmissions = [];
+    snapshot.forEach(function(doc) {
+      window._interviewSubmissions.push(Object.assign({id:doc.id, guestKey:doc.id}, doc.data()));
+    });
+    if (status) status.textContent = window._interviewSubmissions.length ? window._interviewSubmissions.length + ' interview submission(s) loaded.' : 'No interview submissions yet.';
+    renderInterviewSubmissionSummary();
+    renderInterviewSubmissions();
+  }).catch(function(err) {
+    window._interviewSubmissions = [];
+    renderInterviewSubmissionSummary();
+    if (status) status.textContent = 'Could not load submissions: ' + err.message;
+    if (list) list.innerHTML = '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--red);font-size:13px">Firestore read failed.</div>';
+  });
+}
+function renderInterviewSubmissionSummary() {
+  var summary = document.getElementById('interview-submissions-summary');
+  if (!summary) return;
+  var statuses = ['all','sent','in_progress','submitted','refined','final'];
+  var counts = {all:(window._interviewSubmissions||[]).length};
+  (window._interviewSubmissions||[]).forEach(function(s) {
+    var st = s.status || 'unknown';
+    counts[st] = (counts[st] || 0) + 1;
+  });
+  summary.innerHTML = statuses.map(function(st) {
+    return '<div class="stat" style="padding:10px 12px">'
+      + '<div class="sn" style="font-size:18px">'+(counts[st]||0)+'</div>'
+      + '<div class="sl">'+escapeHtml(st === 'all' ? 'All' : statusLabel(st))+'</div>'
+      + '</div>';
+  }).join('');
+}
+function renderInterviewSubmissions() {
+  var list = document.getElementById('interview-submissions-list');
+  if (!list) return;
+  var filter = window._interviewSubmissionFilter || 'all';
+  var sessions = (window._interviewSubmissions||[]).filter(function(s) {
+    return filter === 'all' || s.status === filter;
+  });
+  document.querySelectorAll('[data-submission-filter]').forEach(function(btn) {
+    btn.classList.toggle('on', btn.getAttribute('data-submission-filter') === filter);
+  });
+  if (!sessions.length) {
+    list.innerHTML = '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:13px">No submissions match this filter.</div>';
+    return;
+  }
+  list.innerHTML = sessions.map(function(s) {
+    var guest = [s.guestName, s.guestEmail].filter(Boolean).join(' · ') || 'No guest details yet';
+    var questionCount = s.questionCount || (s.questions||[]).length || 0;
+    return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
+      + '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px">'
+      + '<div style="font-size:14px;font-weight:700;line-height:1.4">'+escapeHtml(s.interviewTitle||'Untitled interview')+'</div>'
+      + '<span class="badge bg">'+escapeHtml(statusLabel(s.status))+'</span>'
+      + '</div>'
+      + '<div style="font-size:12px;color:var(--g3);line-height:1.6;margin-bottom:10px">'
+      + escapeHtml(guest) + '<br>'
+      + 'Guest key: '+escapeHtml(s.guestKey||s.id||'')+'<br>'
+      + 'Questions: '+questionCount+'<br>'
+      + 'Updated: '+escapeHtml(formatFirestoreDate(s.updatedAt))+'<br>'
+      + (s.submittedAt ? 'Submitted: '+escapeHtml(formatFirestoreDate(s.submittedAt))+'<br>' : '')
+      + (s.finalSubmittedAt ? 'Final: '+escapeHtml(formatFirestoreDate(s.finalSubmittedAt))+'<br>' : '')
+      + '</div>'
+      + '<button class="btn" onclick="openInterviewSubmission(\''+escapeHtml(s.guestKey||s.id||'')+'\')">Review</button>'
+      + '</div>';
+  }).join('');
+}
+function filterInterviewSubmissions(status) {
+  window._interviewSubmissionFilter = status || 'all';
+  renderInterviewSubmissions();
+}
+function openInterviewSubmission(guestKey) {
+  var session = (window._interviewSubmissions||[]).find(function(s) {
+    return (s.guestKey||s.id) === guestKey;
+  });
+  if (!session) return;
+  renderInterviewSubmissionDetail(session);
+}
+function getInterviewSubmissionAnswers(session) {
+  if (session.status === 'final' && (session.refinedAnswers||[]).length) return session.refinedAnswers;
+  if ((session.refinedAnswers||[]).length) return session.refinedAnswers;
+  if ((session.rawAnswers||[]).length) return session.rawAnswers;
+  return [];
+}
+function getInterviewSubmissionAnswerText(answer) {
+  return answer.refinedAnswerText || answer.answerText || stripHtml(answer.refinedAnswerHtml || answer.answerHtml || '');
+}
+function getInterviewSubmissionAnswerHtml(answer) {
+  if (answer.refinedAnswerHtml) return answer.refinedAnswerHtml;
+  if (answer.answerHtml) return answer.answerHtml;
+  return escapeHtml(answer.refinedAnswerText || answer.answerText || '').replace(/\n/g,'<br>');
+}
+function renderInterviewSubmissionDetail(session) {
+  var detail = document.getElementById('interview-submission-detail');
+  if (!detail) return;
+  var answers = getInterviewSubmissionAnswers(session);
+  var answersById = {};
+  answers.forEach(function(a){ if (a.questionId) answersById[a.questionId] = a; });
+  var qaHtml = (session.questions||[]).map(function(q, i) {
+    var id = q.id || ('q'+(i+1));
+    var answer = answersById[id] || answers[i] || {};
+    var answerHtml = getInterviewSubmissionAnswerHtml(answer) || '<span style="color:var(--g3)">No answer yet</span>';
+    return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-top:12px">'
+      + '<div style="font-size:12px;font-weight:700;color:var(--yd);margin-bottom:6px">Q'+(i+1)+'</div>'
+      + '<div style="font-size:14px;line-height:1.6;color:var(--blk);margin-bottom:10px">'+escapeHtml(q.question||answer.question||'')+'</div>'
+      + '<div style="font-size:13px;line-height:1.7;color:var(--blk);padding:10px 12px;border-left:3px solid var(--y);background:var(--gray)">'+answerHtml+'</div>'
+      + '</div>';
+  }).join('');
+  if (!qaHtml && answers.length) {
+    qaHtml = answers.map(function(a, i) {
+      return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-top:12px">'
+        + '<div style="font-size:12px;font-weight:700;color:var(--yd);margin-bottom:6px">Q'+(i+1)+'</div>'
+        + '<div style="font-size:14px;line-height:1.6;color:var(--blk);margin-bottom:10px">'+escapeHtml(a.question||'')+'</div>'
+        + '<div style="font-size:13px;line-height:1.7;color:var(--blk);padding:10px 12px;border-left:3px solid var(--y);background:var(--gray)">'+getInterviewSubmissionAnswerHtml(a)+'</div>'
+        + '</div>';
+    }).join('');
+  }
+  detail.style.color = 'var(--blk)';
+  detail.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px">'
+    + '<div>'
+    + '<div style="font-size:18px;font-weight:700;line-height:1.35">'+escapeHtml(session.interviewTitle||'Untitled interview')+'</div>'
+    + '<div style="font-size:13px;color:var(--g3);line-height:1.6;margin-top:6px">'
+    + 'Guest: '+escapeHtml([session.guestName, session.guestEmail].filter(Boolean).join(' · ') || 'Not added yet')+'<br>'
+    + 'Status: '+escapeHtml(statusLabel(session.status))+'<br>'
+    + 'Guest key: '+escapeHtml(session.guestKey||session.id||'')+'<br>'
+    + 'Guest link: '+(session.guestLink ? '<a href="'+escapeHtml(session.guestLink)+'" target="_blank" style="color:var(--yd);text-decoration:none">'+escapeHtml(session.guestLink)+'</a>' : '-')
+    + '</div>'
+    + '</div>'
+    + '<div><button class="btn" onclick="copyInterviewSubmissionQA(\''+escapeHtml(session.guestKey||session.id||'')+'\')">Copy Q&A</button><div id="copy-submission-status" style="font-size:12px;color:var(--g3);margin-top:6px"></div></div>'
+    + '</div>'
+    + (qaHtml || '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3)">No questions found.</div>');
+}
+function buildInterviewSubmissionPlainText(session) {
+  var answers = getInterviewSubmissionAnswers(session);
+  var answersById = {};
+  answers.forEach(function(a){ if (a.questionId) answersById[a.questionId] = a; });
+  var lines = [
+    'Interview title: ' + (session.interviewTitle || 'Untitled interview'),
+    'Guest: ' + ([session.guestName, session.guestEmail].filter(Boolean).join(' · ') || 'Not added yet'),
+    ''
+  ];
+  (session.questions||[]).forEach(function(q, i) {
+    var id = q.id || ('q'+(i+1));
+    var answer = answersById[id] || answers[i] || {};
+    lines.push('Q'+(i+1)+'. '+(q.question || answer.question || ''));
+    lines.push(getInterviewSubmissionAnswerText(answer) || 'No answer yet');
+    lines.push('');
+  });
+  if (!(session.questions||[]).length && answers.length) {
+    answers.forEach(function(a, i) {
+      lines.push('Q'+(i+1)+'. '+(a.question || ''));
+      lines.push(getInterviewSubmissionAnswerText(a) || 'No answer yet');
+      lines.push('');
+    });
+  }
+  return lines.join('\n').trim();
+}
+function copyInterviewSubmissionQA(guestKey) {
+  var session = (window._interviewSubmissions||[]).find(function(s) {
+    return (s.guestKey||s.id) === guestKey;
+  });
+  var msg = document.getElementById('copy-submission-status');
+  if (!session) return;
+  navigator.clipboard.writeText(buildInterviewSubmissionPlainText(session)).then(function() {
+    if (msg) msg.textContent = 'Q&A copied.';
+  }).catch(function() {
+    if (msg) msg.textContent = 'Could not copy Q&A.';
+  });
+}
 function loadGuestInterview(key) {
   currentAccessMode = 'guest';
   currentAccessKey = (key||'').trim().toUpperCase();
@@ -963,6 +1218,9 @@ function backToCards() {
   document.getElementById('landing-scratch-choice').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'none';
   document.getElementById('landing-prepare-interview').style.display = 'none';
+  document.getElementById('landing-interview-submissions').style.display = 'none';
+  var detail = document.getElementById('interview-submission-detail');
+  if (detail) detail.innerHTML = 'Select a submission to review the Q&A.';
   document.getElementById('landing-cards').style.display = 'flex';
 }
 function showUrlEntry() {
@@ -971,6 +1229,7 @@ function showUrlEntry() {
   document.getElementById('landing-scratch-choice').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'none';
   document.getElementById('landing-prepare-interview').style.display = 'none';
+  document.getElementById('landing-interview-submissions').style.display = 'none';
   document.getElementById('landing-url').style.display = 'flex';
   setTimeout(function(){ document.getElementById('landing-url-input').focus(); }, 100);
 }
@@ -980,6 +1239,7 @@ function showPrepareInterview() {
   document.getElementById('landing-scratch').style.display = 'none';
   document.getElementById('landing-scratch-choice').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'none';
+  document.getElementById('landing-interview-submissions').style.display = 'none';
   document.getElementById('landing-prepare-interview').style.display = 'flex';
   setTimeout(function(){ document.getElementById('interview-title').focus(); }, 100);
 }
@@ -989,6 +1249,7 @@ function showScratchChoice() {
   document.getElementById('landing-scratch').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'none';
   document.getElementById('landing-prepare-interview').style.display = 'none';
+  document.getElementById('landing-interview-submissions').style.display = 'none';
   document.getElementById('landing-scratch-choice').style.display = 'flex';
 }
 function showExistingDraftForm() {
@@ -997,6 +1258,7 @@ function showExistingDraftForm() {
   document.getElementById('landing-scratch').style.display = 'none';
   document.getElementById('landing-scratch-choice').style.display = 'none';
   document.getElementById('landing-prepare-interview').style.display = 'none';
+  document.getElementById('landing-interview-submissions').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'flex';
   setTimeout(function(){ document.getElementById('existing-draft-text').focus(); }, 100);
 }
@@ -1006,6 +1268,7 @@ function showScratchForm() {
   document.getElementById('landing-scratch-choice').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'none';
   document.getElementById('landing-prepare-interview').style.display = 'none';
+  document.getElementById('landing-interview-submissions').style.display = 'none';
   document.getElementById('landing-scratch').style.display = 'flex';
 }
 function startFromUrl() {
@@ -1554,6 +1817,8 @@ var currentCard = null;
 var generatedContent = {};
 window._guestInterviewSession = null;
 window._guestInterviewKey = '';
+window._interviewSubmissions = [];
+window._interviewSubmissionFilter = 'all';
 var interviewQuestionState = {
   title: '',
   brief: '',
