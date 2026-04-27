@@ -206,7 +206,7 @@ if (editorialBrief && body.messages?.length) {
     }
 
     // /debug — local check for env values without exposing keys
-    if (url.pathname === '/debug') {
+  if (url.pathname === '/debug') {
   return jsonResponse({
     workerVersion: 'firebase-brief-v1',
     updatedAt: '2026-04-27',
@@ -218,7 +218,45 @@ if (editorialBrief && body.messages?.length) {
       : false,
   });
 }
+// /debug-brief — checks whether Worker can read Firebase editorial brief
+if (url.pathname === '/debug-brief') {
+  try {
+    const fbRes = await fetch(
+      'https://firestore.googleapis.com/v1/projects/wocult-tasks/databases/(default)/documents/editorial_config/editorial_brief'
+    );
 
+    const fbData = await fbRes.json();
+    const fields = fbData.fields || {};
+
+    const readField = (name) => fields[name]?.stringValue || '';
+
+    return jsonResponse({
+      firebaseConnected: fbRes.ok,
+      firebaseStatus: fbRes.status,
+      documentFound: Boolean(fbData.name),
+      documentPath: fbData.name || null,
+      briefs: {
+        generation: {
+          exists: Boolean(readField('generation')),
+          length: readField('generation').length,
+        },
+        refine: {
+          exists: Boolean(readField('refine')),
+          length: readField('refine').length,
+        },
+        scratch: {
+          exists: Boolean(readField('scratch')),
+          length: readField('scratch').length,
+        },
+      },
+    });
+  } catch (e) {
+    return jsonResponse({
+      firebaseConnected: false,
+      error: e.message,
+    }, 500);
+  }
+}
     // Default route — NewsData.io
     const rawQ = url.searchParams.get('q');
     const q = rawQ && rawQ.trim() ? rawQ.trim() : 'india workforce hiring layoffs';
