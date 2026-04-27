@@ -24,6 +24,59 @@ export default {
       try {
         const body = await request.json();
 
+// Fetch editorial brief from Firebase
+let editorialBrief = '';
+
+try {
+  const briefType = body.briefType || 'generation';
+
+  // Remove briefType before forwarding body to Anthropic
+  delete body.briefType;
+
+  const fbRes = await fetch(
+    'https://firestore.googleapis.com/v1/projects/wocult-tasks/databases/(default)/documents/editorial_config/editorial_brief'
+  );
+
+  const fbData = await fbRes.json();
+  const fields = fbData.fields || {};
+
+  editorialBrief = fields[briefType]?.stringValue || '';
+} catch (e) {
+  // Brief fetch failed silently — generation continues without it
+}
+
+// Prepend brief to first user message if brief exists
+if (editorialBrief && body.messages?.length) {
+  const first = body.messages[0];
+
+  if (first.role === 'user') {
+    if (typeof first.content === 'string') {
+      body.messages[0] = {
+        ...first,
+        content: editorialBrief + '\n\n' + first.content,
+      };
+    } else if (Array.isArray(first.content)) {
+      const firstTextIndex = first.content.findIndex(
+        (block) => block.type === 'text' && typeof block.text === 'string'
+      );
+
+      if (firstTextIndex >= 0) {
+        const updatedContent = [...first.content];
+
+        updatedContent[firstTextIndex] = {
+          ...updatedContent[firstTextIndex],
+          text: editorialBrief + '\n\n' + updatedContent[firstTextIndex].text,
+        };
+
+        body.messages[0] = {
+          ...first,
+          content: updatedContent,
+        };
+      }
+    }
+  }
+}
+
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
