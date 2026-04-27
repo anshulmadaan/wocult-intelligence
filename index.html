@@ -204,10 +204,13 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 
 <!-- GUEST PLACEHOLDER -->
 <div id="guest-placeholder" class="landing" style="display:none">
-  <div class="url-entry">
-    <h2>Interview access found</h2>
-    <p>This interview response page will be available here.</p>
-    <div style="font-size:13px;color:var(--g3);padding:10px 12px;border:1px solid var(--bdr);border-radius:8px;background:#fff">Key: <span id="guest-key-display"></span></div>
+  <div class="scratch-screen">
+    <div id="guest-message">
+      <h2>Interview access found</h2>
+      <p class="sub">This interview response page will be available here.</p>
+      <div style="font-size:13px;color:var(--g3);padding:10px 12px;border:1px solid var(--bdr);border-radius:8px;background:#fff">Key: <span id="guest-key-display"></span></div>
+    </div>
+    <div id="guest-interview-content" style="display:none"></div>
   </div>
 </div>
 
@@ -277,12 +280,21 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       </div>
 
       <div class="sfield">
+        <label>In 100 words, explain what this interview is about and what kind of responses you expect.</label>
+        <textarea id="interview-guest-intro" rows="5" placeholder="Example: We are interviewing Gen Z professionals about how they experience work, managers, late hours, workplace toxicity, and what they believe should change."></textarea>
+      </div>
+
+      <div class="sfield">
         <label>Number of questions</label>
         <input id="interview-count" type="number" min="3" max="20" value="8" />
       </div>
 
       <button class="btn-lg btn-y" id="interview-generate-btn" onclick="generateInterviewQuestions()" style="padding:14px 32px;font-size:15px;width:100%">Generate questions</button>
       <div id="interview-status" class="hint" style="margin-top:12px"></div>
+      <div id="interview-guest-intro-review" class="sfield" style="display:none;margin-top:24px">
+        <label>Guest-facing introduction</label>
+        <textarea id="interview-guest-intro-refined" rows="5" oninput="interviewQuestionState.guestIntro=this.value.trim()"></textarea>
+      </div>
       <div id="interview-questions" style="display:flex;flex-direction:column;gap:12px;margin-top:24px"></div>
       <div id="interview-actions" style="display:none;gap:10px;margin-top:16px;flex-wrap:wrap">
         <button class="btn-lg" onclick="addInterviewQuestion()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Add question</button>
@@ -653,7 +665,7 @@ function handleAccessKey(key) {
     currentAccessMode = 'guest';
     saveAccessSession(currentAccessMode, currentAccessKey);
     hideAllAppScreens();
-    showGuestPlaceholder(cleaned);
+    loadGuestInterview(cleaned);
     return true;
   }
   currentAccessMode = '';
@@ -667,11 +679,261 @@ function showGuestPlaceholder(key) {
   hideAllAppScreens();
   currentAccessMode = 'guest';
   currentAccessKey = (key||currentAccessKey||'').trim().toUpperCase();
+  document.getElementById('guest-message').style.display = 'block';
+  document.getElementById('guest-interview-content').style.display = 'none';
+  document.getElementById('guest-message').innerHTML = '<h2>Interview access found</h2><p class="sub">This interview response page will be available here.</p><div style="font-size:13px;color:var(--g3);padding:10px 12px;border:1px solid var(--bdr);border-radius:8px;background:#fff">Key: <span id="guest-key-display"></span></div>';
   document.getElementById('guest-key-display').textContent = currentAccessKey;
   document.getElementById('guest-placeholder').style.display = 'flex';
 }
+function escapeHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function loadGuestInterview(key) {
+  currentAccessMode = 'guest';
+  currentAccessKey = (key||'').trim().toUpperCase();
+  saveAccessSession(currentAccessMode, currentAccessKey);
+  hideAllAppScreens();
+  document.getElementById('guest-placeholder').style.display = 'flex';
+  document.getElementById('guest-message').style.display = 'block';
+  document.getElementById('guest-interview-content').style.display = 'none';
+  document.getElementById('guest-message').innerHTML = '<h2>Loading interview...</h2><p class="sub">Please wait while we open your interview.</p>';
+  if (!db) {
+    document.getElementById('guest-message').innerHTML = '<h2>Could not load interview</h2><p class="sub">Firebase is not connected. Please try again later.</p>';
+    return;
+  }
+  db.collection('interview_sessions').doc(currentAccessKey).get().then(function(doc) {
+    if (!doc.exists) {
+      document.getElementById('guest-message').innerHTML = '<h2>This interview link was not found.</h2><p class="sub">Please check the link or contact Wocult.</p>';
+      return;
+    }
+    window._guestInterviewKey = currentAccessKey;
+    window._guestInterviewSession = Object.assign({guestKey:currentAccessKey}, doc.data());
+    renderGuestInterview(window._guestInterviewSession);
+  }).catch(function(err) {
+    document.getElementById('guest-message').innerHTML = '<h2>Could not load interview</h2><p class="sub">'+escapeHtml(err.message)+'</p>';
+  });
+}
+function renderGuestInterview(session) {
+  hideAllAppScreens();
+  document.getElementById('guest-placeholder').style.display = 'flex';
+  document.getElementById('guest-message').style.display = 'none';
+  var content = document.getElementById('guest-interview-content');
+  var answersById = {};
+  (session.rawAnswers||[]).forEach(function(a){ answersById[a.questionId] = a; });
+  var guestIntro = (session.guestIntro||'').trim() || 'Please answer freely and honestly. You can save progress and return to this link later.';
+  var questionsHtml = (session.questions||[]).map(function(q, i) {
+    var id = q.id || ('q'+(i+1));
+    var answer = answersById[id] || {};
+    return '<div class="sfield" style="padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
+      + '<label>Question '+(i+1)+'</label>'
+      + '<div style="font-size:15px;line-height:1.6;margin-bottom:12px;color:var(--blk)">'+escapeHtml(q.question||'')+'</div>'
+      + '<div class="guest-answer" contenteditable="true" data-question-id="'+escapeHtml(id)+'" data-order="'+(q.order||i+1)+'" data-question="'+escapeHtml(q.question||'')+'" style="border:1px solid var(--bdr);border-radius:8px;min-height:120px;padding:12px;background:#fff;outline:none;font-size:14px;line-height:1.7">'+(answer.answerHtml||'')+'</div>'
+      + '</div>';
+  }).join('');
+  content.innerHTML = '<h2>'+escapeHtml(session.interviewTitle||'Interview')+'</h2>'
+    + '<p class="sub">'+escapeHtml(guestIntro)+'</p>'
+    + '<div class="sfield"><label>Your name</label><input id="guest-name" placeholder="Enter your full name" value="'+escapeHtml(session.guestName||'')+'" /></div>'
+    + '<div class="sfield"><label>Your email</label><input id="guest-email" type="email" placeholder="email@example.com" value="'+escapeHtml(session.guestEmail||'')+'" /></div>'
+    + '<div style="display:flex;flex-direction:column;gap:14px;margin-top:24px">'+questionsHtml+'</div>'
+    + '<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><button class="btn-lg" onclick="saveGuestInterviewProgress()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Save progress</button><button class="btn-lg btn-y" onclick="submitGuestInterviewResponses()">Submit responses</button></div>'
+    + '<div id="guest-save-status" class="hint" style="margin-top:12px"></div>';
+  content.style.display = 'block';
+}
+function collectGuestInterviewAnswers() {
+  var guestName = document.getElementById('guest-name') ? document.getElementById('guest-name').value.trim() : '';
+  var guestEmail = document.getElementById('guest-email') ? document.getElementById('guest-email').value.trim() : '';
+  var rawAnswers = Array.from(document.querySelectorAll('.guest-answer')).map(function(el) {
+    return {
+      questionId: el.getAttribute('data-question-id') || '',
+      order: parseInt(el.getAttribute('data-order')||'0', 10),
+      question: el.getAttribute('data-question') || '',
+      answerHtml: el.innerHTML,
+      answerText: el.innerText.trim()
+    };
+  });
+  return {guestName:guestName, guestEmail:guestEmail, rawAnswers:rawAnswers};
+}
+function saveGuestInterviewProgress() {
+  var status = document.getElementById('guest-save-status');
+  var data = collectGuestInterviewAnswers();
+  if (!window._guestInterviewKey || !db) { if(status) status.textContent = 'Could not save right now.'; return; }
+  db.collection('interview_sessions').doc(window._guestInterviewKey).update({
+    status: 'in_progress',
+    guestName: data.guestName,
+    guestEmail: data.guestEmail,
+    rawAnswers: data.rawAnswers,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() {
+    if (status) status.textContent = 'Progress saved.';
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not save progress: '+err.message;
+  });
+}
+function submitGuestInterviewResponses() {
+  var data = collectGuestInterviewAnswers();
+  if (!data.guestName) { alert('Please enter your name before submitting.'); document.getElementById('guest-name').focus(); return; }
+  if (!data.guestEmail) { alert('Please enter your email before submitting.'); document.getElementById('guest-email').focus(); return; }
+  var missing = data.rawAnswers.find(function(a){return !a.answerText;});
+  if (missing) {
+    alert('Please answer every question before submitting.');
+    var el = document.querySelector('.guest-answer[data-question-id="'+missing.questionId+'"]');
+    if (el) el.scrollIntoView({behavior:'smooth', block:'center'});
+    if (el) el.focus();
+    return;
+  }
+  var status = document.getElementById('guest-save-status');
+  db.collection('interview_sessions').doc(window._guestInterviewKey).update({
+    status: 'submitted',
+    guestName: data.guestName,
+    guestEmail: data.guestEmail,
+    rawAnswers: data.rawAnswers,
+    submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() {
+    if (status) status.textContent = 'Refining your responses for review...';
+    window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, data, {status:'submitted'});
+    return refineGuestInterviewAnswers(data);
+  }).catch(function(err) {
+    if (status) status.textContent = err && err._rawSaved ? 'We could not refine your responses right now. Your original responses have been saved.' : 'Could not submit responses: '+err.message;
+  });
+}
+function refineGuestInterviewAnswers(data) {
+  var session = window._guestInterviewSession || {};
+  var qaJson = JSON.stringify(data.rawAnswers.map(function(a) {
+    return {questionId:a.questionId, order:a.order, question:a.question, answer:a.answerText};
+  }), null, 2);
+var prompt = `Use the editorial brief provided before this prompt for Wocult interview answer refinement.
+
+The guest has answered an interview. Refine only the answers. Do not change the questions.
+
+Guest name:
+${data.guestName}
+
+Interview title:
+${session.interviewTitle||''}
+
+Original Q&A:
+${qaJson}
+
+Requirements:
+- Keep every original question unchanged.
+- Refine only the answer text.
+- Preserve the guest’s meaning, point of view, lived experience, specific examples, and personal details.
+- Use plain English.
+- Remove repetition, filler, jargon, and vague phrases.
+- Do not invent facts, examples, claims, or personal details.
+- Do not add new questions.
+- Do not remove questions.
+- Return the same number of answers in the same order.
+
+Return ONLY valid JSON:
+{
+  "refinedAnswers": [
+    {
+      "questionId": "q1",
+      "order": 1,
+      "question": "Original question unchanged",
+      "refinedAnswerHtml": "<p>Refined answer here</p>",
+      "refinedAnswerText": "Refined answer here"
+    }
+  ]
+}`;
+  return fetch(WORKER+'/generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      briefType:'interviewAnswers',
+      model:'claude-sonnet-4-20250514',
+      max_tokens:3000,
+      messages:[{role:'user',content:prompt}]
+    })
+  }).then(function(r){return r.json();}).then(function(res) {
+    if (res.error) throw new Error(res.error.message);
+    var txt = (res.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
+    if (s===-1) throw new Error('No JSON in response');
+    var parsed = JSON.parse(txt.slice(s,e+1));
+    var refinedAnswers = (parsed.refinedAnswers||[]).map(function(a, i) {
+      var raw = data.rawAnswers[i] || {};
+      return {
+        questionId: a.questionId || raw.questionId || ('q'+(i+1)),
+        order: a.order || raw.order || (i+1),
+        question: raw.question || a.question || '',
+        refinedAnswerHtml: a.refinedAnswerHtml || ('<p>'+escapeHtml(a.refinedAnswerText||raw.answerText||'')+'</p>'),
+        refinedAnswerText: a.refinedAnswerText || ''
+      };
+    });
+    return db.collection('interview_sessions').doc(window._guestInterviewKey).update({
+      status: 'refined',
+      refinedAnswers: refinedAnswers,
+      refinedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function() {
+      window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, {refinedAnswers:refinedAnswers, status:'refined'});
+      renderGuestRefinedReview(refinedAnswers);
+    });
+  }).catch(function(err) {
+    err._rawSaved = true;
+    throw err;
+  });
+}
+function renderGuestRefinedReview(refinedAnswers) {
+  hideAllAppScreens();
+  document.getElementById('guest-placeholder').style.display = 'flex';
+  document.getElementById('guest-message').style.display = 'none';
+  var session = window._guestInterviewSession || {};
+  var content = document.getElementById('guest-interview-content');
+  var answersHtml = refinedAnswers.map(function(a, i) {
+    return '<div class="sfield" style="padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
+      + '<label>Question '+(i+1)+'</label>'
+      + '<div style="font-size:15px;line-height:1.6;margin-bottom:12px;color:var(--blk)">'+escapeHtml(a.question||'')+'</div>'
+      + '<div class="guest-refined-answer" contenteditable="true" data-question-id="'+escapeHtml(a.questionId||('q'+(i+1)))+'" data-order="'+(a.order||i+1)+'" data-question="'+escapeHtml(a.question||'')+'" style="border:1px solid var(--bdr);border-radius:8px;min-height:120px;padding:12px;background:#fff;outline:none;font-size:14px;line-height:1.7">'+(a.refinedAnswerHtml||'')+'</div>'
+      + '</div>';
+  }).join('');
+  content.innerHTML = '<h2>Review your refined responses</h2>'
+    + '<p class="sub">We have lightly refined your answers for clarity. Please review and edit anything before final submission.</p>'
+    + '<div style="font-size:13px;color:var(--g3);margin-bottom:18px">Name: '+escapeHtml(session.guestName||'')+'<br>Email: '+escapeHtml(session.guestEmail||'')+'</div>'
+    + '<div style="display:flex;flex-direction:column;gap:14px">'+answersHtml+'</div>'
+    + '<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><button class="btn-lg" onclick="renderGuestInterview(window._guestInterviewSession)" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to responses</button><button class="btn-lg btn-y" onclick="finalSubmitGuestInterview()">Final submit</button></div>'
+    + '<div id="guest-review-status" class="hint" style="margin-top:12px"></div>';
+  content.style.display = 'block';
+}
+function collectGuestRefinedAnswers() {
+  return Array.from(document.querySelectorAll('.guest-refined-answer')).map(function(el) {
+    return {
+      questionId: el.getAttribute('data-question-id') || '',
+      order: parseInt(el.getAttribute('data-order')||'0', 10),
+      question: el.getAttribute('data-question') || '',
+      refinedAnswerHtml: el.innerHTML,
+      refinedAnswerText: el.innerText.trim()
+    };
+  });
+}
+function finalSubmitGuestInterview() {
+  var refinedAnswers = collectGuestRefinedAnswers();
+  var missing = refinedAnswers.find(function(a){return !a.refinedAnswerText;});
+  if (missing) {
+    alert('Please fill in every refined answer before final submission.');
+    var el = document.querySelector('.guest-refined-answer[data-question-id="'+missing.questionId+'"]');
+    if (el) el.scrollIntoView({behavior:'smooth', block:'center'});
+    if (el) el.focus();
+    return;
+  }
+  var status = document.getElementById('guest-review-status');
+  db.collection('interview_sessions').doc(window._guestInterviewKey).update({
+    status: 'final',
+    refinedAnswers: refinedAnswers,
+    finalSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() {
+    window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, {refinedAnswers:refinedAnswers, status:'final'});
+    if (status) status.textContent = 'Thank you. Your responses have been submitted to Wocult.';
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not submit final responses: '+err.message;
+  });
+}
 function goToLanding() {
-  if (currentAccessMode === 'guest') { showGuestPlaceholder(currentAccessKey); return; }
+  if (currentAccessMode === 'guest') { loadGuestInterview(currentAccessKey); return; }
   if (currentAccessMode !== 'staff') { showAccessScreen(); return; }
   document.getElementById('main').style.display = 'none';
   document.getElementById('workflow').style.display = 'none';
@@ -809,6 +1071,7 @@ function saveInterviewSession() {
   var result = document.getElementById('interview-link-result');
   var title = document.getElementById('interview-title').value.trim();
   var brief = document.getElementById('interview-brief').value.trim();
+  var guestIntro = document.getElementById('interview-guest-intro-refined') ? document.getElementById('interview-guest-intro-refined').value.trim() : interviewQuestionState.guestIntro;
   syncRenderedInterviewQuestions();
   var questions = interviewQuestionState.questions.map(function(q, i) {
     return {id:'q'+(i+1), order:i+1, question:(q.question||'').trim()};
@@ -816,6 +1079,7 @@ function saveInterviewSession() {
   if (!db) { status.textContent = 'Firebase is not connected. Could not create guest link.'; return; }
   if (!title) { alert('Please enter an interview title.'); document.getElementById('interview-title').focus(); return; }
   if (!brief) { alert('Please enter an interview brief.'); document.getElementById('interview-brief').focus(); return; }
+  if (!guestIntro) { alert('Please add the guest-facing interview introduction.'); document.getElementById('interview-guest-intro-refined') ? document.getElementById('interview-guest-intro-refined').focus() : document.getElementById('interview-guest-intro').focus(); return; }
   if (!questions.length) { alert('Please generate or add at least one question.'); return; }
   if (questions.some(function(q){return !q.question;})) { alert('Please fill in every question before generating a guest link.'); return; }
   var guestKey = generateGuestInterviewKey();
@@ -829,6 +1093,7 @@ function saveInterviewSession() {
     createdBy: 'staff',
     interviewTitle: title,
     topicBrief: brief,
+    guestIntro: guestIntro,
     questionCount: questions.length,
     questions: questions,
     guestName: '',
@@ -844,6 +1109,7 @@ function saveInterviewSession() {
   db.collection('interview_sessions').doc(guestKey).set(data).then(function() {
     interviewQuestionState.title = title;
     interviewQuestionState.brief = brief;
+    interviewQuestionState.guestIntro = guestIntro;
     interviewQuestionState.count = questions.length;
     interviewQuestionState.questions = questions;
     interviewQuestionState.guestKey = guestKey;
@@ -877,13 +1143,16 @@ function renderInterviewQuestions() {
 function generateInterviewQuestions() {
   var title = document.getElementById('interview-title').value.trim();
   var brief = document.getElementById('interview-brief').value.trim();
+  var guestIntro = document.getElementById('interview-guest-intro').value.trim();
   var questionCount = parseInt(document.getElementById('interview-count').value, 10);
   var btn = document.getElementById('interview-generate-btn');
   var status = document.getElementById('interview-status');
   if (!brief) { alert('Please enter an interview brief.'); document.getElementById('interview-brief').focus(); return; }
+  if (!guestIntro) { alert('Please add the guest-facing interview introduction.'); document.getElementById('interview-guest-intro').focus(); return; }
   if (!questionCount || questionCount < 3 || questionCount > 20) { alert('Please choose between 3 and 20 questions.'); document.getElementById('interview-count').focus(); return; }
   interviewQuestionState.title = title;
   interviewQuestionState.brief = brief;
+  interviewQuestionState.guestIntro = guestIntro;
   interviewQuestionState.count = questionCount;
   btn.disabled = true;
   btn.textContent = 'Generating...';
@@ -898,10 +1167,14 @@ ${title}
 Interview brief:
 ${brief}
 
+Guest-facing interview introduction:
+${guestIntro}
+
 Number of questions:
 ${questionCount}
 
 Requirements:
+- Refine the guest-facing introduction so it is clear, inviting, and around 100 words.
 - Return exactly ${questionCount} questions.
 - Questions must be direct, clear, specific, and useful.
 - Avoid generic PR questions.
@@ -913,6 +1186,7 @@ Requirements:
 
 Return ONLY valid JSON:
 {
+  "guestIntro": "Refined guest-facing intro, around 100 words",
   "questions": [
     {"id":"q1","question":"Question text here"},
     {"id":"q2","question":"Question text here"}
@@ -933,6 +1207,9 @@ Return ONLY valid JSON:
     var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
     if (s===-1) throw new Error('No JSON in response');
     var parsed = JSON.parse(txt.slice(s,e+1));
+    interviewQuestionState.guestIntro = parsed.guestIntro || guestIntro;
+    document.getElementById('interview-guest-intro-refined').value = interviewQuestionState.guestIntro;
+    document.getElementById('interview-guest-intro-review').style.display = 'block';
     interviewQuestionState.questions = (parsed.questions||[]).slice(0, questionCount).map(function(q, i) {
       return {id:q.id||('q'+(i+1)), question:q.question||''};
     });
@@ -1275,9 +1552,12 @@ var af = 'all';
 var activeTab = 'cards';
 var currentCard = null;
 var generatedContent = {};
+window._guestInterviewSession = null;
+window._guestInterviewKey = '';
 var interviewQuestionState = {
   title: '',
   brief: '',
+  guestIntro: '',
   count: 0,
   questions: [],
   guestKey: '',
