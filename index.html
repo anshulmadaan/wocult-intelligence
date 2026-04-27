@@ -587,7 +587,13 @@ function startGenerationDirect(sourceInfo) {
   var prompt = 'You are a senior editor at Wocult — an independent Indian media platform covering work, culture, and life for modern working professionals.\n\nThis is a FIRST-PERSON SUBMISSION from a reader. Your job is to shape their raw story into a polished Wocult piece in their voice — not rewrite it as journalism. Preserve their perspective, their specific details, their emotional truth. Add structure, clarity, and Wocult editorial quality. Do not generalise or abstract what they have shared — the specificity is the value.\n\nWocult voice: Direct, warm, honest. Peer-to-peer with a smart Indian professional. Never preachy.\n\nFormatting: Sentence case titles and subheadings. No italics except quotes. No bold in body.\n\n'+sourceInfo+'\n\nReturn ONLY valid JSON, no markdown:\n{"title":"original headline max 12 words","slug":"url-slug","shortIntro":"15-20 word hook — human, intriguing","intro40":"exactly 40 word intro","excerpt":"100 word summary","introRichText":"<p>first 100 words as HTML</p>","body":"<p>article HTML. 4 punchy h3 subheadings. 800-1000 words. Flowing prose. First-person voice preserved. End with a thought not a prescription.</p>","readTime":"X min read"}';
   fetch(WORKER+'/generate', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, tools:[{"type":"web_search_20250305","name":"web_search"}], messages:[{role:'user',content:prompt}]})
+    body:JSON.stringify({
+  briefType:'scratch',
+  model:'claude-sonnet-4-20250514',
+  max_tokens:3000,
+  tools:[{"type":"web_search_20250305","name":"web_search"}],
+  messages:[{role:'user',content:prompt}]
+})
   }).then(function(r){return r.json();}).then(function(data){
     clearInterval(anim);
     steps.forEach(function(s){var el=document.getElementById(s);if(el){el.classList.remove('active');el.classList.add('done');}});
@@ -1072,7 +1078,13 @@ function startGeneration() {
   fetch(WORKER+'/generate', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, tools: genTools.length ? genTools : undefined, messages:[{role:'user',content:urlInstruction+prompt}]})
+    body:JSON.stringify({
+  briefType:'generation',
+  model:'claude-sonnet-4-20250514',
+  max_tokens:3000,
+  tools: genTools.length ? genTools : undefined,
+  messages:[{role:'user',content:urlInstruction+prompt}]
+})
   }).then(function(r){return r.json();}).then(function(data) {
     clearInterval(anim);
     steps.forEach(function(s){var el=document.getElementById(s);el.classList.remove('active');el.classList.add('done');});
@@ -1167,7 +1179,13 @@ function sendChatMessage() {
   fetch(WORKER+'/generate', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, tools:[{"type":"web_search_20250305","name":"web_search"}], messages: window._chatHistory})
+    body: JSON.stringify({
+      briefType:'refine',
+      model:'claude-sonnet-4-20250514',
+      max_tokens:3000,
+      tools:[{"type":"web_search_20250305","name":"web_search"}],
+      messages: window._chatHistory
+})
   }).then(function(r){return r.json();}).then(function(data) {
     var thinking = document.getElementById('chat-thinking');
     if (thinking) thinking.remove();
@@ -1259,7 +1277,12 @@ function proceedToReview() {
       var learnPrompt = 'You are analyzing editorial changes made to a Wocult article draft.\n\nVersion 1 (AI original):\n'+v1Text.substring(0,3000)+'\n\nFinal version (editor approved):\n'+vLatestText.substring(0,3000)+'\n\nCompare these versions carefully. Extract 1-3 SPECIFIC editorial preferences the editor demonstrated through their changes. Be specific and actionable — not generic advice.\nReturn ONLY a JSON array of strings. Example: ["Always start with a specific real situation, not a general observation","Avoid corporate jargon like \'leverage\' or \'ecosystem\' — use plain words"]\nReturn [] if changes are too minor to reveal clear preferences.';
       fetch(WORKER+'/generate', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:500, messages:[{role:'user',content:learnPrompt}]})
+        body: JSON.stringify({
+          briefType:'memory',
+          model:'claude-sonnet-4-20250514',
+          max_tokens:500,
+          messages:[{role:'user',content:learnPrompt}]
+})
       }).then(function(r){return r.json();}).then(function(data){
         var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
         var s = txt.indexOf('['); var e = txt.lastIndexOf(']');
@@ -1290,7 +1313,12 @@ function updateDraft() {
   box.innerHTML += '<div class="chat-msg-thinking" id="chat-thinking">Wocult is thinking...</div>';
   fetch(WORKER+'/generate', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:3000, messages: msgs})
+    body: JSON.stringify({
+      briefType:'refine',
+      model:'claude-sonnet-4-20250514',
+      max_tokens:3000,
+      messages: msgs
+})
   }).then(function(r){return r.json();}).then(function(data) {
     var thinking = document.getElementById('chat-thinking');
     if (thinking) thinking.remove();
