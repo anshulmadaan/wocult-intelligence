@@ -9,7 +9,7 @@ export default {
     };
 
     const jsonResponse = (data, status = 200) => {
-      return new Response(JSON.stringify(data), {
+      return new Response(JSON.stringify(data, null, 2), {
         status,
         headers: { ...cors, 'Content-Type': 'application/json' },
       });
@@ -19,63 +19,86 @@ export default {
       return new Response(null, { headers: cors });
     }
 
-    // /generate — proxy to Anthropic
+    // /generate — proxy to Anthropic, with Firebase editorial brief injection
     if (url.pathname === '/generate') {
       try {
         const body = await request.json();
 
-// Fetch editorial brief from Firebase
-let editorialBrief = '';
+        // Debug flag: confirms Firebase brief injection without calling Anthropic
+        const debugBrief = body.debugBrief === true;
+        delete body.debugBrief;
 
-try {
-  const briefType = body.briefType || 'generation';
+        // Which Firebase prompt to use: generation, scratch, refine, etc.
+        const briefType = body.briefType || 'generation';
 
-  // Remove briefType before forwarding body to Anthropic
-  delete body.briefType;
+        // Remove briefType before forwarding request to Anthropic
+        delete body.briefType;
 
-  const fbRes = await fetch(
-    'https://firestore.googleapis.com/v1/projects/wocult-tasks/databases/(default)/documents/editorial_config/editorial_brief'
-  );
+        // Fetch editorial brief from Firebase
+        let editorialBrief = '';
+        let briefInserted = false;
 
-  const fbData = await fbRes.json();
-  const fields = fbData.fields || {};
+        try {
+          const fbRes = await fetch(
+            'https://firestore.googleapis.com/v1/projects/wocult-tasks/databases/(default)/documents/editorial_config/editorial_brief'
+          );
 
-  editorialBrief = fields[briefType]?.stringValue || '';
-} catch (e) {
-  // Brief fetch failed silently — generation continues without it
-}
+          const fbData = await fbRes.json();
+          const fields = fbData.fields || {};
 
-// Prepend brief to first user message if brief exists
-if (editorialBrief && body.messages?.length) {
-  const first = body.messages[0];
+          editorialBrief = fields[briefType]?.stringValue || '';
+        } catch (e) {
+          // Brief fetch failed silently — generation continues without it
+          editorialBrief = '';
+        }
 
-  if (first.role === 'user') {
-    if (typeof first.content === 'string') {
-      body.messages[0] = {
-        ...first,
-        content: editorialBrief + '\n\n' + first.content,
-      };
-    } else if (Array.isArray(first.content)) {
-      const firstTextIndex = first.content.findIndex(
-        (block) => block.type === 'text' && typeof block.text === 'string'
-      );
+        // Prepend Firebase brief to first user message if brief exists
+        if (editorialBrief && body.messages?.length) {
+          const first = body.messages[0];
 
-      if (firstTextIndex >= 0) {
-        const updatedContent = [...first.content];
+          if (first.role === 'user') {
+            if (typeof first.content === 'string') {
+              body.messages[0] = {
+                ...first,
+                content: editorialBrief + '\n\n' + first.content,
+              };
 
-        updatedContent[firstTextIndex] = {
-          ...updatedContent[firstTextIndex],
-          text: editorialBrief + '\n\n' + updatedContent[firstTextIndex].text,
-        };
+              briefInserted = true;
+            } else if (Array.isArray(first.content)) {
+              const firstTextIndex = first.content.findIndex(
+                (block) => block.type === 'text' && typeof block.text === 'string'
+              );
 
-        body.messages[0] = {
-          ...first,
-          content: updatedContent,
-        };
-      }
-    }
-  }
-}
+              if (firstTextIndex >= 0) {
+                const updatedContent = [...first.content];
+
+                updatedContent[firstTextIndex] = {
+                  ...updatedContent[firstTextIndex],
+                  text: editorialBrief + '\n\n' + updatedContent[firstTextIndex].text,
+                };
+
+                body.messages[0] = {
+                  ...first,
+                  content: updatedContent,
+                };
+
+                briefInserted = true;
+              }
+            }
+          }
+        }
+
+        // Debug proof without calling Anthropic or exposing full prompt
+        if (debugBrief) {
+          return jsonResponse({
+            debugMode: true,
+            briefType,
+            briefFound: Boolean(editorialBrief),
+            briefInserted,
+            editorialBriefLength: editorialBrief.length,
+            messageCount: body.messages?.length || 0,
+          });
+        }
 
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -205,58 +228,63 @@ if (editorialBrief && body.messages?.length) {
       }
     }
 
-    // /debug — local check for env values without exposing keys
-  if (url.pathname === '/debug') {
-  return jsonResponse({
-    workerVersion: 'firebase-brief-v1',
-    updatedAt: '2026-04-27',
-    hasAnthropicKey: Boolean(env.ANTHROPIC_API_KEY),
-    hasWebflowToken: Boolean(env.WEBFLOW_TOKEN),
-    hasNewsDataKey: Boolean(env.NEWSDATA_API_KEY),
-    newsDataKeyStartsWithPub: env.NEWSDATA_API_KEY
-      ? env.NEWSDATA_API_KEY.startsWith('pub_')
-      : false,
-  });
-}
-// /debug-brief — checks whether Worker can read Firebase editorial brief
-if (url.pathname === '/debug-brief') {
-  try {
-    const fbRes = await fetch(
-      'https://firestore.googleapis.com/v1/projects/wocult-tasks/databases/(default)/documents/editorial_config/editorial_brief'
-    );
+    // /debug — checks Worker secrets without exposing values
+    if (url.pathname === '/debug') {
+      return jsonResponse({
+        workerVersion: 'firebase-brief-v2',
+        updatedAt: '2026-04-27',
+        hasAnthropicKey: Boolean(env.ANTHROPIC_API_KEY),
+        hasWebflowToken: Boolean(env.WEBFLOW_TOKEN),
+        hasNewsDataKey: Boolean(env.NEWSDATA_API_KEY),
+        newsDataKeyStartsWithPub: env.NEWSDATA_API_KEY
+          ? env.NEWSDATA_API_KEY.trim().startsWith('pub_')
+          : false,
+      });
+    }
 
-    const fbData = await fbRes.json();
-    const fields = fbData.fields || {};
+    // /debug-brief — checks whether Worker can read Firebase editorial brief
+    if (url.pathname === '/debug-brief') {
+      try {
+        const fbRes = await fetch(
+          'https://firestore.googleapis.com/v1/projects/wocult-tasks/databases/(default)/documents/editorial_config/editorial_brief'
+        );
 
-    const readField = (name) => fields[name]?.stringValue || '';
+        const fbData = await fbRes.json();
+        const fields = fbData.fields || {};
 
-    return jsonResponse({
-      firebaseConnected: fbRes.ok,
-      firebaseStatus: fbRes.status,
-      documentFound: Boolean(fbData.name),
-      documentPath: fbData.name || null,
-      briefs: {
-        generation: {
-          exists: Boolean(readField('generation')),
-          length: readField('generation').length,
-        },
-        refine: {
-          exists: Boolean(readField('refine')),
-          length: readField('refine').length,
-        },
-        scratch: {
-          exists: Boolean(readField('scratch')),
-          length: readField('scratch').length,
-        },
-      },
-    });
-  } catch (e) {
-    return jsonResponse({
-      firebaseConnected: false,
-      error: e.message,
-    }, 500);
-  }
-}
+        const readField = (name) => fields[name]?.stringValue || '';
+
+        return jsonResponse({
+          firebaseConnected: fbRes.ok,
+          firebaseStatus: fbRes.status,
+          documentFound: Boolean(fbData.name),
+          documentPath: fbData.name || null,
+          briefs: {
+            generation: {
+              exists: Boolean(readField('generation')),
+              length: readField('generation').length,
+            },
+            refine: {
+              exists: Boolean(readField('refine')),
+              length: readField('refine').length,
+            },
+            scratch: {
+              exists: Boolean(readField('scratch')),
+              length: readField('scratch').length,
+            },
+          },
+        });
+      } catch (e) {
+        return jsonResponse(
+          {
+            firebaseConnected: false,
+            error: e.message,
+          },
+          500
+        );
+      }
+    }
+
     // Default route — NewsData.io
     const rawQ = url.searchParams.get('q');
     const q = rawQ && rawQ.trim() ? rawQ.trim() : 'india workforce hiring layoffs';
@@ -268,13 +296,15 @@ if (url.pathname === '/debug-brief') {
         finalQ: q,
         hasNewsDataKey: Boolean(env.NEWSDATA_API_KEY),
         keyStartsWithPub: env.NEWSDATA_API_KEY
-          ? env.NEWSDATA_API_KEY.startsWith('pub_')
+          ? env.NEWSDATA_API_KEY.trim().startsWith('pub_')
           : false,
       });
     }
 
     const ndUrl = new URL('https://newsdata.io/api/1/latest');
-    ndUrl.searchParams.set('apikey', env.NEWSDATA_API_KEY || '');
+    const newsDataKey = (env.NEWSDATA_API_KEY || '').trim();
+
+    ndUrl.searchParams.set('apikey', newsDataKey);
     ndUrl.searchParams.set('q', q);
     ndUrl.searchParams.set('country', 'in');
     ndUrl.searchParams.set('language', 'en');
