@@ -142,6 +142,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
 <script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
 <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 </head>
@@ -164,6 +165,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
     <button class="btn btn-ghost" onclick="goToLanding()" style="font-size:11px;display:none" id="btn-back-landing">← Home</button>
     <button class="btn" id="rbtn" onclick="loadAll()" style="display:none">Refresh</button>
+    <button class="btn btn-ghost" onclick="logout()" style="font-size:11px;display:none" id="btn-logout">Logout</button>
   </div>
 </div>
 
@@ -196,10 +198,11 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 <div id="access-screen" class="landing">
   <div class="url-entry">
     <h2>Wocult Intelligence</h2>
-    <p>Enter your access key to continue.</p>
-    <input class="wf-input" id="access-key-input" placeholder="Access key" style="font-size:14px;text-transform:uppercase" onkeydown="if(event.key==='Enter')submitAccessKey()" />
+    <p>Sign in with Google to continue.</p>
+    <input class="wf-input" id="access-key-input" placeholder="Interview access key" style="display:none;font-size:14px;text-transform:uppercase" onkeydown="if(event.key==='Enter')submitAccessKey()" />
     <div id="access-error" style="display:none;color:var(--red);font-size:13px;line-height:1.5"></div>
-    <button class="btn-lg btn-y" onclick="submitAccessKey()" style="align-self:flex-start;padding:12px 28px">Continue</button>
+    <button class="btn-lg btn-y" onclick="signInWithGoogle()" style="align-self:flex-start;padding:12px 28px">Continue with Google</button>
+    <p class="hint">Interview guests with INT links can continue directly from their invitation link.</p>
   </div>
 </div>
 
@@ -212,6 +215,68 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       <div style="font-size:13px;color:var(--g3);padding:10px 12px;border:1px solid var(--bdr);border-radius:8px;background:#fff">Key: <span id="guest-key-display"></span></div>
     </div>
     <div id="guest-interview-content" style="display:none"></div>
+  </div>
+</div>
+
+<!-- GUEST WRITER REGISTRATION -->
+<div id="guest-writer-registration" class="landing" style="display:none;padding-top:32px">
+  <div class="scratch-screen">
+    <h2>Guest Writer application</h2>
+    <p class="sub">Tell us about yourself and the story you want to write for Wocult.</p>
+    <div class="sfield"><label>Full name</label><input id="gw-fullName" /></div>
+    <div class="sfield"><label>Email</label><input id="gw-email" readonly /></div>
+    <div class="sfield"><label>Phone number</label><input id="gw-phone" /></div>
+    <div class="sfield"><label>Location</label><input id="gw-location" /></div>
+    <div class="sfield"><label>Date of birth</label><input id="gw-dateOfBirth" type="date" /></div>
+    <div class="sfield"><label>Preferred section</label><select id="gw-preferredSection" onchange="document.getElementById('gw-other-wrap').style.display=this.value==='Other'?'block':'none'" class="wf-input"><option>Health</option><option>Parenting</option><option>Gaming</option><option>Travel</option><option>Food</option><option>Performance dressing</option><option>Look your best</option><option>Power accessories</option><option>Books</option><option>Music</option><option>Films</option><option>Sport</option><option>Clubs</option><option>Other</option></select></div>
+    <div class="sfield" id="gw-other-wrap" style="display:none"><label>Tell us the section you have in mind</label><input id="gw-otherSection" /></div>
+    <div class="sfield"><label>Short bio</label><textarea id="gw-shortBio" rows="4"></textarea></div>
+    <div class="sfield"><label>What would you like to write about?</label><textarea id="gw-storyPitch" rows="4"></textarea></div>
+    <div class="sfield"><label>Why do you want to write for Wocult?</label><textarea id="gw-whyWriteForWocult" rows="4"></textarea></div>
+    <div class="sfield"><label>What experience or perspective do you bring to this topic?</label><textarea id="gw-experiencePerspective" rows="4"></textarea></div>
+    <div class="sfield"><label>LinkedIn / website / portfolio link optional</label><input id="gw-linkedinOrPortfolio" /></div>
+    <button class="btn-lg btn-y" onclick="submitGuestWriterRegistration()" style="width:100%">Submit application</button>
+    <div id="gw-registration-status" class="hint" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<div id="guest-writer-pending" class="landing" style="display:none">
+  <div class="scratch-screen">
+    <h2>Thank you for your interest in writing for Wocult.</h2>
+    <p class="sub">We’ve received your guest writer application and our editorial team is reviewing it. If approved, you’ll get access to the Wocult writing tool where you can draft and submit your story.</p>
+    <p class="sub">We’re looking for honest, thoughtful, experience-led writing — not polished perfection.</p>
+  </div>
+</div>
+
+<div id="guest-writer-dashboard" class="landing" style="display:none">
+  <div class="landing-hero">
+    <h1>Guest Writer dashboard</h1>
+    <p>Draft and submit your Wocult story.</p>
+  </div>
+  <div class="landing-cards" style="grid-template-columns:repeat(2,1fr)">
+    <div class="lcard" onclick="startGuestWriterStory()">
+      <div class="lcard-icon">✍</div>
+      <div class="lcard-title">Start a new story</div>
+      <div class="lcard-desc">Use the Wocult writing tool to shape your experience or perspective into a story.</div>
+      <div class="lcard-cta">Start writing →</div>
+    </div>
+    <div class="lcard" onclick="showGuestWriterStories()">
+      <div class="lcard-icon">MS</div>
+      <div class="lcard-title">My stories</div>
+      <div class="lcard-desc">See saved drafts and submitted stories.</div>
+      <div class="lcard-cta">Open stories →</div>
+    </div>
+  </div>
+</div>
+
+<div id="guest-writer-stories" class="landing" style="display:none;padding-top:32px">
+  <div class="scratch-screen" style="max-width:900px">
+    <button onclick="showGuestWriterDashboard()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back</button>
+    <h2>My stories</h2>
+    <p class="sub">Drafts can be edited and submitted. Stories under review, scheduled, or published are view-only for now.</p>
+    <button class="btn" onclick="loadGuestWriterStories({force:true})" style="margin-bottom:12px">Refresh</button>
+    <div id="guest-writer-stories-status" class="hint" style="margin-bottom:12px"></div>
+    <div id="guest-writer-stories-list" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
 </div>
 
@@ -264,6 +329,24 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
         <div class="lcard-title">Guest submissions</div>
         <div class="lcard-desc">Review guest interview responses and final Q&A submissions.</div>
         <div class="lcard-cta">Review submissions →</div>
+      </div>
+        </div>
+      </section>
+      <div style="height:1px;background:var(--bdr);width:100%"></div>
+      <section>
+        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Community</h2>
+        <div class="landing-cards" style="grid-template-columns:repeat(2,1fr)">
+      <div class="lcard" onclick="showGuestWriterApplications()">
+        <div class="lcard-icon">GW</div>
+        <div class="lcard-title">Guest writer applications</div>
+        <div class="lcard-desc">Review recent Guest Writer applications and approve access to the writing tool.</div>
+        <div class="lcard-cta">Review applications →</div>
+      </div>
+      <div class="lcard" onclick="showStaffGuestWriterStories()">
+        <div class="lcard-icon">ST</div>
+        <div class="lcard-title">Guest writer stories</div>
+        <div class="lcard-desc">Review submitted Guest Writer drafts and update editorial status.</div>
+        <div class="lcard-cta">Review stories →</div>
       </div>
         </div>
       </section>
@@ -360,6 +443,40 @@ There are no right or wrong answers here. Please answer openly and in your own v
           <button id="interview-submissions-load-more" class="btn" onclick="loadMoreInterviewSubmissions()" style="display:none;margin-top:12px;width:100%">Load more</button>
         </div>
         <div id="interview-submission-detail" style="min-height:180px;padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:14px;line-height:1.6">Select a submission to review the Q&A.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guest writer applications screen -->
+  <div id="landing-guest-writer-applications" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:980px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
+        <button class="btn" onclick="loadGuestWriterApplications({force:true})">Refresh</button>
+      </div>
+      <h2>Guest writer applications</h2>
+      <p class="sub">Review recent Guest Writer applications.</p>
+      <div id="guest-writer-applications-status" class="hint" style="margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:16px;align-items:start">
+        <div id="guest-writer-applications-list" style="display:flex;flex-direction:column;gap:10px"></div>
+        <div id="guest-writer-application-detail" style="min-height:180px;padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:14px;line-height:1.6">Select an application to review.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guest writer stories screen -->
+  <div id="landing-guest-writer-stories" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:980px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
+        <button class="btn" onclick="loadStaffGuestWriterStories({force:true})">Refresh</button>
+      </div>
+      <h2>Guest writer stories</h2>
+      <p class="sub">Review Guest Writer stories and update status.</p>
+      <div id="staff-guest-writer-stories-status" class="hint" style="margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:16px;align-items:start">
+        <div id="staff-guest-writer-stories-list" style="display:flex;flex-direction:column;gap:10px"></div>
+        <div id="staff-guest-writer-story-detail" style="min-height:180px;padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:14px;line-height:1.6">Select a story to review.</div>
       </div>
     </div>
   </div>
@@ -628,6 +745,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <div id="publish-result" style="display:none"></div>
   <div class="wf-actions" id="publish-actions">
     <button class="btn-lg" onclick="showWorkflowStep('refine')" style="background:var(--gray);border:none;cursor:pointer">← Back to Refine</button>
+    <button class="btn-lg" id="guest-writer-save-draft-btn" onclick="saveGuestWriterDraft('draft')" style="display:none;background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Save draft</button>
     <button class="btn-lg" onclick="exportCSV()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Export CSV</button>
     <button class="btn-lg btn-y" id="publish-btn" onclick="submitArticle()">Submit</button>
   </div>
@@ -642,6 +760,7 @@ var cards = [];
 
 // Firebase init
 var db = null;
+var auth = null;
 try {
   firebase.initializeApp({
     apiKey: 'AIzaSyBg_ELUjlWMiFKzrykPm9O002tIA-TB1OY',
@@ -652,6 +771,7 @@ try {
     appId: '1:252618445525:web:7dbee6310fcc293040c85c'
   });
   db = firebase.firestore();
+  auth = firebase.auth();
 } catch(e) { console.warn('Firebase init failed:', e.message); }
 var _memoryNotes = [];
 
@@ -672,42 +792,89 @@ var workflowHasBriefStep = true;
 var workflowPreviousLandingScreen = '';
 var currentAccessMode = '';
 var currentAccessKey = '';
+var STAFF_EMAILS = [
+  "poorvi.arya23@gmail.com",
+  "divya.madaan@gmail.com",
+  "anmadaan@gmail.com"
+];
+var currentUser = null;
+var currentGuestWriterProfile = null;
+var currentGuestWriterArticleId = '';
+window._guestWriterStories = [];
+window._guestWriterStoriesLoaded = false;
+window._guestWriterStoriesLoading = false;
+window._guestWriterApplications = [];
+window._guestWriterApplicationsLoaded = false;
+window._guestWriterApplicationsLoading = false;
+window._staffGuestWriterStories = [];
+window._staffGuestWriterStoriesLoaded = false;
+window._staffGuestWriterStoriesLoading = false;
 
 function hideAllAppScreens() {
-  ['access-screen','guest-placeholder','landing','main','workflow','stats-bar','saved-section','saved-toggle-bar'].forEach(function(id) {
+  ['access-screen','guest-placeholder','guest-writer-registration','guest-writer-pending','guest-writer-dashboard','guest-writer-stories','landing','main','workflow','stats-bar','saved-section','saved-toggle-bar'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
   document.getElementById('btn-draft-url').style.display = 'none';
   document.getElementById('btn-back-landing').style.display = 'none';
   document.getElementById('rbtn').style.display = 'none';
+  document.getElementById('btn-logout').style.display = currentUser ? 'inline-flex' : 'none';
 }
 function showAccessScreen() {
   hideAllAppScreens();
   document.getElementById('access-screen').style.display = 'flex';
-  setTimeout(function(){ document.getElementById('access-key-input').focus(); }, 100);
 }
 function submitAccessKey() {
   handleAccessKey(document.getElementById('access-key-input').value);
+}
+function signInWithGoogle() {
+  if (!auth) { document.getElementById('access-error').textContent = 'Google login is not available right now.'; document.getElementById('access-error').style.display = 'block'; return; }
+  var provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(function(err) {
+    document.getElementById('access-error').textContent = err.message || 'Could not sign in with Google.';
+    document.getElementById('access-error').style.display = 'block';
+  });
+}
+function logout() {
+  clearAccessSession(false);
+  currentUser = null;
+  currentGuestWriterProfile = null;
+  currentGuestWriterArticleId = '';
+  if (auth) auth.signOut().finally(function(){ showAccessScreen(); });
+  else showAccessScreen();
 }
 function saveAccessSession(mode, key) {
   sessionStorage.setItem('wocultAccessMode', mode);
   sessionStorage.setItem('wocultAccessKey', key);
 }
-function clearAccessSession() {
+function clearAccessSession(showLogin) {
   sessionStorage.removeItem('wocultAccessMode');
   sessionStorage.removeItem('wocultAccessKey');
   currentAccessMode = '';
   currentAccessKey = '';
-  showAccessScreen();
+  if (showLogin !== false) showAccessScreen();
 }
 function restoreAccessSession() {
   var mode = sessionStorage.getItem('wocultAccessMode') || '';
   var key = sessionStorage.getItem('wocultAccessKey') || '';
-  if ((mode === 'staff' && key === 'WOCSTAFF26') || (mode === 'guest' && key.indexOf('INT-') === 0)) {
+  if (mode === 'guest' && key.indexOf('INT-') === 0) {
     return handleAccessKey(key);
   }
   return false;
+}
+function routeSignedInUser(user) {
+  currentUser = user;
+  if (!user) { currentAccessMode = ''; showAccessScreen(); return; }
+  document.getElementById('btn-logout').style.display = 'inline-flex';
+  var email = (user.email || '').toLowerCase();
+  if (STAFF_EMAILS.indexOf(email) !== -1) {
+    currentAccessMode = 'staff';
+    currentAccessKey = '';
+    goToLanding();
+    return;
+  }
+  currentAccessMode = 'guest_writer';
+  loadGuestWriterProfile(user.uid);
 }
 function handleAccessKey(key) {
   var cleaned = (key||'').trim().toUpperCase();
