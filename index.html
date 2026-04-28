@@ -830,7 +830,9 @@ function submitAccessKey() {
 function signInWithGoogle() {
   if (!auth) { document.getElementById('access-error').textContent = 'Google login is not available right now.'; document.getElementById('access-error').style.display = 'block'; return; }
   var provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).catch(function(err) {
+  auth.signInWithPopup(provider).then(function(result) {
+    if (result && result.user) routeSignedInUser(result.user);
+  }).catch(function(err) {
     document.getElementById('access-error').textContent = err.message || 'Could not sign in with Google.';
     document.getElementById('access-error').style.display = 'block';
   });
