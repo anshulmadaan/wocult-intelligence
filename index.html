@@ -222,7 +222,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 <div id="guest-writer-registration" class="landing" style="display:none;padding-top:32px">
   <div class="scratch-screen">
     <h2>Guest Writer application</h2>
-    <p class="sub">Tell us about yourself and the story you want to write for Wocult.</p>
+    <p class="sub">We'll love to know about you and the stories you want to write for Wocult.</p>
     <div class="sfield"><label>Full name</label><input id="gw-fullName" /></div>
     <div class="sfield"><label>Email</label><input id="gw-email" readonly /></div>
     <div class="sfield"><label>Phone number</label><input id="gw-phone" /></div>
@@ -877,6 +877,60 @@ function routeSignedInUser(user) {
   }
   currentAccessMode = 'guest_writer';
   loadGuestWriterProfile(user.uid);
+}
+function loadGuestWriterProfile(uid) {
+  if (!db || !uid) {
+    showGuestWriterRegistration('Could not check your Guest Writer profile right now. Please complete the form below, or try again later.');
+    return;
+  }
+  hideAllAppScreens();
+  var pending = document.getElementById('guest-writer-pending');
+  if (pending) {
+    pending.style.display = 'flex';
+    pending.querySelector('h2').textContent = 'Checking your Guest Writer access...';
+    pending.querySelectorAll('p')[0].textContent = 'Please wait while Wocult Intelligence checks your application status.';
+    pending.querySelectorAll('p')[1].textContent = '';
+  }
+  db.collection('guest_writers').doc(uid).get().then(function(doc) {
+    if (!doc.exists) {
+      currentGuestWriterProfile = null;
+      showGuestWriterRegistration();
+      return;
+    }
+    currentGuestWriterProfile = Object.assign({uid:uid}, doc.data());
+    if (currentGuestWriterProfile.status === 'approved') {
+      showGuestWriterDashboard();
+      return;
+    }
+    showGuestWriterPending();
+  }).catch(function(err) {
+    showGuestWriterRegistration('Could not check your Guest Writer profile: '+err.message);
+  });
+}
+function showGuestWriterRegistration(message) {
+  hideAllAppScreens();
+  var user = currentUser || {};
+  var fullName = document.getElementById('gw-fullName');
+  var email = document.getElementById('gw-email');
+  var status = document.getElementById('gw-registration-status');
+  if (fullName && !fullName.value) fullName.value = user.displayName || '';
+  if (email) email.value = user.email || '';
+  if (status) status.textContent = message || '';
+  document.getElementById('guest-writer-registration').style.display = 'flex';
+}
+function showGuestWriterPending() {
+  hideAllAppScreens();
+  var pending = document.getElementById('guest-writer-pending');
+  if (pending) {
+    pending.querySelector('h2').textContent = 'Thank you for your interest in writing for Wocult.';
+    pending.querySelectorAll('p')[0].textContent = 'We’ve received your guest writer application and our editorial team is reviewing it. If approved, you’ll get access to the Wocult writing tool where you can draft and submit your story.';
+    pending.querySelectorAll('p')[1].textContent = 'We’re looking for honest, thoughtful, experience-led writing — not polished perfection.';
+    pending.style.display = 'flex';
+  }
+}
+function showGuestWriterDashboard() {
+  hideAllAppScreens();
+  document.getElementById('guest-writer-dashboard').style.display = 'flex';
 }
 function handleAccessKey(key) {
   var cleaned = (key||'').trim().toUpperCase();
