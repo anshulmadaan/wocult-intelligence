@@ -315,7 +315,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <div class="scratch-screen" style="max-width:980px">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
         <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
-        <button class="btn" onclick="loadInterviewSubmissions()">Refresh</button>
+        <button class="btn" onclick="loadInterviewSubmissions({force:true})">Refresh</button>
       </div>
       <h2>Staff submissions</h2>
       <p class="sub">Review guest interview responses submitted through Wocult Intelligence.</p>
@@ -333,7 +333,10 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 
       <div id="interview-submissions-status" class="hint" style="margin-bottom:12px"></div>
       <div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:16px;align-items:start">
-        <div id="interview-submissions-list" style="display:flex;flex-direction:column;gap:10px"></div>
+        <div>
+          <div id="interview-submissions-list" style="display:flex;flex-direction:column;gap:10px"></div>
+          <button id="interview-submissions-load-more" class="btn" onclick="loadMoreInterviewSubmissions()" style="display:none;margin-top:12px;width:100%">Load more</button>
+        </div>
         <div id="interview-submission-detail" style="min-height:180px;padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:14px;line-height:1.6">Select a submission to review the Q&A.</div>
       </div>
     </div>
@@ -759,37 +762,69 @@ function showInterviewSubmissions() {
   document.getElementById('landing-existing-draft').style.display = 'none';
   document.getElementById('landing-prepare-interview').style.display = 'none';
   document.getElementById('landing-interview-submissions').style.display = 'flex';
-  loadInterviewSubmissions();
+  if (window._interviewSubmissionsLoaded) {
+    renderInterviewSubmissionSummary();
+    renderInterviewSubmissions();
+  } else {
+    loadInterviewSubmissions();
+  }
 }
-function loadInterviewSubmissions() {
+function loadInterviewSubmissions(options) {
+  options = options || {};
   var status = document.getElementById('interview-submissions-status');
   var list = document.getElementById('interview-submissions-list');
   var summary = document.getElementById('interview-submissions-summary');
   var detail = document.getElementById('interview-submission-detail');
+  var more = document.getElementById('interview-submissions-load-more');
   if (currentAccessMode !== 'staff') { showAccessScreen(); return; }
+  if (window._interviewSubmissionsLoading) return;
+  if (options.force) {
+    window._interviewSubmissions = [];
+    window._interviewSubmissionsLastVisible = null;
+    window._interviewSubmissionsHasMore = false;
+    window._interviewSubmissionsLoaded = false;
+  }
+  window._interviewSubmissionsLoading = true;
   if (status) status.textContent = 'Loading submissions...';
-  if (summary) summary.innerHTML = '';
-  if (list) list.innerHTML = '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:13px">Loading...</div>';
+  if (!window._interviewSubmissions.length && summary) summary.innerHTML = '';
+  if (!window._interviewSubmissions.length && list) list.innerHTML = '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:13px">Loading...</div>';
   if (detail) detail.innerHTML = 'Select a submission to review the Q&A.';
+  if (more) more.style.display = 'none';
   if (!db) {
     if (status) status.textContent = 'Firebase is not connected. Could not load submissions.';
     if (list) list.innerHTML = '';
+    window._interviewSubmissionsLoading = false;
     return;
   }
-  db.collection('interview_sessions').orderBy('updatedAt', 'desc').get().then(function(snapshot) {
-    window._interviewSubmissions = [];
+  // Firestore free tier has a daily read limit. Never read entire collections from the client; use limit and pagination.
+  var query = db.collection('interview_sessions').orderBy('updatedAt', 'desc').limit(20);
+  if (options.page && window._interviewSubmissionsLastVisible) {
+    query = query.startAfter(window._interviewSubmissionsLastVisible);
+  }
+  query.get().then(function(snapshot) {
+    window._interviewSubmissionsLastVisible = snapshot.docs.length ? snapshot.docs[snapshot.docs.length - 1] : window._interviewSubmissionsLastVisible;
+    window._interviewSubmissionsHasMore = snapshot.docs.length === 20;
+    if (!options.page) window._interviewSubmissions = [];
     snapshot.forEach(function(doc) {
       window._interviewSubmissions.push(Object.assign({id:doc.id, guestKey:doc.id}, doc.data()));
     });
+    window._interviewSubmissionsLoaded = true;
     if (status) status.textContent = window._interviewSubmissions.length ? window._interviewSubmissions.length + ' interview submission(s) loaded.' : 'No interview submissions yet.';
     renderInterviewSubmissionSummary();
     renderInterviewSubmissions();
+    if (more) more.style.display = window._interviewSubmissionsHasMore ? 'block' : 'none';
   }).catch(function(err) {
-    window._interviewSubmissions = [];
+    if (!options.page) window._interviewSubmissions = [];
     renderInterviewSubmissionSummary();
     if (status) status.textContent = 'Could not load submissions: ' + err.message;
-    if (list) list.innerHTML = '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--red);font-size:13px">Firestore read failed.</div>';
+    if (list && !options.page) list.innerHTML = '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--red);font-size:13px">Firestore read failed.</div>';
+  }).finally(function() {
+    window._interviewSubmissionsLoading = false;
   });
+}
+function loadMoreInterviewSubmissions() {
+  if (!window._interviewSubmissionsLastVisible || !window._interviewSubmissionsHasMore) return;
+  loadInterviewSubmissions({page:true});
 }
 function renderInterviewSubmissionSummary() {
   var summary = document.getElementById('interview-submissions-summary');
@@ -947,6 +982,10 @@ function loadGuestInterview(key) {
   currentAccessMode = 'guest';
   currentAccessKey = (key||'').trim().toUpperCase();
   saveAccessSession(currentAccessMode, currentAccessKey);
+  if (window._guestInterviewKey === currentAccessKey && window._guestInterviewSession) {
+    renderGuestInterview(window._guestInterviewSession);
+    return;
+  }
   hideAllAppScreens();
   document.getElementById('guest-placeholder').style.display = 'flex';
   document.getElementById('guest-message').style.display = 'block';
@@ -1758,13 +1797,19 @@ Return ONLY valid JSON, no markdown:
   });
 }
 function loadMemoryNotes(cb) {
-  if (!db) { if (cb) cb([]); return; }
-  db.collection('editorial_memory').orderBy('createdAt','asc').get()
+  if (window._memoryNotesLoaded) { if (cb) cb(_memoryNotes); return; }
+  if (window._memoryNotesLoading) { setTimeout(function(){ loadMemoryNotes(cb); }, 150); return; }
+  if (!db) { window._memoryNotesLoaded = true; if (cb) cb([]); return; }
+  window._memoryNotesLoading = true;
+  // Firestore free tier has a daily read limit. Never read entire collections from the client; use limit and pagination.
+  db.collection('editorial_memory').orderBy('createdAt','asc').limit(20).get()
     .then(function(snap) {
       _memoryNotes = [];
       snap.forEach(function(doc){ _memoryNotes.push({id:doc.id, note:doc.data().note, type:doc.data().type||'manual'}); });
+      window._memoryNotesLoaded = true;
       if (cb) cb(_memoryNotes);
-    }).catch(function(e){ console.warn('Memory load failed', e); if (cb) cb([]); });
+    }).catch(function(e){ console.warn('Memory load failed', e); window._memoryNotesLoaded = true; if (cb) cb([]); })
+    .finally(function(){ window._memoryNotesLoading = false; });
 }
 
 function openMemory() {}
@@ -1809,16 +1854,20 @@ function saveArticleToFirebase(articleData, status) {
     }).catch(function(e){ fbToast('Firebase save failed', false); throw e; });
 }
 
-// Load memory on startup
-loadMemoryNotes(function(){});
 var af = 'all';
 var activeTab = 'cards';
 var currentCard = null;
 var generatedContent = {};
+window._memoryNotesLoaded = false;
+window._memoryNotesLoading = false;
 window._guestInterviewSession = null;
 window._guestInterviewKey = '';
 window._interviewSubmissions = [];
 window._interviewSubmissionFilter = 'all';
+window._interviewSubmissionsLoaded = false;
+window._interviewSubmissionsLoading = false;
+window._interviewSubmissionsLastVisible = null;
+window._interviewSubmissionsHasMore = false;
 var interviewQuestionState = {
   title: '',
   brief: '',
@@ -2300,6 +2349,10 @@ function goStep(n) {
   showWorkflowStep(n === 1 ? 'brief' : n === 2 ? 'generate' : n === 3 ? 'review' : 'brief');
 }
 function startGeneration() {
+  if (!window._memoryNotesLoaded) {
+    loadMemoryNotes(function(){ startGeneration(); });
+    return;
+  }
   var angle = document.getElementById('b-angle').value;
   var titleHint = document.getElementById('b-title').value.trim();
   showWorkflowStep('generate');
