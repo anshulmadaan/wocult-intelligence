@@ -143,6 +143,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 <script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 </head>
 <body>
 
@@ -223,10 +224,14 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       <h1>What would you like to do today?</h1>
       <p>Wocult Intelligence helps you find stories that matter and shape them into something worth reading.</p>
     </div>
-    <div class="landing-cards">
+    <div style="height:1px;background:var(--bdr);width:100%;max-width:880px;margin-bottom:30px"></div>
+    <div style="max-width:880px;width:100%;display:flex;flex-direction:column;gap:30px">
+      <section>
+        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Draft new stories</h2>
+        <div class="landing-cards">
       <div class="lcard" onclick="showMain()">
         <div class="lcard-icon">📰</div>
-        <div class="lcard-title">Browse trending stories</div>
+        <div class="lcard-title">Draft from trending news</div>
         <div class="lcard-desc">Explore live news from Indian workplaces. Find a story that matters and draft a Wocult piece from it.</div>
         <div class="lcard-cta">Open dashboard →</div>
       </div>
@@ -238,22 +243,30 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       </div>
       <div class="lcard" onclick="showScratchChoice()">
         <div class="lcard-icon">✍️</div>
-        <div class="lcard-title">Write from scratch</div>
+        <div class="lcard-title">Write your own story</div>
         <div class="lcard-desc">Share your own story, experience, or perspective. We'll help you shape it into a Wocult piece.</div>
         <div class="lcard-cta">Start writing →</div>
       </div>
+        </div>
+      </section>
+      <div style="height:1px;background:var(--bdr);width:100%"></div>
+      <section>
+        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Interviews</h2>
+        <div class="landing-cards" style="grid-template-columns:repeat(2,1fr)">
       <div class="lcard" onclick="showPrepareInterview()">
         <div class="lcard-icon">🎙️</div>
-        <div class="lcard-title">Prepare interview</div>
+        <div class="lcard-title">Prepare and send questions</div>
         <div class="lcard-desc">Create sharp Wocult-style interview questions from a topic brief.</div>
         <div class="lcard-cta">Prepare questions →</div>
       </div>
       <div class="lcard" onclick="showInterviewSubmissions()">
         <div class="lcard-icon">IN</div>
-        <div class="lcard-title">Staff submissions</div>
+        <div class="lcard-title">Guest submissions</div>
         <div class="lcard-desc">Review guest interview responses and final Q&A submissions.</div>
         <div class="lcard-cta">Review submissions →</div>
       </div>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -286,14 +299,23 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       </div>
 
       <div class="sfield">
-        <label>In 100 words, explain what this interview is about and what kind of responses you expect.</label>
-        <textarea id="interview-guest-intro" rows="5" placeholder="Example: We are interviewing Gen Z professionals about how they experience work, managers, late hours, workplace toxicity, and what they believe should change."></textarea>
+        <label>Add a short introduction to guide the guest. You can edit the default Wocult template or write your own.</label>
+        <textarea id="interview-guest-intro" rows="7" placeholder="Optional guest-facing introduction">This conversation is about what burnout really does to working life — beyond tiredness and long hours. We want to understand how it affects energy, confidence, ambition, relationships, health, and the way people begin to see work itself — and importantly, how people try to manage or recover from it.
+
+There are no right or wrong answers here. Please answer openly and in your own voice. Specific examples, honest reflections, and personal insights are far more valuable to Wocult than polished responses.</textarea>
       </div>
 
       <div class="sfield">
         <label>Number of questions</label>
         <input id="interview-count" type="number" min="3" max="20" value="8" />
       </div>
+
+      <details style="margin-bottom:16px;padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;font-family:inherit">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--blk);font-family:inherit">Wocult interview approach</summary>
+        <div class="hint" style="font-size:12px;line-height:1.6;margin-top:12px;color:var(--blk)">Set the ground → Explore the lived reality → Find the tension → Look for answers → End with meaning</div>
+        <div class="hint" style="font-size:12px;line-height:1.6;margin-top:10px;color:var(--blk)">Ask clearly. Celebrate what works. Challenge what doesn’t. Don’t dodge the uncomfortable question if that is where the real story sits.</div>
+        <div class="hint" style="font-size:12px;line-height:1.6;margin-top:8px">Use this as a guide while framing questions. The interview does not need to be rigid, but it should move from context to real experience, challenge, solutions, and insight.</div>
+      </details>
 
       <button class="btn-lg btn-y" id="interview-generate-btn" onclick="generateInterviewQuestions()" style="padding:14px 32px;font-size:15px;width:100%">Generate questions</button>
       <div id="interview-status" class="hint" style="margin-top:12px"></div>
@@ -731,6 +753,24 @@ function stripHtml(s) {
   div.innerHTML = String(s||'');
   return div.innerText.trim();
 }
+function plainTextToHtml(text) {
+  return String(text||'').trim().split(/\n{2,}/).map(function(p){return p.trim();}).filter(Boolean).map(function(p) {
+    return '<p>'+escapeHtml(p).replace(/\n/g,'<br>')+'</p>';
+  }).join('');
+}
+function downloadBlob(blob, filename) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+function safeFileName(text) {
+  return String(text||'interview').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60) || 'interview';
+}
 function formatFirestoreDate(value) {
   if (!value) return '-';
   var d = null;
@@ -1028,8 +1068,10 @@ function renderGuestInterview(session) {
     + '<p class="sub">'+escapeHtml(guestIntro)+'</p>'
     + '<div class="sfield"><label>Your name</label><input id="guest-name" placeholder="Enter your full name" value="'+escapeHtml(session.guestName||'')+'" /></div>'
     + '<div class="sfield"><label>Your email</label><input id="guest-email" type="email" placeholder="email@example.com" value="'+escapeHtml(session.guestEmail||'')+'" /></div>'
+    + '<div class="sfield" style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff"><label>Word document workflow</label><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-lg" onclick="downloadGuestInterviewDocx()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Download interview as Word document</button><label class="btn-lg" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);display:inline-flex;align-items:center"><input type="file" accept=".docx" style="display:none" onchange="if(this.files&&this.files[0])handleGuestInterviewUpload(this.files[0]);this.value=\'\';">Upload completed Word document</label></div><div id="guest-upload-status" class="hint" style="margin-top:10px"></div></div>'
     + '<div style="display:flex;flex-direction:column;gap:14px;margin-top:24px">'+questionsHtml+'</div>'
     + '<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><button class="btn-lg" onclick="saveGuestInterviewProgress()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Save progress</button><button class="btn-lg btn-y" onclick="submitGuestInterviewResponses()">Submit responses</button></div>'
+    + '<div id="guest-refinement-choice" style="display:none;margin-top:16px;padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff"></div>'
     + '<div id="guest-save-status" class="hint" style="margin-top:12px"></div>';
   content.style.display = 'block';
 }
@@ -1063,8 +1105,80 @@ function saveGuestInterviewProgress() {
     if (status) status.textContent = 'Could not save progress: '+err.message;
   });
 }
-function submitGuestInterviewResponses() {
-  var data = collectGuestInterviewAnswers();
+function downloadGuestInterviewDocx() {
+  var session = window._guestInterviewSession || {};
+  var questions = session.questions || [];
+  var title = session.interviewTitle || 'Interview';
+  if (!window.docx) {
+    alert('Could not create the Word document right now. Please try again in a moment.');
+    return;
+  }
+  var d = window.docx;
+  var children = [
+    new d.Paragraph({text:title, heading:d.HeadingLevel.TITLE}),
+    new d.Paragraph({text:'Guest name: [Enter your full name]'}),
+    new d.Paragraph({text:'Guest email: [Enter your email]'}),
+    new d.Paragraph({text:''})
+  ];
+  questions.forEach(function(q, i) {
+    children.push(new d.Paragraph({text:'QUESTION '+(i+1), heading:d.HeadingLevel.HEADING_2}));
+    children.push(new d.Paragraph({text:q.question||''}));
+    children.push(new d.Paragraph({text:'ANSWER '+(i+1), spacing:{before:240}}));
+    children.push(new d.Paragraph({text:'[Write your answer here]'}));
+    children.push(new d.Paragraph({text:'END ANSWER '+(i+1)}));
+    children.push(new d.Paragraph({text:''}));
+  });
+  var doc = new d.Document({sections:[{properties:{}, children:children}]});
+  d.Packer.toBlob(doc).then(function(blob) {
+    downloadBlob(blob, safeFileName(title)+'-interview.docx');
+  }).catch(function() {
+    alert('Could not create the Word document right now. Please try again in a moment.');
+  });
+}
+function handleGuestInterviewUpload(file) {
+  var status = document.getElementById('guest-upload-status');
+  if (!file || !/\.docx$/i.test(file.name||'')) {
+    if (status) status.textContent = 'Please upload a completed Word document.';
+    return;
+  }
+  if (!window.mammoth) {
+    if (status) status.textContent = 'Could not read this file. Please paste the answers manually.';
+    return;
+  }
+  if (status) status.textContent = 'Reading Word document...';
+  file.arrayBuffer().then(function(buffer) {
+    return mammoth.extractRawText({arrayBuffer:buffer});
+  }).then(function(result) {
+    var count = populateGuestAnswersFromUpload(result.value || '');
+    if (status) status.textContent = count ? 'Answers uploaded. Review them below before submitting.' : 'No answers were found. Please check the file or paste the answers manually.';
+    if (count) showGuestRefinementChoice(collectGuestInterviewAnswers());
+  }).catch(function() {
+    if (status) status.textContent = 'Could not read this file. Please paste the answers manually.';
+  });
+}
+function populateGuestAnswersFromUpload(parsedText) {
+  var text = String(parsedText||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  var nameMatch = text.match(/Guest name:\s*(.+)/i);
+  var emailMatch = text.match(/Guest email:\s*(.+)/i);
+  var nameInput = document.getElementById('guest-name');
+  var emailInput = document.getElementById('guest-email');
+  if (nameInput && nameMatch && !/^\s*\[.*\]\s*$/.test(nameMatch[1])) nameInput.value = nameMatch[1].trim();
+  if (emailInput && emailMatch && !/^\s*\[.*\]\s*$/.test(emailMatch[1])) emailInput.value = emailMatch[1].trim();
+  var count = 0;
+  Array.from(document.querySelectorAll('.guest-answer')).forEach(function(el, i) {
+    var n = i + 1;
+    var next = n + 1;
+    var pattern = new RegExp('ANSWER\\s+'+n+'\\s*\\n([\\s\\S]*?)(?=\\n\\s*END\\s+ANSWER\\s+'+n+'\\b|\\n\\s*QUESTION\\s+'+next+'\\b|$)', 'i');
+    var match = text.match(pattern);
+    if (!match) return;
+    var answer = match[1].replace(/\[Write your answer here\]/gi,'').replace(/END\s+ANSWER\s+\d+/gi,'').trim();
+    if (!answer) return;
+    el.innerHTML = plainTextToHtml(answer);
+    count++;
+  });
+  return count;
+}
+function validateGuestInterviewSubmission(data) {
   if (!data.guestName) { alert('Please enter your name before submitting.'); document.getElementById('guest-name').focus(); return; }
   if (!data.guestEmail) { alert('Please enter your email before submitting.'); document.getElementById('guest-email').focus(); return; }
   var missing = data.rawAnswers.find(function(a){return !a.answerText;});
@@ -1075,20 +1189,78 @@ function submitGuestInterviewResponses() {
     if (el) el.focus();
     return;
   }
+  return true;
+}
+function submitGuestInterviewResponses() {
+  var data = collectGuestInterviewAnswers();
+  if (!validateGuestInterviewSubmission(data)) return;
+  showGuestRefinementChoice(data);
+}
+function showGuestRefinementChoice(data) {
+  window._pendingGuestInterviewData = data || collectGuestInterviewAnswers();
   var status = document.getElementById('guest-save-status');
-  db.collection('interview_sessions').doc(window._guestInterviewKey).update({
+  var choice = document.getElementById('guest-refinement-choice');
+  if (status) status.textContent = '';
+  if (!choice) return;
+  choice.innerHTML = '<div style="font-size:15px;font-weight:600;margin-bottom:8px">Do you want Wocult Intelligence to refine your answers for clarity before final submission?</div>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-lg btn-y" onclick="submitGuestInterviewWithRefinement()">Yes, refine my answers</button><button class="btn-lg" onclick="submitGuestInterviewAsIs()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">No, submit as is</button></div>';
+  choice.style.display = 'block';
+  choice.scrollIntoView({behavior:'smooth', block:'center'});
+}
+function saveGuestRawSubmission(data, finalData) {
+  return db.collection('interview_sessions').doc(window._guestInterviewKey).update(finalData || {
     status: 'submitted',
     guestName: data.guestName,
     guestEmail: data.guestEmail,
     rawAnswers: data.rawAnswers,
     submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function() {
-    if (status) status.textContent = 'Refining your responses for review...';
+  });
+}
+function submitGuestInterviewWithRefinement() {
+  var data = collectGuestInterviewAnswers();
+  if (!validateGuestInterviewSubmission(data)) return;
+  var status = document.getElementById('guest-save-status');
+  var choice = document.getElementById('guest-refinement-choice');
+  if (choice) choice.style.display = 'none';
+  if (status) status.textContent = 'Refining your responses for review...';
+  saveGuestRawSubmission(data).then(function() {
     window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, data, {status:'submitted'});
     return refineGuestInterviewAnswers(data);
   }).catch(function(err) {
     if (status) status.textContent = err && err._rawSaved ? 'We could not refine your responses right now. Your original responses have been saved.' : 'Could not submit responses: '+err.message;
+  });
+}
+function submitGuestInterviewAsIs() {
+  var data = collectGuestInterviewAnswers();
+  if (!validateGuestInterviewSubmission(data)) return;
+  var status = document.getElementById('guest-save-status');
+  var choice = document.getElementById('guest-refinement-choice');
+  var refinedAnswers = data.rawAnswers.map(function(a) {
+    return {
+      questionId: a.questionId,
+      order: a.order,
+      question: a.question,
+      refinedAnswerHtml: a.answerHtml,
+      refinedAnswerText: a.answerText
+    };
+  });
+  if (choice) choice.style.display = 'none';
+  if (status) status.textContent = 'Submitting your responses...';
+  db.collection('interview_sessions').doc(window._guestInterviewKey).update({
+    status: 'final',
+    guestName: data.guestName,
+    guestEmail: data.guestEmail,
+    rawAnswers: data.rawAnswers,
+    refinedAnswers: refinedAnswers,
+    submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    finalSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() {
+    window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, data, {refinedAnswers:refinedAnswers, status:'final'});
+    if (status) status.textContent = 'Thank you. Your responses have been submitted to Wocult.';
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not submit responses: '+err.message;
   });
 }
 function refineGuestInterviewAnswers(data) {
@@ -1381,7 +1553,6 @@ function saveInterviewSession() {
   if (!db) { status.textContent = 'Firebase is not connected. Could not create guest link.'; return; }
   if (!title) { alert('Please enter an interview title.'); document.getElementById('interview-title').focus(); return; }
   if (!brief) { alert('Please enter an interview brief.'); document.getElementById('interview-brief').focus(); return; }
-  if (!guestIntro) { alert('Please add the guest-facing interview introduction.'); document.getElementById('interview-guest-intro-refined') ? document.getElementById('interview-guest-intro-refined').focus() : document.getElementById('interview-guest-intro').focus(); return; }
   if (!questions.length) { alert('Please generate or add at least one question.'); return; }
   if (questions.some(function(q){return !q.question;})) { alert('Please fill in every question before generating a guest link.'); return; }
   var guestKey = generateGuestInterviewKey();
@@ -1433,11 +1604,17 @@ function saveInterviewSession() {
 function renderInterviewQuestions() {
   var wrap = document.getElementById('interview-questions');
   var actions = document.getElementById('interview-actions');
+  var placeholders = [
+    'What does this look like in real working life?',
+    'What is the part people often miss or misunderstand?',
+    'What has helped, and what has not?',
+    'What should others take away from this?'
+  ];
   if (!wrap || !actions) return;
   wrap.innerHTML = interviewQuestionState.questions.map(function(q, i) {
     return '<div class="sfield" style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
       + '<label style="display:flex;justify-content:space-between;align-items:center"><span>Question '+(i+1)+'</span><button onclick="deleteInterviewQuestion('+i+')" style="background:none;border:1px solid var(--g2);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--red)">Delete</button></label>'
-      + '<textarea rows="3" oninput="syncInterviewQuestion('+i+', this.value)">'+(q.question||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</textarea>'
+      + '<textarea rows="3" placeholder="'+placeholders[i % placeholders.length]+'" oninput="syncInterviewQuestion('+i+', this.value)">'+(q.question||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</textarea>'
       + '</div>';
   }).join('');
   actions.style.display = interviewQuestionState.questions.length ? 'flex' : 'none';
@@ -1450,7 +1627,6 @@ function generateInterviewQuestions() {
   var btn = document.getElementById('interview-generate-btn');
   var status = document.getElementById('interview-status');
   if (!brief) { alert('Please enter an interview brief.'); document.getElementById('interview-brief').focus(); return; }
-  if (!guestIntro) { alert('Please add the guest-facing interview introduction.'); document.getElementById('interview-guest-intro').focus(); return; }
   if (!questionCount || questionCount < 3 || questionCount > 20) { alert('Please choose between 3 and 20 questions.'); document.getElementById('interview-count').focus(); return; }
   interviewQuestionState.title = title;
   interviewQuestionState.brief = brief;
@@ -1862,6 +2038,7 @@ window._memoryNotesLoaded = false;
 window._memoryNotesLoading = false;
 window._guestInterviewSession = null;
 window._guestInterviewKey = '';
+window._pendingGuestInterviewData = null;
 window._interviewSubmissions = [];
 window._interviewSubmissionFilter = 'all';
 window._interviewSubmissionsLoaded = false;
