@@ -158,13 +158,13 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <text x="17" y="23" text-anchor="middle" font-family="Georgia,serif" font-size="18" font-weight="700" fill="#1a1a1a">W</text>
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
-  <div class="tbar-sub">Workforce Intelligence</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v6.8</div>
+  <div class="tbar-sub">Editing Studio</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v7</div>
   <div class="tbar-r">
-    <span><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
+    <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
-    <button class="btn btn-ghost" onclick="goToLanding()" style="font-size:11px;display:none" id="btn-back-landing">← Home</button>
     <button class="btn" id="rbtn" onclick="loadAll()" style="display:none">Refresh</button>
+    <button class="btn btn-ghost" onclick="handleHomeClick()" style="font-size:11px;display:none" id="btn-back-landing">Home</button>
     <button class="btn btn-ghost" onclick="logout()" style="font-size:11px;display:none" id="btn-logout">Logout</button>
   </div>
 </div>
@@ -330,7 +330,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <div style="height:1px;background:var(--bdr);width:100%;max-width:880px;margin-bottom:30px"></div>
     <div style="max-width:880px;width:100%;display:flex;flex-direction:column;gap:30px">
       <section>
-        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Draft new stories</h2>
+        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">New stories</h2>
         <div class="landing-cards">
       <div class="lcard" onclick="showMain()">
         <div class="lcard-icon">📰</div>
@@ -354,7 +354,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       </section>
       <div style="height:1px;background:var(--bdr);width:100%"></div>
       <section>
-        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Curate interviews</h2>
+        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Interviews</h2>
         <div class="landing-cards" style="grid-template-columns:repeat(2,1fr)">
       <div class="lcard" onclick="showPrepareInterview()">
         <div class="lcard-icon">🎙️</div>
@@ -372,7 +372,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
       </section>
       <div style="height:1px;background:var(--bdr);width:100%"></div>
       <section>
-        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Manage community</h2>
+        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Community</h2>
         <div class="landing-cards" style="grid-template-columns:repeat(2,1fr)">
       <div class="lcard" onclick="showGuestWriterApplications()">
         <div class="lcard-icon">GW</div>
@@ -839,6 +839,10 @@ var currentUser = null;
 var currentGuestWriterProfile = null;
 var currentGuestWriterArticleId = '';
 var currentGuestWriterStory = null;
+var hasUnsavedChanges = false;
+var browserBackGuardSetup = false;
+var browserBackGuardDisabled = false;
+var LEAVE_WARNING = 'Your work might get lost if you leave this screen without saving. Do you want to continue?';
 window._guestWriterStories = [];
 window._guestWriterStoriesLoaded = false;
 window._guestWriterStoriesLoading = false;
@@ -849,15 +853,87 @@ window._staffGuestWriterStories = [];
 window._staffGuestWriterStoriesLoaded = false;
 window._staffGuestWriterStoriesLoading = false;
 
+function markUnsavedChanges() {
+  hasUnsavedChanges = true;
+}
+function clearUnsavedChanges() {
+  hasUnsavedChanges = false;
+}
+function confirmBeforeLeavingScreen(onContinue) {
+  if (!hasUnsavedChanges) {
+    onContinue();
+    return;
+  }
+  if (window.confirm(LEAVE_WARNING)) {
+    clearUnsavedChanges();
+    onContinue();
+  }
+}
+function isDirtyTrackedTarget(target) {
+  if (!target) return false;
+  var el = target.closest ? target.closest('input, textarea, select, [contenteditable="true"]') : null;
+  if (!el) return false;
+  if (el.readOnly || el.disabled) return false;
+  if (el.tagName === 'INPUT' && ['button','submit','reset','hidden','file'].indexOf((el.type||'').toLowerCase()) !== -1) return false;
+  return !!el.closest([
+    '#landing-url',
+    '#landing-scratch',
+    '#landing-existing-draft',
+    '#landing-prepare-interview',
+    '#guest-placeholder',
+    '#guest-writer-registration',
+    '#guest-writer-idea',
+    '#guest-writer-idea-discussion',
+    '#workflow'
+  ].join(','));
+}
+function setupUnsavedChangeTracking() {
+  document.addEventListener('input', function(e) {
+    if (isDirtyTrackedTarget(e.target)) markUnsavedChanges();
+  });
+  document.addEventListener('change', function(e) {
+    if (isDirtyTrackedTarget(e.target)) markUnsavedChanges();
+  });
+}
+function setupBrowserBackGuard() {
+  if (browserBackGuardSetup || !window.history || !history.pushState) return;
+  browserBackGuardSetup = true;
+  history.pushState({wocultStudioGuard:true}, '', window.location.href);
+  window.addEventListener('popstate', function() {
+    if (browserBackGuardDisabled) return;
+    if (!hasUnsavedChanges) {
+      browserBackGuardDisabled = true;
+      history.back();
+      return;
+    }
+    history.pushState({wocultStudioGuard:true}, '', window.location.href);
+    if (window.confirm(LEAVE_WARNING)) {
+      clearUnsavedChanges();
+      browserBackGuardDisabled = true;
+      history.go(-2);
+    }
+  });
+}
+window.addEventListener('beforeunload', function(e) {
+  if (!hasUnsavedChanges) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+function updateTopUpdatedVisibility(show) {
+  var el = document.getElementById('top-updated-status');
+  if (el) el.style.display = show ? 'inline-flex' : 'none';
+}
+
 function hideAllAppScreens() {
   ['access-screen','guest-placeholder','guest-writer-registration','guest-writer-pending','guest-writer-dashboard','guest-writer-stories','guest-writer-idea','guest-writer-idea-discussion','guest-writer-status-screen','landing','main','workflow','stats-bar','saved-section','saved-toggle-bar'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
   document.getElementById('btn-draft-url').style.display = 'none';
-  document.getElementById('btn-back-landing').style.display = 'none';
+  document.getElementById('btn-back-landing').style.display = currentUser ? 'inline-flex' : 'none';
   document.getElementById('rbtn').style.display = 'none';
   document.getElementById('btn-logout').style.display = currentUser ? 'inline-flex' : 'none';
+  updateTopUpdatedVisibility(false);
 }
 function showAccessScreen() {
   hideAllAppScreens();
@@ -877,6 +953,7 @@ function signInWithGoogle() {
   });
 }
 function logout() {
+  clearUnsavedChanges();
   clearAccessSession(false);
   currentUser = null;
   currentGuestWriterProfile = null;
@@ -907,6 +984,7 @@ function restoreAccessSession() {
 function routeSignedInUser(user) {
   currentUser = user;
   if (!user) { currentAccessMode = ''; showAccessScreen(); return; }
+  clearUnsavedChanges();
   document.getElementById('btn-logout').style.display = 'inline-flex';
   var email = (user.email || '').toLowerCase();
   if (STAFF_EMAILS.indexOf(email) !== -1) {
@@ -917,6 +995,26 @@ function routeSignedInUser(user) {
   }
   currentAccessMode = 'guest_writer';
   loadGuestWriterProfile(user.uid);
+}
+function navigateHome() {
+  if (currentAccessMode === 'guest') {
+    if (currentAccessKey) loadGuestInterview(currentAccessKey);
+    else showAccessScreen();
+    return;
+  }
+  if (currentAccessMode === 'guest_writer') {
+    if (currentUser) loadGuestWriterProfile(currentUser.uid);
+    else showAccessScreen();
+    return;
+  }
+  if (currentAccessMode === 'staff') {
+    goToLanding();
+    return;
+  }
+  showAccessScreen();
+}
+function handleHomeClick() {
+  confirmBeforeLeavingScreen(navigateHome);
 }
 function loadGuestWriterProfile(uid) {
   if (!db || !uid) {
@@ -948,6 +1046,7 @@ function showGuestWriterRegistration(message) {
   if (document.getElementById('gw-email')) document.getElementById('gw-email').value = user.email || '';
   if (document.getElementById('gw-registration-status')) document.getElementById('gw-registration-status').textContent = message || '';
   document.getElementById('guest-writer-registration').style.display = 'flex';
+  clearUnsavedChanges();
 }
 function showGuestWriterPending(title, body, foot) {
   hideAllAppScreens();
@@ -985,6 +1084,7 @@ function submitGuestWriterRegistration() {
   if (data.preferredSection === 'Other' && !data.otherSection) { alert('Please tell us the section you have in mind.'); return; }
   document.getElementById('gw-registration-status').textContent = 'Sending writer profile...';
   db.collection('guest_writers').doc(currentUser.uid).set(data).then(function() {
+    clearUnsavedChanges();
     currentGuestWriterProfile = data;
     showGuestWriterPending();
   }).catch(function(err) {
@@ -1038,6 +1138,7 @@ function showSubmitStoryIdeaScreen() {
   document.getElementById('gwi-idea').value = '';
   updateStoryIdeaWordCount();
   document.getElementById('guest-writer-idea').style.display = 'flex';
+  clearUnsavedChanges();
 }
 function updateStoryIdeaWordCount() {
   var text = document.getElementById('gwi-idea') ? document.getElementById('gwi-idea').value.trim() : '';
@@ -1071,6 +1172,7 @@ function submitGuestWriterIdea() {
   status.style.color = 'var(--g3)';
   status.textContent = 'Submitting story idea...';
   ref.set(data).then(function() {
+    clearUnsavedChanges();
     currentGuestWriterArticleId = ref.id;
     currentGuestWriterStory = Object.assign({id:ref.id}, data);
     showIdeaDiscussionScreen(currentGuestWriterStory);
@@ -1098,6 +1200,8 @@ function showIdeaDiscussionScreen(story) {
     + '<div style="font-size:13px;color:var(--g3);line-height:1.6">Preferred section: '+escapeHtml(story.preferredSection||'')+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+'</div>'
     + '<div style="font-size:14px;line-height:1.7;margin-top:12px">'+escapeHtml(story.ideaSummary||'')+'</div>';
   document.getElementById('guest-writer-idea-discussion').style.display = 'flex';
+  if (document.getElementById('gwi-message')) document.getElementById('gwi-message').value = '';
+  clearUnsavedChanges();
   loadIdeaMessages(story.id, 'gwi-messages');
 }
 function loadIdeaMessages(articleId, targetId) {
@@ -1140,6 +1244,7 @@ function sendIdeaMessage(articleId, role) {
   if (status) status.textContent = 'Sending message...';
   db.collection('articles').doc(articleId).collection('idea_messages').add(data).then(function() {
     input.value = '';
+    clearUnsavedChanges();
     if (status) status.textContent = 'Message sent.';
     return loadIdeaMessages(articleId, isStaff ? 'staff-idea-messages' : 'gwi-messages');
   }).catch(function(err) {
@@ -1156,6 +1261,7 @@ function openGuestWriterWritingScreen(story) {
     if (document.getElementById('sc-name')) document.getElementById('sc-name').value = (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || (currentUser && currentUser.email) || '';
     if (document.getElementById('sc-topic')) document.getElementById('sc-topic').value = story.title || '';
     if (document.getElementById('sc-story')) document.getElementById('sc-story').value = story.body ? stripHtml(story.body) : (story.ideaSummary || '');
+    clearUnsavedChanges();
   }, 50);
 }
 function showGuestWriterStoryStatus(story) {
@@ -1261,12 +1367,8 @@ function showInterviewSubmissions() {
     showAccessScreen();
     return;
   }
+  hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
-  document.getElementById('landing-url').style.display = 'none';
-  document.getElementById('landing-scratch').style.display = 'none';
-  document.getElementById('landing-scratch-choice').style.display = 'none';
-  document.getElementById('landing-existing-draft').style.display = 'none';
-  document.getElementById('landing-prepare-interview').style.display = 'none';
   document.getElementById('landing-interview-submissions').style.display = 'flex';
   if (window._interviewSubmissionsLoaded) {
     renderInterviewSubmissionSummary();
@@ -1486,7 +1588,7 @@ function copyInterviewSubmissionQA(guestKey) {
 }
 function showGuestWriterApplications() {
   if (currentAccessMode !== 'staff') { showAccessScreen(); return; }
-  backToCards();
+  hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-guest-writer-applications').style.display = 'flex';
   loadGuestWriterApplications();
@@ -1541,15 +1643,8 @@ function updateGuestWriterApplicationStatus(id, status) {
 }
 function showStaffGuestWriterStories() {
   if (currentAccessMode !== 'staff') { showAccessScreen(); return; }
+  hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
-  document.getElementById('landing-url').style.display = 'none';
-  document.getElementById('landing-scratch').style.display = 'none';
-  document.getElementById('landing-scratch-choice').style.display = 'none';
-  document.getElementById('landing-existing-draft').style.display = 'none';
-  document.getElementById('landing-prepare-interview').style.display = 'none';
-  document.getElementById('landing-interview-submissions').style.display = 'none';
-  if (document.getElementById('landing-guest-writer-applications')) document.getElementById('landing-guest-writer-applications').style.display = 'none';
-  if (document.getElementById('landing-guest-writer-stories')) document.getElementById('landing-guest-writer-stories').style.display = 'none';
   document.getElementById('landing-guest-writer-stories').style.display = 'flex';
   if (window._staffGuestWriterStoriesLoaded) renderStaffGuestWriterStories();
   else loadStaffGuestWriterStories();
@@ -1680,6 +1775,7 @@ function renderGuestInterview(session) {
     + '<div id="guest-refinement-choice" style="display:none;margin-top:16px;padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff"></div>'
     + '<div id="guest-save-status" class="hint" style="margin-top:12px"></div>';
   content.style.display = 'block';
+  clearUnsavedChanges();
 }
 function collectGuestInterviewAnswers() {
   var guestName = document.getElementById('guest-name') ? document.getElementById('guest-name').value.trim() : '';
@@ -1706,6 +1802,7 @@ function saveGuestInterviewProgress() {
     rawAnswers: data.rawAnswers,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function() {
+    clearUnsavedChanges();
     if (status) status.textContent = 'Progress saved.';
   }).catch(function(err) {
     if (status) status.textContent = 'Could not save progress: '+err.message;
@@ -1782,6 +1879,7 @@ function populateGuestAnswersFromUpload(parsedText) {
     el.innerHTML = plainTextToHtml(answer);
     count++;
   });
+  if (count) markUnsavedChanges();
   return count;
 }
 function validateGuestInterviewSubmission(data) {
@@ -1834,6 +1932,7 @@ function submitGuestInterviewWithRefinement() {
     window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, data, {status:'submitted'});
     return refineGuestInterviewAnswers(data);
   }).catch(function(err) {
+    if (err && err._rawSaved) clearUnsavedChanges();
     if (status) status.textContent = err && err._rawSaved ? 'We could not refine your responses right now. Your original responses have been saved.' : 'Could not submit responses: '+err.message;
   });
 }
@@ -1864,6 +1963,7 @@ function submitGuestInterviewAsIs() {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function() {
     window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, data, {refinedAnswers:refinedAnswers, status:'final'});
+    clearUnsavedChanges();
     if (status) status.textContent = 'Thank you. Your responses have been submitted to Wocult.';
   }).catch(function(err) {
     if (status) status.textContent = 'Could not submit responses: '+err.message;
@@ -1942,6 +2042,7 @@ Return ONLY valid JSON:
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }).then(function() {
       window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, {refinedAnswers:refinedAnswers, status:'refined'});
+      clearUnsavedChanges();
       renderGuestRefinedReview(refinedAnswers);
     });
   }).catch(function(err) {
@@ -1969,6 +2070,7 @@ function renderGuestRefinedReview(refinedAnswers) {
     + '<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><button class="btn-lg" onclick="renderGuestInterview(window._guestInterviewSession)" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to responses</button><button class="btn-lg btn-y" onclick="finalSubmitGuestInterview()">Final submit</button></div>'
     + '<div id="guest-review-status" class="hint" style="margin-top:12px"></div>';
   content.style.display = 'block';
+  clearUnsavedChanges();
 }
 function collectGuestRefinedAnswers() {
   return Array.from(document.querySelectorAll('.guest-refined-answer')).map(function(el) {
@@ -1999,6 +2101,7 @@ function finalSubmitGuestInterview() {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function() {
     window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, {refinedAnswers:refinedAnswers, status:'final'});
+    clearUnsavedChanges();
     if (status) status.textContent = 'Thank you. Your responses have been submitted to Wocult.';
   }).catch(function(err) {
     if (status) status.textContent = 'Could not submit final responses: '+err.message;
@@ -2017,8 +2120,9 @@ function goToLanding() {
   document.getElementById('saved-toggle-bar').style.display = 'none';
   document.getElementById('saved-section').style.display = 'none';
   document.getElementById('btn-draft-url').style.display = 'none';
-  document.getElementById('btn-back-landing').style.display = 'none';
+  document.getElementById('btn-back-landing').style.display = 'inline-flex';
   document.getElementById('rbtn').style.display = 'none';
+  updateTopUpdatedVisibility(false);
   backToCards();
 }
 function showMain() {
@@ -2029,64 +2133,56 @@ function showMain() {
   document.getElementById('btn-draft-url').style.display = 'inline-flex';
   document.getElementById('btn-back-landing').style.display = 'inline-flex';
   document.getElementById('rbtn').style.display = 'inline-flex';
+  updateTopUpdatedVisibility(true);
+}
+function hideStaffLandingPanels() {
+  updateTopUpdatedVisibility(false);
+  [
+    'landing-url',
+    'landing-scratch',
+    'landing-scratch-choice',
+    'landing-existing-draft',
+    'landing-prepare-interview',
+    'landing-interview-submissions',
+    'landing-guest-writer-applications',
+    'landing-guest-writer-stories'
+  ].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
 }
 function backToCards() {
-  document.getElementById('landing-url').style.display = 'none';
-  document.getElementById('landing-scratch').style.display = 'none';
-  document.getElementById('landing-scratch-choice').style.display = 'none';
-  document.getElementById('landing-existing-draft').style.display = 'none';
-  document.getElementById('landing-prepare-interview').style.display = 'none';
-  document.getElementById('landing-interview-submissions').style.display = 'none';
+  hideStaffLandingPanels();
   var detail = document.getElementById('interview-submission-detail');
   if (detail) detail.innerHTML = 'Select a submission to review the Q&A.';
   document.getElementById('landing-cards').style.display = 'flex';
 }
 function showUrlEntry() {
+  hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
-  document.getElementById('landing-scratch').style.display = 'none';
-  document.getElementById('landing-scratch-choice').style.display = 'none';
-  document.getElementById('landing-existing-draft').style.display = 'none';
-  document.getElementById('landing-prepare-interview').style.display = 'none';
-  document.getElementById('landing-interview-submissions').style.display = 'none';
   document.getElementById('landing-url').style.display = 'flex';
   setTimeout(function(){ document.getElementById('landing-url-input').focus(); }, 100);
 }
 function showPrepareInterview() {
+  hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
-  document.getElementById('landing-url').style.display = 'none';
-  document.getElementById('landing-scratch').style.display = 'none';
-  document.getElementById('landing-scratch-choice').style.display = 'none';
-  document.getElementById('landing-existing-draft').style.display = 'none';
-  document.getElementById('landing-interview-submissions').style.display = 'none';
   document.getElementById('landing-prepare-interview').style.display = 'flex';
   setTimeout(function(){ document.getElementById('interview-title').focus(); }, 100);
 }
 function showScratchChoice() {
+  hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
-  document.getElementById('landing-url').style.display = 'none';
-  document.getElementById('landing-scratch').style.display = 'none';
-  document.getElementById('landing-existing-draft').style.display = 'none';
-  document.getElementById('landing-prepare-interview').style.display = 'none';
-  document.getElementById('landing-interview-submissions').style.display = 'none';
   document.getElementById('landing-scratch-choice').style.display = 'flex';
 }
 function showExistingDraftForm() {
+  hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
-  document.getElementById('landing-url').style.display = 'none';
-  document.getElementById('landing-scratch').style.display = 'none';
-  document.getElementById('landing-scratch-choice').style.display = 'none';
-  document.getElementById('landing-prepare-interview').style.display = 'none';
-  document.getElementById('landing-interview-submissions').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'flex';
   setTimeout(function(){ document.getElementById('existing-draft-text').focus(); }, 100);
 }
 function showScratchForm() {
+  hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
-  document.getElementById('landing-url').style.display = 'none';
-  document.getElementById('landing-scratch-choice').style.display = 'none';
-  document.getElementById('landing-existing-draft').style.display = 'none';
-  document.getElementById('landing-prepare-interview').style.display = 'none';
-  document.getElementById('landing-interview-submissions').style.display = 'none';
   document.getElementById('landing-scratch').style.display = 'flex';
 }
 function startFromUrl() {
@@ -2102,19 +2198,23 @@ function selectRadio(el, hiddenId) {
   el.closest('.radio-grid').querySelectorAll('.radio-opt').forEach(function(o){ o.classList.remove('sel'); });
   el.classList.add('sel');
   document.getElementById(hiddenId).value = el.textContent;
+  markUnsavedChanges();
 }
 function toggleCheck(el) {
   el.classList.toggle('sel');
+  markUnsavedChanges();
 }
 function syncInterviewQuestion(idx, value) {
   if (interviewQuestionState.questions[idx]) interviewQuestionState.questions[idx].question = value;
 }
 function deleteInterviewQuestion(idx) {
   interviewQuestionState.questions.splice(idx, 1);
+  markUnsavedChanges();
   renderInterviewQuestions();
 }
 function addInterviewQuestion() {
   interviewQuestionState.questions.push({id:'q'+(interviewQuestionState.questions.length+1), question:''});
+  markUnsavedChanges();
   renderInterviewQuestions();
 }
 function syncRenderedInterviewQuestions() {
@@ -2201,6 +2301,7 @@ function saveInterviewSession() {
       + '<button class="btn" onclick="copyGuestInterviewLink()">Copy link</button>'
       + '<span id="interview-copy-status" style="font-size:12px;color:var(--g3);margin-left:8px"></span>';
     status.textContent = 'Guest link saved. Share it with the interviewee.';
+    clearUnsavedChanges();
   }).catch(function(err) {
     status.textContent = 'Could not save interview session: '+err.message;
   }).finally(function() {
@@ -2464,6 +2565,7 @@ Return ONLY valid JSON, no markdown:
       {role:'user', content:'You are a Wocult senior editor. The user pasted an existing draft. Preserve their voice, meaning, specific examples, and personal details while improving structure, clarity, and flow.\n\nRULES:\n- Editorial changes: brief description + <version>full HTML</version>\n- Conversational: reply normally, no tags\n- Sentence case. No italics except quotes. No bold body.\n- Under 1200 words unless user asks otherwise\n\nCurrent article:\n'+document.getElementById('chat-article-preview').innerHTML},
       {role:'assistant', content:'Ready. I refined the draft while preserving the writer’s voice. What would you like to change?'}
     ];
+    markUnsavedChanges();
     window.scrollTo(0,0);
   }).catch(function(err){
     clearInterval(anim);
@@ -2573,6 +2675,7 @@ Return ONLY valid JSON, no markdown:
       {role:'user', content:'You are a Wocult senior editor. You have a first-person submission. Keep the contributor\'s voice and specific details. Shape, don\'t rewrite.\n\nRULES:\n- Editorial changes: brief description + <version>full HTML</version>\n- Conversational: reply normally, no tags\n- Sentence case. No italics except quotes. No bold body.\n- Under 1200 words unless user asks otherwise\n\nCurrent article:\n'+document.getElementById('chat-article-preview').innerHTML},
       {role:'assistant', content:'Ready. This is their story — I\'ll preserve their voice. What would you like to refine?'}
     ];
+    markUnsavedChanges();
     window.scrollTo(0,0);
   }).catch(function(err){
     clearInterval(anim);
@@ -2633,6 +2736,7 @@ function saveArticleToFirebase(articleData, status) {
   return db.collection('articles').add(data)
     .then(function(ref){
       fbToast('✓ Saved to Firebase — ID: '+ref.id.substring(0,8)+'...');
+      clearUnsavedChanges();
       return ref.id;
     }).catch(function(e){ fbToast('Firebase save failed', false); throw e; });
 }
@@ -3021,6 +3125,7 @@ function setWorkflowCard(card) {
   maxWorkflowStepReached = 0;
   document.getElementById('main').style.display = 'none';
   document.getElementById('workflow').style.display = 'block';
+  updateTopUpdatedVisibility(_workflowSource === 'main' && !card._url);
   document.documentElement.style.overflow = 'auto';
   document.body.style.overflow = 'auto';
   var bc = card.cat==='hiring'?'bh':card.cat==='layoffs'?'bl':card.cat==='expansion'?'be':card.cat==='investment'?'bi':card.cat==='policy'?'bp':'bg';
@@ -3107,7 +3212,7 @@ function showPreviousWorkflowScreen() {
   if (workflowPreviousLandingScreen === 'landing-scratch-choice') { showScratchChoice(); return; }
   if (workflowPreviousLandingScreen === 'landing-scratch') { showScratchForm(); return; }
   if (workflowPreviousLandingScreen === 'landing-existing-draft') { showExistingDraftForm(); return; }
-  if (confirm('Go home? Your current draft may be lost.')) goToLanding();
+  confirmBeforeLeavingScreen(goToLanding);
 }
 function goWorkflowBack() {
   if (currentWorkflowStep === 'review') { showWorkflowStep('refine'); return; }
@@ -3122,12 +3227,10 @@ function goWorkflowBack() {
     return;
   }
   if (currentWorkflowStep === 'brief') { showPreviousWorkflowScreen(); return; }
-  if (confirm('Go home? Your current draft may be lost.')) goToLanding();
+  confirmBeforeLeavingScreen(goToLanding);
 }
 function goWorkflowHome() {
-  var preview = document.getElementById('chat-article-preview');
-  var hasDraft = (generatedContent && Object.keys(generatedContent).length > 0) || (preview && preview.innerText.trim());
-  if (!hasDraft || confirm('Go home? Your current draft may be lost.')) goToLanding();
+  confirmBeforeLeavingScreen(goToLanding);
 }
 function goStep(n) {
   showWorkflowStep(n === 1 ? 'brief' : n === 2 ? 'generate' : n === 3 ? 'review' : 'brief');
@@ -3277,6 +3380,7 @@ var hasUrl = !!currentCard._url;
       {role:'user', content: 'You are a sharp senior editor at Wocult — an independent Indian media platform for modern working professionals.\n\nWocult\'s north star: Every story must answer — what is in this for the working professional? Does it educate, advise, explain something they\'ve lived but never named? The reader should feel: this platform gets it. This is written for me. Wocult\'s goal is to be the most trusted voice for India\'s working class.\n\nVoice: Direct, confident, peer-to-peer. Reader is smart, slightly cynical about corporate culture, 28-38, Indian. Never preachy. Never corporate. Never above the reader. Study these real Wocult opening lines: "Most leaders who rule by fear do not know they are doing it." / "High performance has a biology. And most organisations are ignoring it." / "Every transformation has a business case. Very few have a human one."\n\nWhat never belongs: hustle worship, title worship, glorifying overwork, treating companies as heroes, press releases dressed as journalism.\n\nYou are helping refine a draft article in a live preview window.\n\nRULES:\n- For ANY editorial change (rewrite, edit, add section, change tone, add subheadings, etc.): respond with a brief 1-line description of what you changed, then wrap the FULL revised article HTML in <version> tags.\n- For research, factual questions, opinions, or anything conversational: reply normally with NO <version> tags. This appears in the chat below.\n- FORMATTING: All titles and subheadings in sentence case. No italics except direct quotes from a person. No bold in body copy.\\n- WORD LIMIT: Keep revised articles under 1200 words. If the user asks to add an angle or new section, make room by tightening other sections — condense, remove redundancy. BUT never alter or remove text the user has written manually. Be wise: retain their thought, make space elsewhere.\n- Use web search when asked to find data, statistics, or sources.\n- Be intelligent and confident. Improve the writing substantially, not cosmetically.\n\nExample editorial response:\nRewrote the intro to lead with the worker perspective.\n<version><h2>New Title</h2><p class="short-intro">New intro line</p><p>Full revised article...</p></version>\n\nCurrent article (Version 1):\n'+document.getElementById('chat-article-preview').innerHTML},
       {role:'assistant', content: 'Ready. Tell me what to change — a section, the tone, the headline — or ask me to research something.'}
     ];
+    markUnsavedChanges();
     window.scrollTo(0,0);
   }).catch(function(e) {
     clearInterval(anim);
@@ -3576,6 +3680,7 @@ function saveGuestWriterDraft(status, options) {
     else if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
   }
   return db.collection('articles').doc(currentGuestWriterArticleId).set(data, {merge:true}).then(function() {
+    clearUnsavedChanges();
     if (!options.silent) {
       if (status === 'under_review') {
         document.getElementById('publish-result').style.display = 'block';
@@ -3682,6 +3787,8 @@ function autoDownloadCSV(data) {
   a.click();
 }
 
+setupUnsavedChangeTracking();
+setupBrowserBackGuard();
 renderSaved();
 loadAll();
 var accessKeyFromUrl = new URLSearchParams(window.location.search).get('key');
