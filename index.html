@@ -202,7 +202,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <input class="wf-input" id="access-key-input" placeholder="Interview access key" style="display:none;font-size:14px;text-transform:uppercase" onkeydown="if(event.key==='Enter')submitAccessKey()" />
     <div id="access-error" style="display:none;color:var(--red);font-size:13px;line-height:1.5"></div>
     <button class="btn-lg btn-y" onclick="signInWithGoogle()" style="align-self:flex-start;padding:12px 28px">Continue with Google</button>
-    <p class="hint">Interview guests with INT links can continue directly from their invitation link.</p>
+    <p class="hint">Interview guests can continue directly from their invitation link. No login needed.</p>
   </div>
 </div>
 
@@ -325,7 +325,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   <div id="landing-cards" class="landing">
     <div class="landing-hero">
       <h1>What would you like to do today?</h1>
-      <p>Wocult Intelligence helps you find stories that matter and shape them into something worth reading.</p>
+      <p>Wocult Studio helps you find stories that matter and shape them into something worth reading.</p>
     </div>
     <div style="height:1px;background:var(--bdr);width:100%;max-width:880px;margin-bottom:30px"></div>
     <div style="max-width:880px;width:100%;display:flex;flex-direction:column;gap:30px">
@@ -461,7 +461,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
         <button class="btn" onclick="loadInterviewSubmissions({force:true})">Refresh</button>
       </div>
       <h2>Staff submissions</h2>
-      <p class="sub">Review guest interview responses submitted through Wocult Intelligence.</p>
+      <p class="sub">Review guest interview responses submitted through Wocult Studio.</p>
 
       <div id="interview-submissions-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:16px"></div>
 
@@ -924,7 +924,7 @@ function loadGuestWriterProfile(uid) {
     return;
   }
   hideAllAppScreens();
-  showGuestWriterPending('Checking your writer profile...', 'Please wait while Wocult Intelligence checks your access.', '');
+  showGuestWriterPending('Checking your writer profile...', 'Please wait while Wocult Studio checks your access.', '');
   db.collection('guest_writers').doc(uid).get().then(function(doc) {
     if (!doc.exists) {
       currentGuestWriterProfile = null;
@@ -993,7 +993,7 @@ function submitGuestWriterRegistration() {
 }
 function loadActiveGuestWriterStory(uid) {
   hideAllAppScreens();
-  showGuestWriterPending('Loading your story...', 'Please wait while Wocult Intelligence checks your current story stage.', '');
+  showGuestWriterPending('Loading your story...', 'Please wait while Wocult Studio checks your current story stage.', '');
   db.collection('articles')
     .where('sourceType','==','guest_writer')
     .where('writerUid','==',uid)
@@ -1808,7 +1808,7 @@ function showGuestRefinementChoice(data) {
   var choice = document.getElementById('guest-refinement-choice');
   if (status) status.textContent = '';
   if (!choice) return;
-  choice.innerHTML = '<div style="font-size:15px;font-weight:600;margin-bottom:8px">Do you want Wocult Intelligence to refine your answers for clarity before final submission?</div>'
+  choice.innerHTML = '<div style="font-size:15px;font-weight:600;margin-bottom:8px">Do you want Wocult Studio to refine your answers for clarity before final submission?</div>'
     + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-lg btn-y" onclick="submitGuestInterviewWithRefinement()">Yes, refine my answers</button><button class="btn-lg" onclick="submitGuestInterviewAsIs()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">No, submit as is</button></div>';
   choice.style.display = 'block';
   choice.scrollIntoView({behavior:'smooth', block:'center'});
