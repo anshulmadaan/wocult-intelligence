@@ -150,6 +150,17 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 
 <!-- Firebase Toast -->
 <div id="fb-toast" style="display:none;position:fixed;bottom:24px;right:24px;background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;border-left:3px solid var(--y)"></div>
+<div id="gw-welcome-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;align-items:center;justify-content:center;padding:24px">
+  <div style="background:#fff;border-radius:10px;border:1px solid var(--bdr);max-width:520px;width:100%;padding:24px;box-shadow:0 18px 60px rgba(0,0,0,0.25)">
+    <h2 style="font-size:22px;font-family:Georgia,serif;margin-bottom:12px">Welcome to Wocult.</h2>
+    <p style="font-size:14px;line-height:1.7;color:var(--blk);white-space:pre-line;margin-bottom:18px">Your writer profile has been approved. You can now share your first story idea with our editorial team.
+
+Before you write the full piece, send us the idea you want to explore. We’ll review the angle, share feedback if needed, and approve it once it feels ready to write.
+
+We’re looking for honest, experience-led stories — not polished perfection.</p>
+    <button class="btn-lg btn-y" onclick="dismissGuestWriterWelcome()">Start with a story idea</button>
+  </div>
+</div>
 
 
 <div class="topbar">
@@ -224,6 +235,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
     <h2>Create your writer profile</h2>
     <p class="sub">Tell us who you are, what you’d like to write about, and the experience or perspective you’d bring to Wocult.</p>
     <div class="sfield"><label>Full name</label><input id="gw-fullName" /></div>
+    <div class="sfield"><label>Alias</label><div class="hint">Would you like to be attributed under another alias or an alternate name?</div><input id="gw-alias" /></div>
     <div class="sfield"><label>Email</label><input id="gw-email" readonly /></div>
     <div class="sfield"><label>Phone number</label><input id="gw-phone" /></div>
     <div class="sfield"><label>Location</label><input id="gw-location" /></div>
@@ -568,6 +580,20 @@ There are no right or wrong answers here. Please answer openly and in your own v
       <h2>Tell us your story</h2>
       <p class="sub">Share your experience, perspective, or idea. Write freely — we'll shape it into a Wocult piece. Your voice, our edit.</p>
 
+      <div id="guest-writer-upload-block" style="display:none">
+        <div class="sfield">
+          <label>Upload your story</label>
+          <div class="hint">Upload a draft if you have already written your story. You can review it before submitting.</div>
+          <input id="guest-writer-story-file" type="file" accept=".txt,.docx" onchange="handleGuestWriterStoryUpload(this.files[0])" />
+          <div id="guest-writer-upload-status" class="hint"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin:24px 0;color:var(--g3);font-size:12px;font-weight:700;letter-spacing:0.8px">
+          <div style="height:1px;background:var(--bdr);flex:1"></div>
+          <span>OR</span>
+          <div style="height:1px;background:var(--bdr);flex:1"></div>
+        </div>
+      </div>
+
       <div class="sfield">
         <label>Your name and email</label>
         <input id="sc-name" placeholder="Name · email@example.com" />
@@ -612,7 +638,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
       <div class="sfield">
         <label>Tell us your story</label>
         <div class="hint">Write freely — a full draft, rough notes, or just the idea. Tell us what happened, what it taught you, and why other working professionals may relate.</div>
-        <textarea id="sc-story" rows="8" placeholder="Start writing here..."></textarea>
+        <textarea id="sc-story" rows="8" placeholder="Start writing here..." oninput="updateGuestWriterSubmitState()"></textarea>
       </div>
 
       <div class="sfield">
@@ -622,7 +648,10 @@ There are no right or wrong answers here. Please answer openly and in your own v
         </label>
       </div>
 
-      <button class="btn-lg btn-y" onclick="startFromScratch()" style="padding:14px 32px;font-size:15px;width:100%">Generate my story →</button>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-lg" id="guest-writer-submit-story-btn" onclick="submitGuestWriterStoryAsIs()" disabled style="display:none;background:var(--gray);border:1px solid var(--g2);cursor:not-allowed;color:var(--blk);opacity:0.5;flex:1">Submit</button>
+        <button class="btn-lg btn-y" onclick="startFromScratch()" style="padding:14px 32px;font-size:15px;flex:1">Generate your story</button>
+      </div>
     </div>
   </div>
 
@@ -841,6 +870,7 @@ var currentUser = null;
 var currentGuestWriterProfile = null;
 var currentGuestWriterArticleId = '';
 var currentGuestWriterStory = null;
+var guestWriterUploadedStoryText = '';
 var hasUnsavedChanges = false;
 var browserBackGuardSetup = false;
 var browserBackGuardDisabled = false;
@@ -856,6 +886,35 @@ window._staffGuestWriterStories = [];
 window._staffGuestWriterStoriesLoaded = false;
 window._staffGuestWriterStoriesLoading = false;
 
+function isStaffUser(user) {
+  return !!(user && STAFF_EMAILS.indexOf((user.email || '').toLowerCase()) !== -1);
+}
+function guardStaffScreen() {
+  if (isStaffUser(currentUser)) return true;
+  hideAllAppScreens();
+  if (currentUser) {
+    currentAccessMode = 'guest_writer';
+    loadGuestWriterProfile(currentUser.uid);
+  } else {
+    showAccessScreen();
+  }
+  return false;
+}
+function enforceStaffScreenAccess() {
+  if (isStaffUser(currentUser)) return;
+  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','main'].some(function(id) {
+    var el = document.getElementById(id);
+    return el && el.style.display !== 'none';
+  });
+  if (!staffVisible) return;
+  if (currentUser) {
+    currentAccessMode = 'guest_writer';
+    hideAllAppScreens();
+    loadGuestWriterProfile(currentUser.uid);
+  } else {
+    showAccessScreen();
+  }
+}
 function markUnsavedChanges() {
   hasUnsavedChanges = true;
 }
@@ -920,12 +979,16 @@ function setupBrowserBackGuard() {
       browserBackGuardDisabled = true;
       history.go(-2);
     }
+    setTimeout(enforceStaffScreenAccess, 0);
   });
 }
 window.addEventListener('beforeunload', function(e) {
   if (!hasUnsavedChanges) return;
   e.preventDefault();
   e.returnValue = '';
+});
+window.addEventListener('pageshow', function() {
+  setTimeout(enforceStaffScreenAccess, 0);
 });
 function updateTopUpdatedVisibility(show) {
   var el = document.getElementById('top-updated-status');
@@ -941,6 +1004,10 @@ function hideAllAppScreens() {
   document.getElementById('btn-back-landing').style.display = currentUser ? 'inline-flex' : 'none';
   document.getElementById('rbtn').style.display = 'none';
   document.getElementById('btn-logout').style.display = currentUser ? 'inline-flex' : 'none';
+  var uploadBlock = document.getElementById('guest-writer-upload-block');
+  if (uploadBlock) uploadBlock.style.display = 'none';
+  var submitBtn = document.getElementById('guest-writer-submit-story-btn');
+  if (submitBtn) submitBtn.style.display = 'none';
   updateTopUpdatedVisibility(false);
 }
 function showAccessScreen() {
@@ -994,8 +1061,7 @@ function routeSignedInUser(user) {
   if (!user) { currentAccessMode = ''; showAccessScreen(); return; }
   clearUnsavedChanges();
   document.getElementById('btn-logout').style.display = 'inline-flex';
-  var email = (user.email || '').toLowerCase();
-  if (STAFF_EMAILS.indexOf(email) !== -1) {
+  if (isStaffUser(user)) {
     currentAccessMode = 'staff';
     currentAccessKey = '';
     goToLanding();
@@ -1051,6 +1117,7 @@ function showGuestWriterRegistration(message) {
   hideAllAppScreens();
   var user = currentUser || {};
   if (document.getElementById('gw-fullName') && !document.getElementById('gw-fullName').value) document.getElementById('gw-fullName').value = user.displayName || '';
+  if (document.getElementById('gw-alias')) document.getElementById('gw-alias').value = '';
   if (document.getElementById('gw-email')) document.getElementById('gw-email').value = user.email || '';
   if (document.getElementById('gw-registration-status')) document.getElementById('gw-registration-status').textContent = message || '';
   document.getElementById('guest-writer-registration').style.display = 'flex';
@@ -1071,6 +1138,7 @@ function submitGuestWriterRegistration() {
     uid: currentUser.uid,
     email: document.getElementById('gw-email').value.trim() || currentUser.email || '',
     fullName: document.getElementById('gw-fullName').value.trim(),
+    alias: document.getElementById('gw-alias').value.trim(),
     phone: document.getElementById('gw-phone').value.trim(),
     location: document.getElementById('gw-location').value.trim(),
     dateOfBirth: document.getElementById('gw-dateOfBirth').value,
@@ -1146,7 +1214,28 @@ function showSubmitStoryIdeaScreen() {
   document.getElementById('gwi-idea').value = '';
   updateStoryIdeaWordCount();
   document.getElementById('guest-writer-idea').style.display = 'flex';
+  maybeShowGuestWriterWelcome();
   clearUnsavedChanges();
+}
+function maybeShowGuestWriterWelcome() {
+  if (currentAccessMode !== 'guest_writer' || !currentUser || !db || !currentGuestWriterProfile) return;
+  if (currentGuestWriterProfile.status !== 'approved' || currentGuestWriterProfile.approvalWelcomeSeen === true) return;
+  var modal = document.getElementById('gw-welcome-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+}
+function dismissGuestWriterWelcome() {
+  var modal = document.getElementById('gw-welcome-modal');
+  if (modal) modal.style.display = 'none';
+  if (!currentUser || !db || !currentGuestWriterProfile || currentGuestWriterProfile.approvalWelcomeSeen === true) return;
+  currentGuestWriterProfile.approvalWelcomeSeen = true;
+  db.collection('guest_writers').doc(currentUser.uid).update({
+    approvalWelcomeSeen: true,
+    approvalWelcomeSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(function(err) {
+    console.warn('Could not save guest writer welcome flag:', err.message);
+  });
 }
 function updateStoryIdeaWordCount() {
   var text = document.getElementById('gwi-idea') ? document.getElementById('gwi-idea').value.trim() : '';
@@ -1259,6 +1348,81 @@ function sendIdeaMessage(articleId, role) {
     if (status) status.textContent = 'Could not send message: '+err.message;
   });
 }
+function updateGuestWriterSubmitState() {
+  var btn = document.getElementById('guest-writer-submit-story-btn');
+  if (!btn) return;
+  var story = document.getElementById('sc-story') ? document.getElementById('sc-story').value.trim() : '';
+  var hasStory = !!(story || guestWriterUploadedStoryText);
+  btn.disabled = !hasStory;
+  btn.style.opacity = hasStory ? '1' : '0.5';
+  btn.style.cursor = hasStory ? 'pointer' : 'not-allowed';
+}
+function handleGuestWriterStoryUpload(file) {
+  var status = document.getElementById('guest-writer-upload-status');
+  if (!file) return;
+  var name = file.name || '';
+  if (/\.txt$/i.test(name)) {
+    file.text().then(function(text) {
+      guestWriterUploadedStoryText = text || '';
+      if (document.getElementById('sc-story')) document.getElementById('sc-story').value = guestWriterUploadedStoryText;
+      if (status) status.textContent = guestWriterUploadedStoryText ? 'Story uploaded. Review it below before submitting.' : 'This file did not contain readable text.';
+      markUnsavedChanges();
+      updateGuestWriterSubmitState();
+    }).catch(function() {
+      if (status) status.textContent = 'Could not read this file. Please paste your story below.';
+    });
+    return;
+  }
+  if (/\.docx$/i.test(name)) {
+    if (!window.mammoth) { if (status) status.textContent = 'Could not read this Word document. Please paste your story below.'; return; }
+    file.arrayBuffer().then(function(buffer) {
+      return mammoth.extractRawText({arrayBuffer:buffer});
+    }).then(function(result) {
+      guestWriterUploadedStoryText = result.value || '';
+      if (document.getElementById('sc-story')) document.getElementById('sc-story').value = guestWriterUploadedStoryText;
+      if (status) status.textContent = guestWriterUploadedStoryText ? 'Story uploaded. Review it below before submitting.' : 'This document did not contain readable text.';
+      markUnsavedChanges();
+      updateGuestWriterSubmitState();
+    }).catch(function() {
+      if (status) status.textContent = 'Could not read this Word document. Please paste your story below.';
+    });
+    return;
+  }
+  if (status) status.textContent = 'This file type is not supported yet. Please upload a .txt or .docx file.';
+}
+function submitGuestWriterStoryAsIs() {
+  if (currentAccessMode !== 'guest_writer' || !currentUser || !db || !currentGuestWriterArticleId) return;
+  var storyText = document.getElementById('sc-story') ? document.getElementById('sc-story').value.trim() : '';
+  if (!storyText) { updateGuestWriterSubmitState(); return; }
+  var profile = currentGuestWriterProfile || {};
+  var title = document.getElementById('sc-topic') ? document.getElementById('sc-topic').value.trim() : '';
+  var data = {
+    sourceType: 'guest_writer',
+    writerUid: currentUser.uid,
+    writerEmail: currentUser.email || profile.email || '',
+    writerName: profile.fullName || currentUser.displayName || '',
+    preferredSection: (currentGuestWriterStory && currentGuestWriterStory.preferredSection) || profile.preferredSection || '',
+    title: title || (currentGuestWriterStory && currentGuestWriterStory.title) || 'Untitled story',
+    body: plainTextToHtml(storyText),
+    rawStoryText: storyText,
+    uploadedStory: !!guestWriterUploadedStoryText,
+    status: 'under_review',
+    writingUnlocked: true,
+    submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  var btn = document.getElementById('guest-writer-submit-story-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+  db.collection('articles').doc(currentGuestWriterArticleId).set(data, {merge:true}).then(function() {
+    clearUnsavedChanges();
+    currentGuestWriterStory = Object.assign({}, currentGuestWriterStory||{}, data);
+    showGuestWriterStoryStatus(currentGuestWriterStory);
+  }).catch(function(err) {
+    alert('Could not submit story: '+err.message);
+  }).finally(function() {
+    if (btn) { btn.textContent = 'Submit'; updateGuestWriterSubmitState(); }
+  });
+}
 function openGuestWriterWritingScreen(story) {
   currentGuestWriterStory = story;
   currentGuestWriterArticleId = story.id;
@@ -1266,9 +1430,13 @@ function openGuestWriterWritingScreen(story) {
   document.getElementById('landing').style.display = 'block';
   showScratchForm();
   setTimeout(function() {
+    guestWriterUploadedStoryText = '';
     if (document.getElementById('sc-name')) document.getElementById('sc-name').value = (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || (currentUser && currentUser.email) || '';
     if (document.getElementById('sc-topic')) document.getElementById('sc-topic').value = story.title || '';
     if (document.getElementById('sc-story')) document.getElementById('sc-story').value = story.body ? stripHtml(story.body) : (story.ideaSummary || '');
+    if (document.getElementById('guest-writer-upload-status')) document.getElementById('guest-writer-upload-status').textContent = '';
+    if (document.getElementById('guest-writer-story-file')) document.getElementById('guest-writer-story-file').value = '';
+    updateGuestWriterSubmitState();
     clearUnsavedChanges();
   }, 50);
 }
@@ -1371,10 +1539,7 @@ function guestWriterStatusLabel(status) {
   return map[status] || (status ? String(status).replace(/_/g, ' ') : 'Draft');
 }
 function showInterviewSubmissions() {
-  if (currentAccessMode !== 'staff') {
-    showAccessScreen();
-    return;
-  }
+  if (!guardStaffScreen()) return;
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-interview-submissions').style.display = 'flex';
@@ -1648,7 +1813,7 @@ function copyInterviewSubmissionQA(guestKey) {
   });
 }
 function showGuestWriterApplications() {
-  if (currentAccessMode !== 'staff') { showAccessScreen(); return; }
+  if (!guardStaffScreen()) return;
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-guest-writer-applications').style.display = 'flex';
@@ -1681,29 +1846,39 @@ function renderGuestWriterApplications() {
   list.innerHTML = window._guestWriterApplications.map(function(a) {
     return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
       + '<div style="font-size:14px;font-weight:700">'+escapeHtml(a.fullName||a.email||'Guest Writer')+'</div>'
-      + '<div style="font-size:12px;color:var(--g3);line-height:1.6">'+escapeHtml(a.email||'')+'<br>'+escapeHtml(a.preferredSection||'')+'<br>Status: '+escapeHtml(a.status||'pending')+'</div>'
+      + '<div style="font-size:12px;color:var(--g3);line-height:1.6">'+escapeHtml(a.email||'')+'<br>'+escapeHtml(a.preferredSection||'')+'<br>Status: '+escapeHtml(guestWriterProfileStatusLabel(a.status))+'</div>'
       + '<button class="btn" style="margin-top:10px" onclick="openGuestWriterApplication(\''+escapeHtml(a.id)+'\')">Open</button>'
       + '</div>';
   }).join('');
+}
+function guestWriterProfileStatusLabel(status) {
+  if (status === 'approved') return 'Approved';
+  return status ? String(status).replace(/_/g, ' ') : 'pending';
 }
 function openGuestWriterApplication(id) {
   var a = window._guestWriterApplications.find(function(x){return x.id===id;});
   var detail = document.getElementById('guest-writer-application-detail');
   if (!a || !detail) return;
+  var approved = a.status === 'approved';
   detail.style.color = 'var(--blk)';
   detail.innerHTML = '<h3 style="font-size:16px;margin-bottom:8px">'+escapeHtml(a.fullName||'Guest Writer')+'</h3>'
-    + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Email: '+escapeHtml(a.email||'')+'<br>Phone: '+escapeHtml(a.phone||'')+'<br>Location: '+escapeHtml(a.location||'')+'<br>Section: '+escapeHtml(a.preferredSection||'')+'<br>Status: '+escapeHtml(a.status||'pending')+'</div>'
+    + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Email: '+escapeHtml(a.email||'')+'<br>Alias: '+escapeHtml(a.alias||'-')+'<br>Phone: '+escapeHtml(a.phone||'')+'<br>Location: '+escapeHtml(a.location||'')+'<br>Section: '+escapeHtml(a.preferredSection||'')+'<br>Status: '+escapeHtml(guestWriterProfileStatusLabel(a.status))+'</div>'
     + '<div style="font-size:13px;line-height:1.7"><strong>Bio</strong><br>'+escapeHtml(a.shortBio||'')+'<br><br><strong>Story idea</strong><br>'+escapeHtml(a.storyPitch||'')+'<br><br><strong>Experience or perspective</strong><br>'+escapeHtml(a.experiencePerspective||'')+'</div>'
-    + '<div style="display:flex;gap:8px;margin-top:14px"><button class="btn" onclick="updateGuestWriterApplicationStatus(\''+escapeHtml(a.id)+'\',\'approved\')">Approve</button><button class="btn" onclick="updateGuestWriterApplicationStatus(\''+escapeHtml(a.id)+'\',\'pending\')">Mark pending</button></div>';
+    + '<div style="display:flex;gap:8px;margin-top:14px"><button class="btn" '+(approved?'disabled style="opacity:0.5;cursor:not-allowed"':'onclick="updateGuestWriterApplicationStatus(\''+escapeHtml(a.id)+'\',\'approved\')"')+'>'+(approved?'Approved':'Approve')+'</button></div>';
 }
 function updateGuestWriterApplicationStatus(id, status) {
+  var app = (window._guestWriterApplications||[]).find(function(x){return x.id===id;});
+  if (app && app.status === 'approved' && status === 'approved') return;
   db.collection('guest_writers').doc(id).update({status:status, updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function() {
+    if (app) app.status = status;
     window._guestWriterApplicationsLoaded = false;
+    renderGuestWriterApplications();
+    openGuestWriterApplication(id);
     loadGuestWriterApplications({force:true});
   }).catch(function(err){ alert('Could not update writer profile: '+err.message); });
 }
 function showStaffGuestWriterStories() {
-  if (currentAccessMode !== 'staff') { showAccessScreen(); return; }
+  if (!guardStaffScreen()) return;
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-guest-writer-stories').style.display = 'flex';
@@ -1748,23 +1923,53 @@ function openStaffGuestWriterStory(id) {
   var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
   var detail = document.getElementById('staff-guest-writer-story-detail');
   if (!story || !detail) return;
+  var inIdeaDiscussion = story.status === 'idea_under_review' || story.status === 'idea_needs_work';
+  var ideaApproved = story.status === 'draft' || story.writingUnlocked === true || story.ideaStatus === 'approved';
+  var hasArticleContent = !!((story.introRichText||'') || (story.body||''));
+  var hasSubmittedStoryContent = ['under_review','submitted','scheduled','published'].indexOf(story.status) !== -1 && hasArticleContent;
+  var historyWrap = ideaApproved
+    ? '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:14px;font-weight:600">Idea discussion history</summary><div id="staff-idea-messages" style="display:flex;flex-direction:column;gap:10px;margin-top:10px;margin-bottom:12px"></div></details>'
+    : '<h4 style="font-size:14px;margin:12px 0 8px">Idea discussion</h4><div id="staff-idea-messages" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>';
+  var messageBox = ideaApproved ? '' : '<textarea id="staff-idea-message" class="wf-textarea" rows="4" placeholder="Send feedback or a note to the writer..."></textarea>';
+  var sendButton = ideaApproved
+    ? '<button class="btn" disabled style="opacity:0.5;cursor:not-allowed">Send message</button>'
+    : '<button class="btn" onclick="sendIdeaMessage(\''+escapeHtml(id)+'\',\'staff\')">Send message</button>';
+  var approveButton = ideaApproved
+    ? '<button class="btn" disabled style="opacity:0.5;cursor:not-allowed">Idea approved</button>'
+    : '<button class="btn" onclick="approveGuestWriterIdea(\''+escapeHtml(id)+'\')">Approve idea</button>';
+  var askButton = hasSubmittedStoryContent
+    ? '<button class="btn" onclick="askGuestWriterIdeaChanges(\''+escapeHtml(id)+'\')">Ask for changes</button>'
+    : '<button class="btn" disabled style="opacity:0.5;cursor:not-allowed">Ask for changes</button>';
+  var copyButton = hasSubmittedStoryContent
+    ? '<button class="btn" onclick="copyStaffGuestWriterStory(\''+escapeHtml(id)+'\')">Copy article content</button>'
+    : '<button class="btn" disabled style="opacity:0.5;cursor:not-allowed" title="No submitted article content to copy yet">Copy article content</button>';
   detail.style.color = 'var(--blk)';
   detail.innerHTML = '<h3 style="font-size:16px;margin-bottom:8px">'+escapeHtml(story.title||'Untitled story idea')+'</h3>'
     + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Writer: '+escapeHtml(story.writerName||'')+'<br>Email: '+escapeHtml(story.writerEmail||'')+'<br>Preferred section: '+escapeHtml(story.preferredSection||'')+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+'</div>'
     + '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);font-size:14px;line-height:1.7;margin-bottom:14px"><strong>Story idea</strong><br>'+escapeHtml(story.ideaSummary||'')+'</div>'
-    + '<h4 style="font-size:14px;margin:12px 0 8px">Idea discussion</h4><div id="staff-idea-messages" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>'
-    + '<textarea id="staff-idea-message" class="wf-textarea" rows="4" placeholder="Send feedback or a note to the writer..."></textarea>'
-    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" onclick="sendIdeaMessage(\''+escapeHtml(id)+'\',\'staff\')">Send message</button><button class="btn" onclick="approveGuestWriterIdea(\''+escapeHtml(id)+'\')">Approve idea</button><button class="btn" onclick="askGuestWriterIdeaChanges(\''+escapeHtml(id)+'\')">Ask for changes</button><button class="btn" onclick="copyStaffGuestWriterStory(\''+escapeHtml(id)+'\')">Copy article content</button></div><div id="staff-idea-message-status" class="hint" style="margin-top:10px"></div>';
+    + historyWrap
+    + messageBox
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+sendButton+approveButton+askButton+copyButton+'</div><div id="staff-idea-message-status" class="hint" style="margin-top:10px"></div>';
   loadIdeaMessages(id, 'staff-idea-messages');
 }
 function approveGuestWriterIdea(id) {
+  if (!window.confirm('Are you sure you want to approve this idea? Once approved, the writer will be able to start writing the full story.')) return;
   db.collection('articles').doc(id).update({
     status: 'draft',
     ideaStatus: 'approved',
     writingUnlocked: true,
     ideaApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){ loadStaffGuestWriterStories({force:true}); }).catch(function(err){ alert('Could not approve idea: '+err.message); });
+  }).then(function(){
+    var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
+    if (story) {
+      story.status = 'draft';
+      story.ideaStatus = 'approved';
+      story.writingUnlocked = true;
+      openStaffGuestWriterStory(id);
+    }
+    loadStaffGuestWriterStories({force:true});
+  }).catch(function(err){ alert('Could not approve idea: '+err.message); });
 }
 function askGuestWriterIdeaChanges(id) {
   db.collection('articles').doc(id).update({
@@ -1778,6 +1983,7 @@ function copyStaffGuestWriterStory(id) {
   var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
   if (!story) return;
   var text = [story.title, story.ideaSummary, stripHtml((story.introRichText||'')+(story.body||''))].filter(Boolean).join('\n\n');
+  if (!((story.introRichText||'') || (story.body||''))) { alert('No article content is available to copy yet.'); return; }
   navigator.clipboard.writeText(text);
 }
 function loadGuestInterview(key) {
@@ -1824,6 +2030,7 @@ function renderGuestInterview(session) {
       + '<label>Question '+(i+1)+'</label>'
       + '<div style="font-size:15px;line-height:1.6;margin-bottom:12px;color:var(--blk)">'+escapeHtml(q.question||'')+'</div>'
       + '<div class="guest-answer" contenteditable="true" data-question-id="'+escapeHtml(id)+'" data-order="'+(q.order||i+1)+'" data-question="'+escapeHtml(q.question||'')+'" style="border:1px solid var(--bdr);border-radius:8px;min-height:120px;padding:12px;background:#fff;outline:none;font-size:14px;line-height:1.7">'+(answer.answerHtml||'')+'</div>'
+      + '<div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap"><button class="btn" data-refine-question-id="'+escapeHtml(id)+'" onclick="refineGuestInterviewAnswer(\''+escapeHtml(id)+'\')">Refine</button><span class="hint guest-question-refine-status" data-refine-status-id="'+escapeHtml(id)+'"></span></div>'
       + '</div>';
   }).join('');
   content.innerHTML = '<h2>'+escapeHtml(session.interviewTitle||'Interview')+'</h2>'
@@ -1832,8 +2039,10 @@ function renderGuestInterview(session) {
     + '<div class="sfield"><label>Your name</label><input id="guest-name" placeholder="Enter your full name" value="'+escapeHtml(session.guestName||'')+'" /></div>'
     + '<div class="sfield"><label>Your email</label><input id="guest-email" type="email" placeholder="email@example.com" value="'+escapeHtml(session.guestEmail||'')+'" /></div>'
     + '<div class="sfield" style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff"><label>Word document workflow</label><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-lg" onclick="downloadGuestInterviewDocx()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Download interview as Word document</button><label class="btn-lg" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);display:inline-flex;align-items:center"><input type="file" accept=".docx" style="display:none" onchange="if(this.files&&this.files[0])handleGuestInterviewUpload(this.files[0]);this.value=\'\';">Upload completed Word document</label></div><div id="guest-upload-status" class="hint" style="margin-top:10px"></div></div>'
+    + '<div style="display:flex;align-items:center;gap:12px;margin:24px 0;color:var(--g3);font-size:12px;font-weight:700;letter-spacing:0.8px"><div style="height:1px;background:var(--bdr);flex:1"></div><span>OR</span><div style="height:1px;background:var(--bdr);flex:1"></div></div>'
+    + '<div style="font-size:14px;font-weight:700;color:var(--blk);margin-bottom:12px">Fill the responses here</div>'
     + '<div style="display:flex;flex-direction:column;gap:14px;margin-top:24px">'+questionsHtml+'</div>'
-    + '<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><button class="btn-lg" onclick="saveGuestInterviewProgress()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Save Progress</button><button class="btn-lg" onclick="submitGuestInterviewWithRefinement()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Refine</button><button class="btn-lg btn-y" onclick="confirmSubmitGuestInterviewAsIs()">Submit</button></div>'
+    + '<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><button class="btn-lg" onclick="saveGuestInterviewProgress()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Save Progress</button><button class="btn-lg btn-y" onclick="confirmSubmitGuestInterviewAsIs()">Submit</button></div>'
     + '<div id="guest-refinement-choice" style="display:none;margin-top:16px;padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff"></div>'
     + '<div id="guest-save-status" class="hint" style="margin-top:12px"></div>';
   content.style.display = 'block';
@@ -1981,9 +2190,112 @@ function confirmSubmitGuestInterviewAsIs() {
   if (status) status.textContent = '';
   if (!choice) return;
   choice.innerHTML = '<div style="font-size:15px;font-weight:600;margin-bottom:8px">Are you sure you want to submit without using Wocult AI?</div>'
-    + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-lg btn-y" onclick="submitGuestInterviewAsIs()">Yes, submit</button><button class="btn-lg" onclick="submitGuestInterviewWithRefinement()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">No, refine</button></div>';
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-lg btn-y" onclick="submitGuestInterviewAsIs()">Yes, submit</button><button class="btn-lg" onclick="cancelGuestInterviewSubmitChoice()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">No, refine</button></div>';
   choice.style.display = 'block';
   choice.scrollIntoView({behavior:'smooth', block:'center'});
+}
+function cancelGuestInterviewSubmitChoice() {
+  var choice = document.getElementById('guest-refinement-choice');
+  if (choice) choice.style.display = 'none';
+}
+function getGuestInterviewAnswerElement(questionId) {
+  return Array.from(document.querySelectorAll('.guest-answer')).find(function(el) {
+    return el.getAttribute('data-question-id') === questionId;
+  });
+}
+function getGuestInterviewRefineStatus(questionId) {
+  return Array.from(document.querySelectorAll('.guest-question-refine-status')).find(function(el) {
+    return el.getAttribute('data-refine-status-id') === questionId;
+  });
+}
+function getGuestInterviewRefineButton(questionId) {
+  return Array.from(document.querySelectorAll('[data-refine-question-id]')).find(function(el) {
+    return el.getAttribute('data-refine-question-id') === questionId;
+  });
+}
+function refineGuestInterviewAnswer(questionId) {
+  var answerEl = getGuestInterviewAnswerElement(questionId);
+  var status = getGuestInterviewRefineStatus(questionId);
+  var btn = getGuestInterviewRefineButton(questionId);
+  if (!answerEl) return;
+  var answerText = answerEl.innerText.trim();
+  if (!answerText) {
+    if (status) status.textContent = 'Please write an answer before refining it.';
+    return;
+  }
+  var data = collectGuestInterviewAnswers();
+  var answer = data.rawAnswers.find(function(a){ return a.questionId === questionId; });
+  if (!answer) return;
+  if (status) status.textContent = 'Refining this answer...';
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; btn.style.cursor = 'not-allowed'; }
+  db.collection('interview_sessions').doc(window._guestInterviewKey).update({
+    status: 'in_progress',
+    guestName: data.guestName,
+    guestEmail: data.guestEmail,
+    rawAnswers: data.rawAnswers,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() {
+    var session = window._guestInterviewSession || {};
+var prompt = `Use the editorial brief provided before this prompt for Wocult interview answer refinement.
+
+The guest has answered one interview question. Refine only this answer. Do not change the question.
+
+Interview title:
+${session.interviewTitle||''}
+
+Question:
+${answer.question}
+
+Original answer:
+${answer.answerText}
+
+Requirements:
+- Preserve the guest's meaning, point of view, lived experience, specific examples, and personal details.
+- Use plain English.
+- Remove repetition, filler, jargon, and vague phrases.
+- Do not invent facts, examples, claims, or personal details.
+- Return only this one refined answer.
+
+Return ONLY valid JSON:
+{
+  "refinedAnswerHtml": "<p>Refined answer here</p>",
+  "refinedAnswerText": "Refined answer here"
+}`;
+    return fetch(WORKER+'/generate', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        briefType:'interviewAnswers',
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1200,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+  }).then(function(r){return r.json();}).then(function(res) {
+    if (res.error) throw new Error(res.error.message);
+    var txt = (res.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
+    if (s===-1) throw new Error('No JSON in response');
+    var parsed = JSON.parse(txt.slice(s,e+1));
+    var refinedHtml = parsed.refinedAnswerHtml || plainTextToHtml(parsed.refinedAnswerText || answerText);
+    answerEl.innerHTML = refinedHtml;
+    var updatedData = collectGuestInterviewAnswers();
+    return db.collection('interview_sessions').doc(window._guestInterviewKey).update({
+      status: 'in_progress',
+      guestName: updatedData.guestName,
+      guestEmail: updatedData.guestEmail,
+      rawAnswers: updatedData.rawAnswers,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }).then(function() {
+    window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, collectGuestInterviewAnswers(), {status:'in_progress'});
+    clearUnsavedChanges();
+    if (status) status.textContent = 'Answer refined. Review it before submitting.';
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not refine this answer: '+err.message;
+  }).finally(function() {
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; }
+  });
 }
 function saveGuestRawSubmission(data, finalData) {
   return db.collection('interview_sessions').doc(window._guestInterviewKey).update(finalData || {
@@ -2191,6 +2503,7 @@ function goToLanding() {
   document.getElementById('access-screen').style.display = 'none';
   document.getElementById('guest-placeholder').style.display = 'none';
   document.getElementById('landing').style.display = 'block';
+  if (!guardStaffScreen()) return;
   document.getElementById('stats-bar').style.display = 'none';
   document.getElementById('saved-toggle-bar').style.display = 'none';
   document.getElementById('saved-section').style.display = 'none';
@@ -2201,6 +2514,7 @@ function goToLanding() {
   backToCards();
 }
 function showMain() {
+  if (!guardStaffScreen()) return;
   document.getElementById('landing').style.display = 'none';
   document.getElementById('main').style.display = 'block';
   document.getElementById('stats-bar').style.display = 'grid';
@@ -2233,12 +2547,14 @@ function backToCards() {
   document.getElementById('landing-cards').style.display = 'flex';
 }
 function showUrlEntry() {
+  if (!guardStaffScreen()) return;
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-url').style.display = 'flex';
   setTimeout(function(){ document.getElementById('landing-url-input').focus(); }, 100);
 }
 function showPrepareInterview() {
+  if (!guardStaffScreen()) return;
   hideStaffLandingPanels();
   resetInterviewPreparationForm();
   document.getElementById('landing-cards').style.display = 'none';
@@ -2296,20 +2612,28 @@ function setInterviewGeneratedButtonState(hasLink, canUpdate) {
   if (updateBtn) updateBtn.style.display = hasLink && canUpdate !== false ? 'inline-flex' : 'none';
 }
 function showScratchChoice() {
+  if (currentAccessMode === 'staff' && !guardStaffScreen()) return;
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-scratch-choice').style.display = 'flex';
 }
 function showExistingDraftForm() {
+  if (currentAccessMode === 'staff' && !guardStaffScreen()) return;
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-existing-draft').style.display = 'flex';
   setTimeout(function(){ document.getElementById('existing-draft-text').focus(); }, 100);
 }
 function showScratchForm() {
+  if (currentAccessMode === 'staff' && !guardStaffScreen()) return;
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-scratch').style.display = 'flex';
+  var uploadBlock = document.getElementById('guest-writer-upload-block');
+  var submitBtn = document.getElementById('guest-writer-submit-story-btn');
+  if (uploadBlock) uploadBlock.style.display = currentAccessMode === 'guest_writer' ? 'block' : 'none';
+  if (submitBtn) submitBtn.style.display = currentAccessMode === 'guest_writer' ? 'inline-flex' : 'none';
+  updateGuestWriterSubmitState();
 }
 function startFromUrl() {
   var url = document.getElementById('landing-url-input').value.trim();
