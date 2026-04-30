@@ -482,6 +482,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
       <div id="interview-submissions-filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
         <button class="chip on" data-submission-filter="all" onclick="filterInterviewSubmissions('all')">all</button>
         <button class="chip" data-submission-filter="sent" onclick="filterInterviewSubmissions('sent')">sent</button>
+        <button class="chip" data-submission-filter="seen" onclick="filterInterviewSubmissions('seen')">seen</button>
         <button class="chip" data-submission-filter="in_progress" onclick="filterInterviewSubmissions('in_progress')">in_progress</button>
         <button class="chip" data-submission-filter="submitted" onclick="filterInterviewSubmissions('submitted')">submitted</button>
         <button class="chip" data-submission-filter="refined" onclick="filterInterviewSubmissions('refined')">refined</button>
@@ -1520,12 +1521,30 @@ function formatFirestoreDate(value) {
 function statusLabel(status) {
   var map = {
     sent: 'Sent',
+    seen: 'Seen',
     in_progress: 'In progress',
+    'in progress': 'In progress',
     submitted: 'Submitted',
     refined: 'Refined',
-    final: 'Final'
+    final: 'Submitted',
+    finalSubmitted: 'Submitted'
   };
   return map[status] || (status ? String(status).replace(/_/g, ' ') : 'Unknown');
+}
+function normalizedInterviewStatus(session) {
+  var status = session && session.status ? String(session.status) : '';
+  if (status === 'finalSubmitted' || status === 'final' || status === 'submitted' || (session && session.finalSubmittedAt)) return 'submitted';
+  if (status === 'in progress') return 'in_progress';
+  return status;
+}
+function interviewStatusDotHtml(session) {
+  var status = normalizedInterviewStatus(session);
+  var color = '#9ca3af';
+  if (status === 'sent') color = '#dc2626';
+  if (status === 'seen') color = '#f97316';
+  if (status === 'in_progress') color = '#facc15';
+  if (status === 'submitted') color = '#16a34a';
+  return '<span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:'+color+';margin-right:6px;vertical-align:middle"></span>';
 }
 function guestWriterStatusLabel(status) {
   var map = {
@@ -1605,10 +1624,10 @@ function loadMoreInterviewSubmissions() {
 function renderInterviewSubmissionSummary() {
   var summary = document.getElementById('interview-submissions-summary');
   if (!summary) return;
-  var statuses = ['all','sent','in_progress','submitted','refined','final'];
+  var statuses = ['all','sent','seen','in_progress','submitted','refined','final'];
   var counts = {all:(window._interviewSubmissions||[]).length};
   (window._interviewSubmissions||[]).forEach(function(s) {
-    var st = s.status || 'unknown';
+    var st = normalizedInterviewStatus(s) || 'unknown';
     counts[st] = (counts[st] || 0) + 1;
   });
   summary.innerHTML = statuses.map(function(st) {
@@ -1623,7 +1642,7 @@ function renderInterviewSubmissions() {
   if (!list) return;
   var filter = window._interviewSubmissionFilter || 'all';
   var sessions = (window._interviewSubmissions||[]).filter(function(s) {
-    return filter === 'all' || s.status === filter;
+    return filter === 'all' || normalizedInterviewStatus(s) === filter || s.status === filter;
   });
   document.querySelectorAll('[data-submission-filter]').forEach(function(btn) {
     btn.classList.toggle('on', btn.getAttribute('data-submission-filter') === filter);
@@ -1638,7 +1657,7 @@ function renderInterviewSubmissions() {
     return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
       + '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px">'
       + '<div style="font-size:14px;font-weight:700;line-height:1.4">'+escapeHtml(s.interviewTitle||'Untitled interview')+'</div>'
-      + '<span class="badge bg">'+escapeHtml(statusLabel(s.status))+'</span>'
+      + '<span class="badge bg">'+interviewStatusDotHtml(s)+escapeHtml(statusLabel(normalizedInterviewStatus(s) || s.status))+'</span>'
       + '</div>'
       + '<div style="font-size:12px;color:var(--g3);line-height:1.6;margin-bottom:10px">'
       + escapeHtml(guest) + '<br>'
@@ -1678,11 +1697,11 @@ function getInterviewSubmissionAnswerHtml(answer) {
   return escapeHtml(answer.refinedAnswerText || answer.answerText || '').replace(/\n/g,'<br>');
 }
 function isInterviewQuestionEditLocked(session) {
-  return session && (session.status === 'final' || session.status === 'submitted' || !!session.finalSubmittedAt);
+  return session && (session.status === 'final' || session.status === 'submitted' || session.status === 'finalSubmitted' || !!session.submittedAt || !!session.finalSubmittedAt);
 }
 function renderInterviewQuestionEditor(session) {
   if (isInterviewQuestionEditLocked(session)) {
-    return '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);font-size:13px;line-height:1.6;margin:14px 0">This interview has already been submitted. Questions should not be edited now.</div>';
+    return '';
   }
   var questions = session.questions || [];
   if (!questions.length) return '';
@@ -1991,7 +2010,9 @@ function loadGuestInterview(key) {
   currentAccessKey = (key||'').trim().toUpperCase();
   saveAccessSession(currentAccessMode, currentAccessKey);
   if (window._guestInterviewKey === currentAccessKey && window._guestInterviewSession) {
-    renderGuestInterview(window._guestInterviewSession);
+    markGuestInterviewSeenIfNeeded(window._guestInterviewSession).finally(function() {
+      renderGuestInterview(window._guestInterviewSession);
+    });
     return;
   }
   hideAllAppScreens();
@@ -2010,9 +2031,23 @@ function loadGuestInterview(key) {
     }
     window._guestInterviewKey = currentAccessKey;
     window._guestInterviewSession = Object.assign({guestKey:currentAccessKey}, doc.data());
-    renderGuestInterview(window._guestInterviewSession);
+    markGuestInterviewSeenIfNeeded(window._guestInterviewSession).finally(function() {
+      renderGuestInterview(window._guestInterviewSession);
+    });
   }).catch(function(err) {
     document.getElementById('guest-message').innerHTML = '<h2>Could not load interview</h2><p class="sub">'+escapeHtml(err.message)+'</p>';
+  });
+}
+function markGuestInterviewSeenIfNeeded(session) {
+  if (!session || !db || session.status !== 'sent') return Promise.resolve();
+  return db.collection('interview_sessions').doc(session.guestKey || currentAccessKey).update({
+    status: 'seen',
+    seenAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() {
+    session.status = 'seen';
+  }).catch(function(err) {
+    console.warn('Could not mark interview as seen:', err.message);
   });
 }
 function renderGuestInterview(session) {
@@ -2794,6 +2829,7 @@ function updateInterviewSession() {
     var session = Object.assign({id:doc.id, guestKey:doc.id}, doc.data());
     if (isInterviewQuestionEditLocked(session)) {
       if (status) status.textContent = 'This interview has already been submitted. Questions should not be edited now.';
+      setInterviewGeneratedButtonState(true, false);
       return null;
     }
     if (status) status.textContent = 'Saving updates...';
