@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -120,6 +120,9 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .btn-lg{padding:10px 28px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:none}
 .btn-y{background:var(--y);color:var(--ydeep)}.btn-y:hover{background:#EFB860}
 .btn-dark{background:var(--blk);color:var(--y)}.btn-dark:hover{background:#333}
+.guest-word-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;width:100%}
+.guest-word-actions .guest-word-action-btn{width:100%;height:56px;min-height:56px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 18px;margin:0;border:1px solid var(--bdr);border-radius:8px;background:#f3eee6;color:var(--blk);font-family:inherit;font-size:14px;font-weight:600;line-height:1.2;text-align:center;cursor:pointer;appearance:none;-webkit-appearance:none}
+@media (max-width:640px){.guest-word-actions{grid-template-columns:1fr}}
 .source-card{background:var(--gray);border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start}
 .source-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;background:var(--blk);color:var(--y);white-space:nowrap;margin-top:2px}
 .source-title{font-size:14px;font-weight:500;line-height:1.4}
@@ -400,6 +403,18 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       </div>
         </div>
       </section>
+      <div style="height:1px;background:var(--bdr);width:100%"></div>
+      <section>
+        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Editorial tracker</h2>
+        <div class="landing-cards" style="grid-template-columns:1fr">
+      <div class="lcard" onclick="showEditorialTracker()">
+        <div class="lcard-icon">ET</div>
+        <div class="lcard-title">Editorial tracker</div>
+        <div class="lcard-desc">Track interviews, guest stories, and Wocult stories in one place.</div>
+        <div class="lcard-cta">Open tracker</div>
+      </div>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -424,6 +439,16 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       <div class="sfield">
         <label>Interview title</label>
         <input id="interview-title" placeholder="Example: Founder interview on workplace burnout" />
+      </div>
+
+      <div class="sfield">
+        <label>Guest name</label>
+        <input id="interview-guest-name" placeholder="Enter the guest's name" />
+      </div>
+
+      <div class="sfield">
+        <label>Guest email</label>
+        <input id="interview-guest-email" type="email" placeholder="guest@example.com" />
       </div>
 
       <div class="sfield">
@@ -487,6 +512,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
         <button class="chip" data-submission-filter="submitted" onclick="filterInterviewSubmissions('submitted')">submitted</button>
         <button class="chip" data-submission-filter="refined" onclick="filterInterviewSubmissions('refined')">refined</button>
         <button class="chip" data-submission-filter="final" onclick="filterInterviewSubmissions('final')">final</button>
+        <button class="chip" data-submission-filter="published" onclick="filterInterviewSubmissions('published')">published</button>
       </div>
 
       <div id="interview-submissions-status" class="hint" style="margin-bottom:12px"></div>
@@ -530,6 +556,86 @@ There are no right or wrong answers here. Please answer openly and in your own v
       <div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:16px;align-items:start">
         <div id="staff-guest-writer-stories-list" style="display:flex;flex-direction:column;gap:10px"></div>
         <div id="staff-guest-writer-story-detail" style="min-height:180px;padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:14px;line-height:1.6">Select a story to review.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Editorial tracker screen -->
+  <div id="landing-editorial-tracker" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:1120px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">&larr; Back to staff dashboard</button>
+        <button class="btn" onclick="loadEditorialTracker({force:true})">Refresh</button>
+      </div>
+      <h2>Editorial tracker</h2>
+      <p class="sub">Track interviews, guest stories, and Wocult stories in one place.</p>
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;flex:1">
+          <input id="tracker-search" class="saved-input" placeholder="Search title, name, or email" oninput="renderEditorialTracker()" />
+          <select id="tracker-type-filter" onchange="renderEditorialTracker()" style="padding:9px 10px;border:1px solid var(--g2);border-radius:7px;font-family:inherit;font-size:13px;background:#fff">
+            <option value="all">All types</option>
+            <option value="guest_story">Guest story</option>
+            <option value="interview">Interview</option>
+            <option value="wocult_story">Wocult story</option>
+          </select>
+          <select id="tracker-status-filter" onchange="renderEditorialTracker()" style="padding:9px 10px;border:1px solid var(--g2);border-radius:7px;font-family:inherit;font-size:13px;background:#fff">
+            <option value="all">All statuses</option>
+            <option value="Sent">Sent</option>
+            <option value="Seen">Seen</option>
+            <option value="In progress">In progress</option>
+            <option value="Idea under review">Idea under review</option>
+            <option value="Feedback shared">Feedback shared</option>
+            <option value="Draft">Draft</option>
+            <option value="Story under review">Story under review</option>
+            <option value="Submitted">Submitted</option>
+            <option value="Scheduled">Scheduled</option>
+            <option value="Published">Published</option>
+          </select>
+          <input id="tracker-created-from" type="date" class="saved-input" title="Created from" onchange="renderEditorialTracker()" />
+          <input id="tracker-created-to" type="date" class="saved-input" title="Created to" onchange="renderEditorialTracker()" />
+          <input id="tracker-submitted-from" type="date" class="saved-input" title="Submitted from" onchange="renderEditorialTracker()" />
+          <input id="tracker-submitted-to" type="date" class="saved-input" title="Submitted to" onchange="renderEditorialTracker()" />
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="tracker-sort" onchange="renderEditorialTracker()" style="padding:9px 10px;border:1px solid var(--g2);border-radius:7px;font-family:inherit;font-size:13px;background:#fff">
+            <option value="updated_desc">Last updated: newest first</option>
+            <option value="created_desc">Date created: newest first</option>
+            <option value="submitted_desc">Date submitted: newest first</option>
+            <option value="status">Status</option>
+            <option value="type">Type</option>
+          </select>
+          <button id="tracker-archive-btn" class="btn" onclick="archiveSelectedEditorialTrackerItems()" disabled style="opacity:0.5;cursor:not-allowed">Archive selected</button>
+          <button class="btn" onclick="clearEditorialTrackerFilters()">Clear filters</button>
+        </div>
+      </div>
+      <div id="editorial-tracker-status" class="hint" style="margin-bottom:10px">Loading editorial tracker...</div>
+      <div style="overflow:auto;max-height:520px;border:1px solid var(--bdr);border-radius:8px;background:#fff">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:960px">
+          <thead style="background:var(--gray);text-align:left">
+            <tr>
+              <th style="position:sticky;top:0;z-index:2;background:var(--gray);padding:10px;border-bottom:1px solid var(--bdr);width:52px">S. No.</th>
+              <th style="position:sticky;top:0;z-index:2;background:var(--gray);padding:10px;border-bottom:1px solid var(--bdr);width:42px"><input type="checkbox" id="tracker-select-all" onchange="toggleEditorialTrackerSelectAll(this.checked)" /></th>
+              <th style="position:sticky;top:0;z-index:2;background:var(--gray);padding:10px;border-bottom:1px solid var(--bdr)">Story title</th>
+              <th style="position:sticky;top:0;z-index:2;background:var(--gray);padding:10px;border-bottom:1px solid var(--bdr)">Type</th>
+              <th style="position:sticky;top:0;z-index:2;background:var(--gray);padding:10px;border-bottom:1px solid var(--bdr)">Guest / Writer name</th>
+              <th style="position:sticky;top:0;z-index:2;background:var(--gray);padding:10px;border-bottom:1px solid var(--bdr)">Date created</th>
+              <th style="position:sticky;top:0;z-index:2;background:var(--gray);padding:10px;border-bottom:1px solid var(--bdr)">Date submitted</th>
+              <th style="position:sticky;top:0;z-index:2;background:var(--gray);padding:10px;border-bottom:1px solid var(--bdr)">Status</th>
+              <th style="position:sticky;top:0;z-index:2;background:var(--gray);padding:10px;border-bottom:1px solid var(--bdr)">Last updated</th>
+              <th style="position:sticky;top:0;z-index:2;background:var(--gray);padding:10px;border-bottom:1px solid var(--bdr)">Action</th>
+            </tr>
+          </thead>
+          <tbody id="editorial-tracker-body"></tbody>
+        </table>
+      </div>
+      <div id="editorial-tracker-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9997;padding:28px;align-items:flex-start;justify-content:center">
+        <div style="background:#fff;border:1px solid var(--bdr);border-radius:10px;width:min(1120px,100%);max-height:92vh;overflow:auto;box-shadow:0 18px 60px rgba(0,0,0,0.25)">
+          <div style="position:sticky;top:0;z-index:2;background:#fff;border-bottom:1px solid var(--bdr);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+            <div style="font-size:15px;font-weight:700;color:var(--blk)">Editorial tracker detail</div>
+            <button class="btn" onclick="closeEditorialTrackerOverlay()">Close</button>
+          </div>
+          <div id="editorial-tracker-overlay-body" style="padding:18px;color:var(--blk);font-size:14px;line-height:1.6"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -903,7 +1009,7 @@ function guardStaffScreen() {
 }
 function enforceStaffScreenAccess() {
   if (isStaffUser(currentUser)) return;
-  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','main'].some(function(id) {
+  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','main'].some(function(id) {
     var el = document.getElementById(id);
     return el && el.style.display !== 'none';
   });
@@ -991,6 +1097,9 @@ window.addEventListener('beforeunload', function(e) {
 window.addEventListener('pageshow', function() {
   setTimeout(enforceStaffScreenAccess, 0);
 });
+window.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeEditorialTrackerOverlay();
+});
 function updateTopUpdatedVisibility(show) {
   var el = document.getElementById('top-updated-status');
   if (el) el.style.display = show ? 'inline-flex' : 'none';
@@ -1065,6 +1174,7 @@ function routeSignedInUser(user) {
   if (isStaffUser(user)) {
     currentAccessMode = 'staff';
     currentAccessKey = '';
+    if (routeStaffViewFromUrl()) return;
     goToLanding();
     return;
   }
@@ -1329,6 +1439,14 @@ function sendIdeaMessage(articleId, role) {
   var status = document.getElementById(isStaff ? 'staff-idea-message-status' : 'gwi-message-status');
   var message = input ? input.value.trim() : '';
   if (!message) { alert('Please write a message first.'); return; }
+  var story = isStaff
+    ? (window._staffGuestWriterStories||[]).find(function(s){return s.id===articleId;})
+    : (currentGuestWriterStory && currentGuestWriterStory.id === articleId ? currentGuestWriterStory : null);
+  if (isPublishedOrLocked(story)) {
+    if (status) status.textContent = 'This item has been published and is locked from further editing.';
+    else publishedLockedMessage();
+    return;
+  }
   var sender = currentUser || {};
   var data = {
     articleId: articleId,
@@ -1527,12 +1645,14 @@ function statusLabel(status) {
     submitted: 'Submitted',
     refined: 'Refined',
     final: 'Submitted',
-    finalSubmitted: 'Submitted'
+    finalSubmitted: 'Submitted',
+    published: 'Published'
   };
   return map[status] || (status ? String(status).replace(/_/g, ' ') : 'Unknown');
 }
 function normalizedInterviewStatus(session) {
   var status = session && session.status ? String(session.status) : '';
+  if (status === 'published') return 'published';
   if (status === 'finalSubmitted' || status === 'final' || status === 'submitted' || (session && session.finalSubmittedAt)) return 'submitted';
   if (status === 'in progress') return 'in_progress';
   return status;
@@ -1543,8 +1663,46 @@ function interviewStatusDotHtml(session) {
   if (status === 'sent') color = '#dc2626';
   if (status === 'seen') color = '#f97316';
   if (status === 'in_progress') color = '#facc15';
-  if (status === 'submitted') color = '#16a34a';
+  if (status === 'submitted' || status === 'published') color = '#16a34a';
   return '<span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:'+color+';margin-right:6px;vertical-align:middle"></span>';
+}
+function trackerDateValue(value) {
+  if (!value) return 0;
+  if (value.toDate) return value.toDate().getTime();
+  if (value.seconds) return value.seconds * 1000;
+  var d = new Date(value);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+function trackerDateOnly(value) {
+  var n = trackerDateValue(value);
+  if (!n) return '';
+  var d = new Date(n);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function friendlyWocultStoryStatus(status) {
+  var map = {
+    draft: 'Draft',
+    under_review: 'Under review',
+    submitted: 'Submitted',
+    scheduled: 'Scheduled',
+    published: 'Published'
+  };
+  return map[status] || (status ? String(status).replace(/_/g, ' ') : 'Unknown');
+}
+function trackerStatusDot(label) {
+  var color = '#9ca3af';
+  if (['Sent','Not started'].indexOf(label) !== -1) color = '#dc2626';
+  if (['Seen','Feedback shared','Needs work'].indexOf(label) !== -1) color = '#f97316';
+  if (['In progress','Idea under review','Under review','Story under review','Draft'].indexOf(label) !== -1) color = '#facc15';
+  if (['Submitted','Approved','Published'].indexOf(label) !== -1) color = '#16a34a';
+  if (label === 'Scheduled') color = '#2563eb';
+  return '<span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:'+color+';margin-right:6px;vertical-align:middle"></span>';
+}
+function isPublishedOrLocked(item) {
+  return !!(item && (item.status === 'published' || item.locked === true));
+}
+function publishedLockedMessage() {
+  alert('This item has been published and is locked from further editing.');
 }
 function guestWriterStatusLabel(status) {
   var map = {
@@ -1552,10 +1710,399 @@ function guestWriterStatusLabel(status) {
     idea_under_review: 'Idea under review',
     idea_needs_work: 'Feedback shared',
     under_review: 'Story under review',
+    submitted: 'Submitted',
     scheduled: 'Scheduled',
     published: 'Published'
   };
   return map[status] || (status ? String(status).replace(/_/g, ' ') : 'Draft');
+}
+function showEditorialTracker() {
+  if (!guardStaffScreen()) return;
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-editorial-tracker').style.display = 'flex';
+  loadEditorialTracker();
+}
+function getStaffViewParams() {
+  var params = new URLSearchParams(window.location.search);
+  var view = params.get('staffView') || '';
+  var id = params.get('id') || '';
+  if (!view || !id) return null;
+  return {view:view, id:id};
+}
+function buildStaffViewUrl(type, id) {
+  return window.location.origin + window.location.pathname + '?staffView=' + encodeURIComponent(type) + '&id=' + encodeURIComponent(id);
+}
+function routeStaffViewFromUrl() {
+  var params = getStaffViewParams();
+  if (!params) return false;
+  if (!isStaffUser(currentUser)) { showAccessScreen(); return true; }
+  showStaffViewDetail(params.view, params.id);
+  return true;
+}
+function showStaffViewDetail(type, id) {
+  if (!guardStaffScreen()) return;
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-editorial-tracker').style.display = 'flex';
+  var status = document.getElementById('editorial-tracker-status');
+  var body = document.getElementById('editorial-tracker-body');
+  var overlay = document.getElementById('editorial-tracker-overlay');
+  var overlayBody = document.getElementById('editorial-tracker-overlay-body');
+  if (status) status.textContent = 'Loading selected item...';
+  if (body) body.innerHTML = '<tr><td colspan="10" style="padding:16px;color:var(--g3)">Opened from staff detail link.</td></tr>';
+  if (overlay) overlay.style.display = 'flex';
+  if (overlayBody) overlayBody.innerHTML = 'Loading selected item...';
+  if (!db) {
+    if (status) status.textContent = 'Could not load the selected item. Try refreshing.';
+    return;
+  }
+  var collection = type === 'interview' ? 'interview_sessions' : 'articles';
+  db.collection(collection).doc(id).get().then(function(doc) {
+    if (!doc.exists) {
+      if (status) status.textContent = 'Could not load the selected item. Try refreshing.';
+      if (overlayBody) overlayBody.innerHTML = 'No item found.';
+      return;
+    }
+    var data = Object.assign({id:doc.id}, doc.data());
+    if (type === 'interview') {
+      data.guestKey = data.guestKey || doc.id;
+      renderInterviewSubmissionDetail(data, 'editorial-tracker-overlay-body');
+    } else if (type === 'guest_story') {
+      window._staffGuestWriterStories = [data];
+      openStaffGuestWriterStory(doc.id, 'editorial-tracker-overlay-body');
+    } else {
+      renderWocultStoryPreview(data, 'editorial-tracker-overlay-body');
+    }
+    if (status) status.textContent = 'Selected item loaded.';
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not load the selected item. Try refreshing.';
+    if (overlayBody) overlayBody.innerHTML = escapeHtml(err.message || 'Could not load item.');
+  });
+}
+function loadEditorialTracker(options) {
+  options = options || {};
+  var status = document.getElementById('editorial-tracker-status');
+  var body = document.getElementById('editorial-tracker-body');
+  if (!guardStaffScreen()) return;
+  if (!db) {
+    if (status) status.textContent = 'Could not load the editorial tracker. Try refreshing.';
+    if (body) body.innerHTML = '';
+    return;
+  }
+  if (window._editorialTrackerLoading) return;
+  if (window._editorialTrackerLoaded && !options.force) { renderEditorialTracker(); return; }
+  window._editorialTrackerLoading = true;
+  window._editorialTrackerSelected = {};
+  if (status) status.textContent = 'Loading editorial tracker...';
+  if (body) body.innerHTML = '<tr><td colspan="10" style="padding:16px;color:var(--g3)">Loading editorial tracker...</td></tr>';
+  Promise.all([
+    db.collection('interview_sessions').orderBy('updatedAt', 'desc').limit(50).get(),
+    db.collection('articles').orderBy('updatedAt', 'desc').limit(50).get(),
+    db.collection('articles').orderBy('savedAt', 'desc').limit(50).get()
+  ]).then(function(results) {
+    var items = [];
+    results[0].forEach(function(doc) {
+      var s = Object.assign({id:doc.id, guestKey:doc.id}, doc.data());
+      if (s.archived === true) return;
+      var label = statusLabel(normalizedInterviewStatus(s) || s.status);
+      items.push({
+        id: doc.id,
+        itemType: 'interview',
+        typeLabel: 'Interview',
+        title: s.interviewTitle || 'Untitled interview',
+        person: [s.guestName, s.guestEmail].filter(Boolean).join(' · ') || 'Guest not added',
+        email: s.guestEmail || '',
+        createdAt: s.createdAt,
+        submittedAt: s.finalSubmittedAt || s.submittedAt,
+        updatedAt: s.updatedAt,
+        statusLabel: label,
+        raw: s
+      });
+    });
+    var articleDocs = {};
+    results[1].forEach(function(doc) { articleDocs[doc.id] = doc; });
+    results[2].forEach(function(doc) { articleDocs[doc.id] = doc; });
+    Object.keys(articleDocs).forEach(function(docId) {
+      var doc = articleDocs[docId];
+      var a = Object.assign({id:doc.id}, doc.data());
+      if (a.archived === true) return;
+      var isGuest = a.sourceType === 'guest_writer';
+      var label = isGuest ? guestWriterStatusLabel(a.status) : friendlyWocultStoryStatus(a.status);
+      items.push({
+        id: doc.id,
+        itemType: isGuest ? 'guest_story' : 'wocult_story',
+        typeLabel: isGuest ? 'Guest story' : 'Wocult story',
+        title: a.title || (isGuest ? 'Untitled story idea' : 'Untitled story'),
+        person: isGuest ? (a.writerName || a.writerEmail || 'Guest writer') : (a.authorName || a.createdBy || 'Wocult'),
+        email: a.writerEmail || a.authorEmail || '',
+        createdAt: a.createdAt || a.savedAt,
+        submittedAt: a.finalSubmittedAt || a.submittedAt,
+        updatedAt: a.updatedAt || a.savedAt || a.createdAt,
+        statusLabel: label,
+        raw: a
+      });
+    });
+    window._editorialTrackerItems = items;
+    window._editorialTrackerLoaded = true;
+    renderEditorialTracker();
+  }).catch(function(err) {
+    console.warn('Editorial tracker load failed:', err);
+    if (status) status.textContent = 'Could not load the editorial tracker. Try refreshing.';
+    if (body) body.innerHTML = '<tr><td colspan="10" style="padding:16px;color:var(--red)">Could not load the editorial tracker. Try refreshing.</td></tr>';
+  }).finally(function() {
+    window._editorialTrackerLoading = false;
+  });
+}
+function getEditorialTrackerFilteredItems() {
+  var q = (document.getElementById('tracker-search') ? document.getElementById('tracker-search').value.trim().toLowerCase() : '');
+  var type = document.getElementById('tracker-type-filter') ? document.getElementById('tracker-type-filter').value : 'all';
+  var status = document.getElementById('tracker-status-filter') ? document.getElementById('tracker-status-filter').value : 'all';
+  var createdFrom = document.getElementById('tracker-created-from') ? document.getElementById('tracker-created-from').value : '';
+  var createdTo = document.getElementById('tracker-created-to') ? document.getElementById('tracker-created-to').value : '';
+  var submittedFrom = document.getElementById('tracker-submitted-from') ? document.getElementById('tracker-submitted-from').value : '';
+  var submittedTo = document.getElementById('tracker-submitted-to') ? document.getElementById('tracker-submitted-to').value : '';
+  var sort = document.getElementById('tracker-sort') ? document.getElementById('tracker-sort').value : 'updated_desc';
+  var filtered = (window._editorialTrackerItems||[]).filter(function(item) {
+    var hay = [item.title, item.person, item.email, item.typeLabel, item.statusLabel].join(' ').toLowerCase();
+    if (q && hay.indexOf(q) === -1) return false;
+    if (type !== 'all' && item.itemType !== type) return false;
+    if (status !== 'all' && item.statusLabel !== status) return false;
+    var created = trackerDateOnly(item.createdAt);
+    var submitted = trackerDateOnly(item.submittedAt);
+    if (createdFrom && (!created || created < createdFrom)) return false;
+    if (createdTo && (!created || created > createdTo)) return false;
+    if (submittedFrom && (!submitted || submitted < submittedFrom)) return false;
+    if (submittedTo && (!submitted || submitted > submittedTo)) return false;
+    return true;
+  });
+  filtered.sort(function(a,b) {
+    if (sort === 'created_desc') return trackerDateValue(b.createdAt) - trackerDateValue(a.createdAt);
+    if (sort === 'submitted_desc') return trackerDateValue(b.submittedAt) - trackerDateValue(a.submittedAt);
+    if (sort === 'status') return a.statusLabel.localeCompare(b.statusLabel);
+    if (sort === 'type') return a.typeLabel.localeCompare(b.typeLabel);
+    return trackerDateValue(b.updatedAt) - trackerDateValue(a.updatedAt);
+  });
+  return filtered;
+}
+function renderEditorialTracker() {
+  var body = document.getElementById('editorial-tracker-body');
+  var status = document.getElementById('editorial-tracker-status');
+  if (!body) return;
+  var all = window._editorialTrackerItems || [];
+  var items = getEditorialTrackerFilteredItems();
+  var visibleKeys = {};
+  items.forEach(function(item) { visibleKeys[editorialTrackerItemKey(item)] = true; });
+  Object.keys(window._editorialTrackerSelected || {}).forEach(function(key) {
+    if (!visibleKeys[key]) delete window._editorialTrackerSelected[key];
+  });
+  if (!all.length) {
+    body.innerHTML = '<tr><td colspan="10" style="padding:16px;color:var(--g3)">No items found.</td></tr>';
+    if (status) status.textContent = 'No items found.';
+    updateEditorialTrackerArchiveButton(items);
+    return;
+  }
+  if (!items.length) {
+    body.innerHTML = '<tr><td colspan="10" style="padding:16px;color:var(--g3)">No items match these filters.</td></tr>';
+    if (status) status.textContent = 'No items match these filters.';
+    updateEditorialTrackerArchiveButton(items);
+    return;
+  }
+  if (status) status.textContent = items.length + ' item(s) shown.';
+  body.innerHTML = items.map(function(item, idx) {
+    var key = editorialTrackerItemKey(item);
+    return '<tr>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+(idx+1)+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr)"><input type="checkbox" data-tracker-row-key="'+escapeHtml(key)+'" onchange="toggleEditorialTrackerRowSelection(\''+escapeHtml(key)+'\', this.checked)" '+(window._editorialTrackerSelected && window._editorialTrackerSelected[key] ? 'checked' : '')+' /></td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);font-weight:600;color:var(--blk)">'+escapeHtml(item.title)+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr)">'+escapeHtml(item.typeLabel)+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr)">'+escapeHtml(item.person || '-')+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+escapeHtml(formatFirestoreDate(item.createdAt))+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+(item.submittedAt ? escapeHtml(formatFirestoreDate(item.submittedAt)) : '—')+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+trackerStatusDot(item.statusLabel)+escapeHtml(item.statusLabel)+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+escapeHtml(formatFirestoreDate(item.updatedAt))+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr)"><button class="btn" onclick="openEditorialTrackerItem(\''+escapeHtml(item.itemType)+'\',\''+escapeHtml(item.id)+'\')">Open</button></td>'
+      + '</tr>';
+  }).join('');
+  updateEditorialTrackerArchiveButton(items);
+}
+function clearEditorialTrackerFilters() {
+  ['tracker-search','tracker-created-from','tracker-created-to','tracker-submitted-from','tracker-submitted-to'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  if (document.getElementById('tracker-type-filter')) document.getElementById('tracker-type-filter').value = 'all';
+  if (document.getElementById('tracker-status-filter')) document.getElementById('tracker-status-filter').value = 'all';
+  if (document.getElementById('tracker-sort')) document.getElementById('tracker-sort').value = 'updated_desc';
+  renderEditorialTracker();
+}
+function editorialTrackerItemKey(item) {
+  return item.itemType + ':' + item.id;
+}
+function toggleEditorialTrackerRowSelection(key, checked) {
+  window._editorialTrackerSelected = window._editorialTrackerSelected || {};
+  if (checked) window._editorialTrackerSelected[key] = true;
+  else delete window._editorialTrackerSelected[key];
+  updateEditorialTrackerArchiveButton(getEditorialTrackerFilteredItems());
+}
+function toggleEditorialTrackerSelectAll(checked) {
+  window._editorialTrackerSelected = window._editorialTrackerSelected || {};
+  getEditorialTrackerFilteredItems().forEach(function(item) {
+    var key = editorialTrackerItemKey(item);
+    if (checked) window._editorialTrackerSelected[key] = true;
+    else delete window._editorialTrackerSelected[key];
+  });
+  renderEditorialTracker();
+}
+function updateEditorialTrackerArchiveButton(visibleItems) {
+  var btn = document.getElementById('tracker-archive-btn');
+  var selectAll = document.getElementById('tracker-select-all');
+  var selected = Object.keys(window._editorialTrackerSelected || {});
+  if (btn) {
+    btn.disabled = selected.length === 0;
+    btn.textContent = selected.length ? 'Archive selected ('+selected.length+')' : 'Archive selected';
+    btn.style.opacity = selected.length ? '1' : '0.5';
+    btn.style.cursor = selected.length ? 'pointer' : 'not-allowed';
+  }
+  if (selectAll) {
+    var visibleKeys = (visibleItems || []).map(editorialTrackerItemKey);
+    var selectedVisible = visibleKeys.filter(function(key){ return window._editorialTrackerSelected && window._editorialTrackerSelected[key]; }).length;
+    selectAll.checked = !!visibleKeys.length && selectedVisible === visibleKeys.length;
+    selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visibleKeys.length;
+  }
+}
+function isHighRiskArchiveItem(item) {
+  var rawStatus = item && item.raw && item.raw.status ? String(item.raw.status) : '';
+  return ['Published','Scheduled','Submitted'].indexOf(item.statusLabel) !== -1 || ['published','scheduled','submitted','final','finalSubmitted','under_review'].indexOf(rawStatus) !== -1;
+}
+function archiveSelectedEditorialTrackerItems() {
+  var selectedKeys = Object.keys(window._editorialTrackerSelected || {});
+  if (!selectedKeys.length || !db) return;
+  var selectedItems = (window._editorialTrackerItems||[]).filter(function(item) {
+    return selectedKeys.indexOf(editorialTrackerItemKey(item)) !== -1;
+  });
+  if (!selectedItems.length) return;
+  if (!window.confirm('You are about to archive selected items. They will no longer appear in the main tracker. Do you want to continue?')) return;
+  if (selectedItems.some(isHighRiskArchiveItem)) {
+    if (!window.confirm('Some selected items appear to be submitted, scheduled, or published. Archiving them may hide important records from the main tracker. Do you still want to continue?')) return;
+  }
+  var status = document.getElementById('editorial-tracker-status');
+  var btn = document.getElementById('tracker-archive-btn');
+  if (status) status.textContent = 'Archiving selected items...';
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; btn.style.cursor = 'not-allowed'; }
+  var archiveData = {
+    archived: true,
+    archivedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    archivedBy: currentUser && currentUser.email ? currentUser.email : ''
+  };
+  Promise.all(selectedItems.map(function(item) {
+    var collection = item.itemType === 'interview' ? 'interview_sessions' : 'articles';
+    return db.collection(collection).doc(item.id).update(archiveData);
+  })).then(function() {
+    window._editorialTrackerItems = (window._editorialTrackerItems||[]).filter(function(item) {
+      return selectedKeys.indexOf(editorialTrackerItemKey(item)) === -1;
+    });
+    window._editorialTrackerSelected = {};
+    renderEditorialTracker();
+    if (status) status.textContent = 'Selected items archived.';
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not archive selected items: '+err.message;
+    updateEditorialTrackerArchiveButton(getEditorialTrackerFilteredItems());
+  });
+}
+function openEditorialTrackerItem(type, id) {
+  var item = (window._editorialTrackerItems||[]).find(function(x){ return x.itemType === type && x.id === id; });
+  if (!item) return;
+  if (!isStaffUser(currentUser)) return;
+  var overlay = document.getElementById('editorial-tracker-overlay');
+  var body = document.getElementById('editorial-tracker-overlay-body');
+  if (!overlay || !body) return;
+  overlay.style.display = 'flex';
+  body.innerHTML = 'Loading selected item...';
+  if (type === 'interview') {
+    renderInterviewSubmissionDetail(item.raw, 'editorial-tracker-overlay-body');
+    return;
+  }
+  if (type === 'guest_story') {
+    window._staffGuestWriterStories = window._staffGuestWriterStories || [];
+    if (!window._staffGuestWriterStories.some(function(s){return s.id === id;})) window._staffGuestWriterStories.push(item.raw);
+    openStaffGuestWriterStory(id, 'editorial-tracker-overlay-body');
+    return;
+  }
+  renderWocultStoryPreview(item.raw, 'editorial-tracker-overlay-body');
+}
+function closeEditorialTrackerOverlay() {
+  var overlay = document.getElementById('editorial-tracker-overlay');
+  var body = document.getElementById('editorial-tracker-overlay-body');
+  if (overlay) overlay.style.display = 'none';
+  if (body) body.innerHTML = '';
+}
+function renderWocultStoryPreview(story, targetId) {
+  var target = document.getElementById(targetId);
+  if (!target) return;
+  var content = story.introRichText || story.excerpt || story.shortIntro || story.body || '';
+  var publishButton = isPublishedOrLocked(story)
+    ? ''
+    : '<button class="btn" onclick="markStaffItemAsPublished(\'articles\',\''+escapeHtml(story.id||'')+'\',\'wocult_story\',\''+escapeHtml(targetId)+'\')">Mark as published</button>';
+  target.style.color = 'var(--blk)';
+  target.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px">'
+    + '<div><div style="font-size:18px;font-weight:700;line-height:1.35">'+escapeHtml(story.title||'Untitled story')+'</div>'
+    + '<div style="font-size:13px;color:var(--g3);line-height:1.6;margin-top:6px">Status: '+trackerStatusDot(friendlyWocultStoryStatus(story.status))+escapeHtml(friendlyWocultStoryStatus(story.status))+'<br>Created: '+escapeHtml(formatFirestoreDate(story.createdAt||story.savedAt))+'<br>Updated: '+escapeHtml(formatFirestoreDate(story.updatedAt||story.savedAt))+'</div></div>'
+    + '<div>'+publishButton+'</div>'
+    + '</div>'
+    + '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);font-size:14px;line-height:1.7;max-height:420px;overflow:auto">'+(content ? content : '<span style="color:var(--g3)">No story preview available.</span>')+'</div>';
+}
+function markStaffItemAsPublished(collection, id, itemType, targetId) {
+  if (!isStaffUser(currentUser) || !db || !collection || !id) return;
+  if (!window.confirm('Are you sure you want to mark this as published? Once published, it will be locked from further editing.')) return;
+  db.collection(collection).doc(id).update({
+    status: 'published',
+    publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    publishedBy: currentUser && currentUser.email ? currentUser.email : '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    locked: true
+  }).then(function() {
+    var updateLocal = function(item) {
+      if (!item) return;
+      item.status = 'published';
+      item.locked = true;
+    };
+    if (itemType === 'interview') {
+      var session = (window._interviewSubmissions||[]).find(function(s){ return (s.guestKey||s.id) === id; });
+      updateLocal(session);
+      (window._editorialTrackerItems||[]).forEach(function(item) {
+        if (item.itemType === 'interview' && item.id === id) {
+          updateLocal(item.raw);
+          item.statusLabel = 'Published';
+        }
+      });
+      renderInterviewSubmissions();
+      if (session) renderInterviewSubmissionDetail(session, targetId);
+      else {
+        var trackerInterview = (window._editorialTrackerItems||[]).find(function(item){return item.itemType === 'interview' && item.id === id;});
+        if (trackerInterview) renderInterviewSubmissionDetail(trackerInterview.raw, targetId);
+      }
+    } else {
+      var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id === id;});
+      updateLocal(story);
+      (window._editorialTrackerItems||[]).forEach(function(item) {
+        if (item.id === id && (item.itemType === 'guest_story' || item.itemType === 'wocult_story')) {
+          updateLocal(item.raw);
+          item.statusLabel = 'Published';
+        }
+      });
+      if (itemType === 'guest_story') {
+        renderStaffGuestWriterStories();
+        openStaffGuestWriterStory(id, targetId);
+      } else {
+        var trackerStory = (window._editorialTrackerItems||[]).find(function(item){return item.id === id && item.itemType === 'wocult_story';});
+        if (trackerStory) renderWocultStoryPreview(trackerStory.raw, targetId);
+      }
+    }
+    renderEditorialTracker();
+  }).catch(function(err) {
+    alert('Could not mark as published: '+err.message);
+  });
 }
 function showInterviewSubmissions() {
   if (!guardStaffScreen()) return;
@@ -1624,7 +2171,7 @@ function loadMoreInterviewSubmissions() {
 function renderInterviewSubmissionSummary() {
   var summary = document.getElementById('interview-submissions-summary');
   if (!summary) return;
-  var statuses = ['all','sent','seen','in_progress','submitted','refined','final'];
+  var statuses = ['all','sent','seen','in_progress','submitted','refined','final','published'];
   var counts = {all:(window._interviewSubmissions||[]).length};
   (window._interviewSubmissions||[]).forEach(function(s) {
     var st = normalizedInterviewStatus(s) || 'unknown';
@@ -1683,21 +2230,38 @@ function openInterviewSubmission(guestKey) {
   renderInterviewSubmissionDetail(session);
 }
 function getInterviewSubmissionAnswers(session) {
+  if ((session.staffEditedAnswers||[]).length) return session.staffEditedAnswers;
+  if ((session.finalAnswers||[]).length) return session.finalAnswers;
   if (session.status === 'final' && (session.refinedAnswers||[]).length) return session.refinedAnswers;
   if ((session.refinedAnswers||[]).length) return session.refinedAnswers;
   if ((session.rawAnswers||[]).length) return session.rawAnswers;
   return [];
 }
 function getInterviewSubmissionAnswerText(answer) {
-  return answer.refinedAnswerText || answer.answerText || stripHtml(answer.refinedAnswerHtml || answer.answerHtml || '');
+  return answer.staffEditedAnswerText || answer.finalAnswerText || answer.refinedAnswerText || answer.answerText || stripHtml(answer.staffEditedAnswerHtml || answer.finalAnswerHtml || answer.refinedAnswerHtml || answer.answerHtml || '');
 }
 function getInterviewSubmissionAnswerHtml(answer) {
+  if (answer.staffEditedAnswerHtml) return answer.staffEditedAnswerHtml;
+  if (answer.finalAnswerHtml) return answer.finalAnswerHtml;
   if (answer.refinedAnswerHtml) return answer.refinedAnswerHtml;
   if (answer.answerHtml) return answer.answerHtml;
-  return escapeHtml(answer.refinedAnswerText || answer.answerText || '').replace(/\n/g,'<br>');
+  return escapeHtml(answer.staffEditedAnswerText || answer.finalAnswerText || answer.refinedAnswerText || answer.answerText || '').replace(/\n/g,'<br>');
+}
+function hasInterviewSubmittedResponses(session) {
+  return !!(session && (
+    session.status === 'submitted' ||
+    session.status === 'final' ||
+    session.status === 'finalSubmitted' ||
+    !!session.submittedAt ||
+    !!session.finalSubmittedAt ||
+    (session.rawAnswers||[]).length ||
+    (session.finalAnswers||[]).length ||
+    (session.refinedAnswers||[]).length ||
+    (session.staffEditedAnswers||[]).length
+  ));
 }
 function isInterviewQuestionEditLocked(session) {
-  return session && (session.status === 'final' || session.status === 'submitted' || session.status === 'finalSubmitted' || !!session.submittedAt || !!session.finalSubmittedAt);
+  return session && (isPublishedOrLocked(session) || hasInterviewSubmittedResponses(session));
 }
 function renderInterviewQuestionEditor(session) {
   if (isInterviewQuestionEditLocked(session)) {
@@ -1707,6 +2271,8 @@ function renderInterviewQuestionEditor(session) {
   if (!questions.length) return '';
   return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin:14px 0">'
     + '<div style="font-size:14px;font-weight:700;margin-bottom:10px">Edit questions</div>'
+    + '<div class="sfield" style="margin-bottom:12px"><label>Guest name</label><input class="staff-interview-guest-name-edit" value="'+escapeHtml(session.guestName||'')+'" placeholder="Guest name" /></div>'
+    + '<div class="sfield" style="margin-bottom:12px"><label>Guest email</label><input class="staff-interview-guest-email-edit" type="email" value="'+escapeHtml(session.guestEmail||'')+'" placeholder="guest@example.com" /></div>'
     + questions.map(function(q, i) {
       return '<div class="sfield" style="margin-bottom:12px"><label>Question '+(i+1)+'</label><textarea class="staff-interview-question-edit" data-question-index="'+i+'" rows="3">'+escapeHtml(q.question||'')+'</textarea></div>';
     }).join('')
@@ -1714,58 +2280,85 @@ function renderInterviewQuestionEditor(session) {
     + '<div id="staff-question-edit-status" class="hint" style="margin-top:10px"></div>'
     + '</div>';
 }
-function renderInterviewSubmissionDetail(session) {
-  var detail = document.getElementById('interview-submission-detail');
+function renderInterviewSubmissionDetail(session, targetId) {
+  var detail = document.getElementById(targetId || 'interview-submission-detail');
   if (!detail) return;
+  var publishedLocked = isPublishedOrLocked(session);
+  var publishButton = publishedLocked
+    ? ''
+    : '<button class="btn" onclick="markStaffItemAsPublished(\'interview_sessions\',\''+escapeHtml(session.guestKey||session.id||'')+'\',\'interview\',\''+escapeHtml(targetId||'interview-submission-detail')+'\')">Mark as published</button>';
   var answers = getInterviewSubmissionAnswers(session);
+  var submittedResponses = hasInterviewSubmittedResponses(session);
   var answersById = {};
   answers.forEach(function(a){ if (a.questionId) answersById[a.questionId] = a; });
   var qaHtml = (session.questions||[]).map(function(q, i) {
     var id = q.id || ('q'+(i+1));
     var answer = answersById[id] || answers[i] || {};
     var answerHtml = getInterviewSubmissionAnswerHtml(answer) || '<span style="color:var(--g3)">No answer yet</span>';
+    var answerBlock = submittedResponses && !publishedLocked
+      ? '<div class="staff-interview-answer-edit" contenteditable="true" data-question-id="'+escapeHtml(id)+'" data-order="'+(q.order||i+1)+'" data-question="'+escapeHtml(q.question||answer.question||'')+'" style="border:1px solid var(--bdr);border-radius:8px;min-height:96px;padding:10px 12px;background:#fff;outline:none;font-size:13px;line-height:1.7;color:var(--blk)">'+answerHtml+'</div>'
+      : '<div style="font-size:13px;line-height:1.7;color:var(--blk);padding:10px 12px;border-left:3px solid var(--y);background:var(--gray)">'+answerHtml+'</div>';
     return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-top:12px">'
       + '<div style="font-size:12px;font-weight:700;color:var(--yd);margin-bottom:6px">Q'+(i+1)+'</div>'
       + '<div style="font-size:14px;line-height:1.6;color:var(--blk);margin-bottom:10px">'+escapeHtml(q.question||answer.question||'')+'</div>'
-      + '<div style="font-size:13px;line-height:1.7;color:var(--blk);padding:10px 12px;border-left:3px solid var(--y);background:var(--gray)">'+answerHtml+'</div>'
+      + '<div style="font-size:12px;font-weight:700;color:var(--g3);margin-bottom:6px">Answer</div>'
+      + answerBlock
       + '</div>';
   }).join('');
   if (!qaHtml && answers.length) {
     qaHtml = answers.map(function(a, i) {
+      var qid = a.questionId || ('q'+(i+1));
+      var answerHtml = getInterviewSubmissionAnswerHtml(a);
+      var answerBlock = submittedResponses && !publishedLocked
+        ? '<div class="staff-interview-answer-edit" contenteditable="true" data-question-id="'+escapeHtml(qid)+'" data-order="'+(a.order||i+1)+'" data-question="'+escapeHtml(a.question||'')+'" style="border:1px solid var(--bdr);border-radius:8px;min-height:96px;padding:10px 12px;background:#fff;outline:none;font-size:13px;line-height:1.7;color:var(--blk)">'+answerHtml+'</div>'
+        : '<div style="font-size:13px;line-height:1.7;color:var(--blk);padding:10px 12px;border-left:3px solid var(--y);background:var(--gray)">'+answerHtml+'</div>';
       return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-top:12px">'
         + '<div style="font-size:12px;font-weight:700;color:var(--yd);margin-bottom:6px">Q'+(i+1)+'</div>'
         + '<div style="font-size:14px;line-height:1.6;color:var(--blk);margin-bottom:10px">'+escapeHtml(a.question||'')+'</div>'
-        + '<div style="font-size:13px;line-height:1.7;color:var(--blk);padding:10px 12px;border-left:3px solid var(--y);background:var(--gray)">'+getInterviewSubmissionAnswerHtml(a)+'</div>'
+        + '<div style="font-size:12px;font-weight:700;color:var(--g3);margin-bottom:6px">Answer</div>'
+        + answerBlock
         + '</div>';
     }).join('');
   }
+  var saveAnswersButton = submittedResponses && !publishedLocked
+    ? '<div style="margin-top:14px"><button class="btn" onclick="saveStaffEditedInterviewAnswers(\''+escapeHtml(session.guestKey||session.id||'')+'\',\''+escapeHtml(targetId||'interview-submission-detail')+'\')">Save edited answers</button><div id="staff-answer-edit-status" class="hint" style="margin-top:10px"></div></div>'
+    : '';
   detail.style.color = 'var(--blk)';
   detail.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px">'
     + '<div>'
     + '<div style="font-size:18px;font-weight:700;line-height:1.35">'+escapeHtml(session.interviewTitle||'Untitled interview')+'</div>'
     + '<div style="font-size:13px;color:var(--g3);line-height:1.6;margin-top:6px">'
-    + 'Guest: '+escapeHtml([session.guestName, session.guestEmail].filter(Boolean).join(' · ') || 'Not added yet')+'<br>'
+    + 'Guest name: '+escapeHtml(session.guestName || '�')+'<br>'
+    + 'Guest email: '+escapeHtml(session.guestEmail || '�')+'<br>'
     + 'Status: '+escapeHtml(statusLabel(session.status))+'<br>'
     + 'Guest key: '+escapeHtml(session.guestKey||session.id||'')+'<br>'
     + 'Guest link: '+(session.guestLink ? '<a href="'+escapeHtml(session.guestLink)+'" target="_blank" style="color:var(--yd);text-decoration:none">'+escapeHtml(session.guestLink)+'</a>' : '-')
     + '</div>'
     + '</div>'
-    + '<div><button class="btn" onclick="copyInterviewSubmissionQA(\''+escapeHtml(session.guestKey||session.id||'')+'\')">Copy Q&A</button><div id="copy-submission-status" style="font-size:12px;color:var(--g3);margin-top:6px"></div></div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="copyInterviewSubmissionQA(\''+escapeHtml(session.guestKey||session.id||'')+'\')">Copy Q&A</button>'+publishButton+'<div id="copy-submission-status" style="font-size:12px;color:var(--g3);margin-top:6px;flex-basis:100%"></div></div>'
     + '</div>'
     + renderInterviewQuestionEditor(session)
-    + (qaHtml || '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3)">No questions found.</div>');
+    + (qaHtml || '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3)">No questions found.</div>')
+    + saveAnswersButton;
 }
 function saveStaffInterviewQuestionEdits(guestKey) {
-  var session = (window._interviewSubmissions||[]).find(function(s) {
-    return (s.guestKey||s.id) === guestKey;
-  });
+  var session = findStaffInterviewSession(guestKey);
   var status = document.getElementById('staff-question-edit-status');
   if (!session || !db) return;
+  if (isPublishedOrLocked(session)) {
+    if (status) status.textContent = 'This item has been published and is locked from further editing.';
+    else publishedLockedMessage();
+    return;
+  }
   if (isInterviewQuestionEditLocked(session)) {
-    if (status) status.textContent = 'This interview has already been submitted. Questions should not be edited now.';
+    if (status) status.textContent = isPublishedOrLocked(session) ? 'This item has been published and is locked from further editing.' : 'This interview has already been submitted. Questions should not be edited now.';
     return;
   }
   var fields = Array.from(document.querySelectorAll('.staff-interview-question-edit'));
+  var guestNameField = document.querySelector('.staff-interview-guest-name-edit');
+  var guestEmailField = document.querySelector('.staff-interview-guest-email-edit');
+  var guestName = guestNameField ? guestNameField.value.trim() : (session.guestName || '');
+  var guestEmail = guestEmailField ? guestEmailField.value.trim() : (session.guestEmail || '');
   var questions = fields.map(function(field, i) {
     var existing = (session.questions||[])[i] || {};
     return {
@@ -1781,10 +2374,14 @@ function saveStaffInterviewQuestionEdits(guestKey) {
   if (!window.confirm('Changing questions after sharing the link may affect guests who have already started responding. Do you want to save these changes?')) return;
   if (status) status.textContent = 'Saving changes...';
   db.collection('interview_sessions').doc(guestKey).update({
+    guestName: guestName,
+    guestEmail: guestEmail,
     questions: questions,
     questionCount: questions.length,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function() {
+    session.guestName = guestName;
+    session.guestEmail = guestEmail;
     session.questions = questions;
     session.questionCount = questions.length;
     if (status) status.textContent = 'Questions updated.';
@@ -1792,6 +2389,54 @@ function saveStaffInterviewQuestionEdits(guestKey) {
     renderInterviewSubmissionDetail(session);
   }).catch(function(err) {
     if (status) status.textContent = 'Could not save question changes: '+err.message;
+  });
+}
+function findStaffInterviewSession(guestKey) {
+  var session = (window._interviewSubmissions||[]).find(function(s) {
+    return (s.guestKey||s.id) === guestKey;
+  });
+  if (session) return session;
+  var trackerItem = (window._editorialTrackerItems||[]).find(function(item) {
+    return item.itemType === 'interview' && item.id === guestKey;
+  });
+  return trackerItem ? trackerItem.raw : null;
+}
+function saveStaffEditedInterviewAnswers(guestKey, targetId) {
+  var session = findStaffInterviewSession(guestKey);
+  var root = document.getElementById(targetId || 'interview-submission-detail') || document;
+  var status = root.querySelector ? root.querySelector('#staff-answer-edit-status') : document.getElementById('staff-answer-edit-status');
+  if (!session || !db) return;
+  if (isPublishedOrLocked(session)) {
+    if (status) status.textContent = 'This item has been published and is locked from further editing.';
+    else publishedLockedMessage();
+    return;
+  }
+  var fields = Array.from(root.querySelectorAll('.staff-interview-answer-edit'));
+  var staffEditedAnswers = fields.map(function(field, i) {
+    return {
+      questionId: field.getAttribute('data-question-id') || ('q'+(i+1)),
+      order: parseInt(field.getAttribute('data-order')||String(i+1), 10),
+      question: field.getAttribute('data-question') || '',
+      staffEditedAnswerHtml: field.innerHTML,
+      staffEditedAnswerText: field.innerText.trim()
+    };
+  });
+  if (!staffEditedAnswers.length) return;
+  if (status) status.textContent = 'Saving edited answers...';
+  db.collection('interview_sessions').doc(guestKey).update({
+    staffEditedAnswers: staffEditedAnswers,
+    staffEditedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    staffEditedBy: currentUser && currentUser.email ? currentUser.email : '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() {
+    session.staffEditedAnswers = staffEditedAnswers;
+    (window._editorialTrackerItems||[]).forEach(function(item) {
+      if (item.itemType === 'interview' && item.id === guestKey) item.raw.staffEditedAnswers = staffEditedAnswers;
+    });
+    if (status) status.textContent = 'Edited answers saved.';
+    renderInterviewSubmissionDetail(session, targetId);
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not save edited answers: '+err.message;
   });
 }
 function buildInterviewSubmissionPlainText(session) {
@@ -1820,9 +2465,7 @@ function buildInterviewSubmissionPlainText(session) {
   return lines.join('\n').trim();
 }
 function copyInterviewSubmissionQA(guestKey) {
-  var session = (window._interviewSubmissions||[]).find(function(s) {
-    return (s.guestKey||s.id) === guestKey;
-  });
+  var session = findStaffInterviewSession(guestKey);
   var msg = document.getElementById('copy-submission-status');
   if (!session) return;
   navigator.clipboard.writeText(buildInterviewSubmissionPlainText(session)).then(function() {
@@ -1938,40 +2581,46 @@ function renderStaffGuestWriterStories() {
       + '</div>';
   }).join('');
 }
-function openStaffGuestWriterStory(id) {
+function openStaffGuestWriterStory(id, targetId) {
   var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
-  var detail = document.getElementById('staff-guest-writer-story-detail');
+  var detail = document.getElementById(targetId || 'staff-guest-writer-story-detail');
   if (!story || !detail) return;
+  var publishedLocked = isPublishedOrLocked(story);
   var inIdeaDiscussion = story.status === 'idea_under_review' || story.status === 'idea_needs_work';
   var ideaApproved = story.status === 'draft' || story.writingUnlocked === true || story.ideaStatus === 'approved';
   var hasArticleContent = !!((story.introRichText||'') || (story.body||''));
   var hasSubmittedStoryContent = ['under_review','submitted','scheduled','published'].indexOf(story.status) !== -1 && hasArticleContent;
-  var historyWrap = ideaApproved
+  var historyWrap = (ideaApproved || publishedLocked)
     ? '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:14px;font-weight:600">Idea discussion history</summary><div id="staff-idea-messages" style="display:flex;flex-direction:column;gap:10px;margin-top:10px;margin-bottom:12px"></div></details>'
     : '<h4 style="font-size:14px;margin:12px 0 8px">Idea discussion</h4><div id="staff-idea-messages" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>';
-  var messageBox = ideaApproved ? '' : '<textarea id="staff-idea-message" class="wf-textarea" rows="4" placeholder="Send feedback or a note to the writer..."></textarea>';
-  var sendButton = ideaApproved
+  var messageBox = (ideaApproved || publishedLocked) ? '' : '<textarea id="staff-idea-message" class="wf-textarea" rows="4" placeholder="Send feedback or a note to the writer..."></textarea>';
+  var sendButton = (ideaApproved || publishedLocked)
     ? '<button class="btn" disabled style="opacity:0.5;cursor:not-allowed">Send message</button>'
     : '<button class="btn" onclick="sendIdeaMessage(\''+escapeHtml(id)+'\',\'staff\')">Send message</button>';
-  var approveButton = ideaApproved
+  var approveButton = (ideaApproved || publishedLocked)
     ? '<button class="btn" disabled style="opacity:0.5;cursor:not-allowed">Idea approved</button>'
     : '<button class="btn" onclick="approveGuestWriterIdea(\''+escapeHtml(id)+'\')">Approve idea</button>';
-  var askButton = hasSubmittedStoryContent
+  var askButton = hasSubmittedStoryContent && !publishedLocked
     ? '<button class="btn" onclick="askGuestWriterIdeaChanges(\''+escapeHtml(id)+'\')">Ask for changes</button>'
     : '<button class="btn" disabled style="opacity:0.5;cursor:not-allowed">Ask for changes</button>';
   var copyButton = hasSubmittedStoryContent
     ? '<button class="btn" onclick="copyStaffGuestWriterStory(\''+escapeHtml(id)+'\')">Copy article content</button>'
     : '<button class="btn" disabled style="opacity:0.5;cursor:not-allowed" title="No submitted article content to copy yet">Copy article content</button>';
+  var publishButton = publishedLocked
+    ? ''
+    : '<button class="btn" onclick="markStaffItemAsPublished(\'articles\',\''+escapeHtml(id)+'\',\'guest_story\',\''+escapeHtml(targetId || 'staff-guest-writer-story-detail')+'\')">Mark as published</button>';
   detail.style.color = 'var(--blk)';
   detail.innerHTML = '<h3 style="font-size:16px;margin-bottom:8px">'+escapeHtml(story.title||'Untitled story idea')+'</h3>'
     + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Writer: '+escapeHtml(story.writerName||'')+'<br>Email: '+escapeHtml(story.writerEmail||'')+'<br>Preferred section: '+escapeHtml(story.preferredSection||'')+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+'</div>'
     + '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);font-size:14px;line-height:1.7;margin-bottom:14px"><strong>Story idea</strong><br>'+escapeHtml(story.ideaSummary||'')+'</div>'
     + historyWrap
     + messageBox
-    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+sendButton+approveButton+askButton+copyButton+'</div><div id="staff-idea-message-status" class="hint" style="margin-top:10px"></div>';
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+sendButton+approveButton+askButton+copyButton+publishButton+'</div><div id="staff-idea-message-status" class="hint" style="margin-top:10px"></div>';
   loadIdeaMessages(id, 'staff-idea-messages');
 }
 function approveGuestWriterIdea(id) {
+  var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
+  if (isPublishedOrLocked(story)) { publishedLockedMessage(); return; }
   if (!window.confirm('Are you sure you want to approve this idea? Once approved, the writer will be able to start writing the full story.')) return;
   db.collection('articles').doc(id).update({
     status: 'draft',
@@ -1980,7 +2629,7 @@ function approveGuestWriterIdea(id) {
     ideaApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function(){
-    var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
+    story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
     if (story) {
       story.status = 'draft';
       story.ideaStatus = 'approved';
@@ -1991,6 +2640,8 @@ function approveGuestWriterIdea(id) {
   }).catch(function(err){ alert('Could not approve idea: '+err.message); });
 }
 function askGuestWriterIdeaChanges(id) {
+  var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
+  if (isPublishedOrLocked(story)) { publishedLockedMessage(); return; }
   db.collection('articles').doc(id).update({
     status: 'idea_needs_work',
     ideaStatus: 'needs_work',
@@ -2030,6 +2681,7 @@ function loadGuestInterview(key) {
       return;
     }
     window._guestInterviewKey = currentAccessKey;
+    window._guestInterviewOriginalAnswers = {};
     window._guestInterviewSession = Object.assign({guestKey:currentAccessKey}, doc.data());
     markGuestInterviewSeenIfNeeded(window._guestInterviewSession).finally(function() {
       renderGuestInterview(window._guestInterviewSession);
@@ -2058,24 +2710,28 @@ function renderGuestInterview(session) {
   var answersById = {};
   (session.rawAnswers||[]).forEach(function(a){ answersById[a.questionId] = a; });
   var guestIntro = (session.guestIntro||'').trim() || 'Please answer freely and honestly. You can save progress and return to this link later.';
+  window._guestInterviewOriginalAnswers = window._guestInterviewOriginalAnswers || {};
   var questionsHtml = (session.questions||[]).map(function(q, i) {
     var id = q.id || ('q'+(i+1));
     var answer = answersById[id] || {};
+    var canRevert = !!window._guestInterviewOriginalAnswers[id];
     return '<div class="sfield" style="padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
       + '<label>Question '+(i+1)+'</label>'
       + '<div style="font-size:15px;line-height:1.6;margin-bottom:12px;color:var(--blk)">'+escapeHtml(q.question||'')+'</div>'
       + '<div class="guest-answer" contenteditable="true" data-question-id="'+escapeHtml(id)+'" data-order="'+(q.order||i+1)+'" data-question="'+escapeHtml(q.question||'')+'" style="border:1px solid var(--bdr);border-radius:8px;min-height:120px;padding:12px;background:#fff;outline:none;font-size:14px;line-height:1.7">'+(answer.answerHtml||'')+'</div>'
-      + '<div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap"><button class="btn" data-refine-question-id="'+escapeHtml(id)+'" onclick="refineGuestInterviewAnswer(\''+escapeHtml(id)+'\')">Refine</button><span class="hint guest-question-refine-status" data-refine-status-id="'+escapeHtml(id)+'"></span></div>'
+      + '<div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap"><button class="btn" data-refine-question-id="'+escapeHtml(id)+'" onclick="refineGuestInterviewAnswer(\''+escapeHtml(id)+'\')">Refine</button><button class="btn" data-revert-question-id="'+escapeHtml(id)+'" onclick="revertGuestInterviewAnswer(\''+escapeHtml(id)+'\')" '+(canRevert ? '' : 'disabled')+' style="'+(canRevert ? '' : 'opacity:0.5;cursor:not-allowed')+'">Revert</button><span class="hint guest-question-refine-status" data-refine-status-id="'+escapeHtml(id)+'"></span></div>'
       + '</div>';
   }).join('');
-  content.innerHTML = '<h2>'+escapeHtml(session.interviewTitle||'Interview')+'</h2>'
+  var guestLine = session.guestName ? '<div style="font-size:13px;color:var(--g3);margin:0 0 14px">Interview for: '+escapeHtml(session.guestName)+'</div>' : '';
+  content.innerHTML = '<h2 style="margin-bottom:18px">'+escapeHtml(session.interviewTitle||'Interview')+'</h2>'
     + '<p class="sub" style="white-space:pre-line">'+escapeHtml(guestIntro)+'</p>'
-    + '<div style="font-size:14px;font-weight:700;line-height:1.6;margin:0 0 18px;color:var(--blk)">Your responses can be refined through Wocult AI. If you want help polishing your answers, click Refine. If you want to submit them as they are, click Submit.</div>'
-    + '<div class="sfield"><label>Your name</label><input id="guest-name" placeholder="Enter your full name" value="'+escapeHtml(session.guestName||'')+'" /></div>'
-    + '<div class="sfield"><label>Your email</label><input id="guest-email" type="email" placeholder="email@example.com" value="'+escapeHtml(session.guestEmail||'')+'" /></div>'
-    + '<div class="sfield" style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff"><label>Word document workflow</label><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-lg" onclick="downloadGuestInterviewDocx()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Download interview as Word document</button><label class="btn-lg" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);display:inline-flex;align-items:center"><input type="file" accept=".docx" style="display:none" onchange="if(this.files&&this.files[0])handleGuestInterviewUpload(this.files[0]);this.value=\'\';">Upload completed Word document</label></div><div id="guest-upload-status" class="hint" style="margin-top:10px"></div></div>'
+    + guestLine
+    + '<div style="font-size:14px;font-weight:700;line-height:1.6;margin:0 0 18px;color:var(--blk)">Wocult AI can help turn your raw thoughts into clearer, well-structured responses while keeping your point of view intact. Add your thoughts under each question, then click Refine to see a suggested version.</div>'
+    + '<div style="border-top:1px solid var(--bdr);margin:20px 0"></div>'
+    + '<div style="font-size:14px;font-weight:700;color:var(--blk);margin-bottom:12px">Option 1: Download the questions in Word, complete your answers, and upload the updated document here.</div>'
+    + '<div class="sfield" style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff"><div class="guest-word-actions"><button type="button" class="guest-word-action-btn" onclick="downloadGuestInterviewDocx()">Download interview as Word document</button><button type="button" class="guest-word-action-btn" onclick="document.getElementById(\'guest-interview-upload-input\').click()">Upload completed Word document</button><input id="guest-interview-upload-input" type="file" accept=".docx" style="display:none" onchange="if(this.files&&this.files[0])handleGuestInterviewUpload(this.files[0]);this.value=\'\';"></div><div id="guest-upload-status" class="hint" style="margin-top:10px"></div></div>'
     + '<div style="display:flex;align-items:center;gap:12px;margin:24px 0;color:var(--g3);font-size:12px;font-weight:700;letter-spacing:0.8px"><div style="height:1px;background:var(--bdr);flex:1"></div><span>OR</span><div style="height:1px;background:var(--bdr);flex:1"></div></div>'
-    + '<div style="font-size:14px;font-weight:700;color:var(--blk);margin-bottom:12px">Fill the responses here</div>'
+    + '<div style="font-size:14px;font-weight:700;color:var(--blk);margin-bottom:12px">Option 2: Fill the responses here</div>'
     + '<div style="display:flex;flex-direction:column;gap:14px;margin-top:24px">'+questionsHtml+'</div>'
     + '<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><button class="btn-lg" onclick="saveGuestInterviewProgress()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Save Progress</button><button class="btn-lg btn-y" onclick="confirmSubmitGuestInterviewAsIs()">Submit</button></div>'
     + '<div id="guest-refinement-choice" style="display:none;margin-top:16px;padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff"></div>'
@@ -2084,8 +2740,9 @@ function renderGuestInterview(session) {
   clearUnsavedChanges();
 }
 function collectGuestInterviewAnswers() {
-  var guestName = document.getElementById('guest-name') ? document.getElementById('guest-name').value.trim() : '';
-  var guestEmail = document.getElementById('guest-email') ? document.getElementById('guest-email').value.trim() : '';
+  var session = window._guestInterviewSession || {};
+  var guestName = session.guestName || '';
+  var guestEmail = session.guestEmail || '';
   var rawAnswers = Array.from(document.querySelectorAll('.guest-answer')).map(function(el) {
     return {
       questionId: el.getAttribute('data-question-id') || '',
@@ -2103,8 +2760,6 @@ function saveGuestInterviewProgress() {
   if (!window._guestInterviewKey || !db) { if(status) status.textContent = 'Could not save right now.'; return; }
   db.collection('interview_sessions').doc(window._guestInterviewKey).update({
     status: 'in_progress',
-    guestName: data.guestName,
-    guestEmail: data.guestEmail,
     rawAnswers: data.rawAnswers,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function() {
@@ -2125,8 +2780,7 @@ function downloadGuestInterviewDocx() {
   var d = window.docx;
   var children = [
     new d.Paragraph({text:title, heading:d.HeadingLevel.TITLE}),
-    new d.Paragraph({text:'Guest name: [Enter your full name]'}),
-    new d.Paragraph({text:'Guest email: [Enter your email]'}),
+    new d.Paragraph({text:session.guestName ? 'Interview for: '+session.guestName : ''}),
     new d.Paragraph({text:''})
   ];
   questions.forEach(function(q, i) {
@@ -2166,12 +2820,6 @@ function handleGuestInterviewUpload(file) {
 }
 function populateGuestAnswersFromUpload(parsedText) {
   var text = String(parsedText||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-  var nameMatch = text.match(/Guest name:\s*(.+)/i);
-  var emailMatch = text.match(/Guest email:\s*(.+)/i);
-  var nameInput = document.getElementById('guest-name');
-  var emailInput = document.getElementById('guest-email');
-  if (nameInput && nameMatch && !/^\s*\[.*\]\s*$/.test(nameMatch[1])) nameInput.value = nameMatch[1].trim();
-  if (emailInput && emailMatch && !/^\s*\[.*\]\s*$/.test(emailMatch[1])) emailInput.value = emailMatch[1].trim();
   var count = 0;
   Array.from(document.querySelectorAll('.guest-answer')).forEach(function(el, i) {
     var n = i + 1;
@@ -2188,8 +2836,6 @@ function populateGuestAnswersFromUpload(parsedText) {
   return count;
 }
 function validateGuestInterviewSubmission(data) {
-  if (!data.guestName) { alert('Please enter your name before submitting.'); document.getElementById('guest-name').focus(); return; }
-  if (!data.guestEmail) { alert('Please enter your email before submitting.'); document.getElementById('guest-email').focus(); return; }
   var missing = data.rawAnswers.find(function(a){return !a.answerText;});
   if (missing) {
     alert('Please answer every question before submitting.');
@@ -2248,6 +2894,29 @@ function getGuestInterviewRefineButton(questionId) {
     return el.getAttribute('data-refine-question-id') === questionId;
   });
 }
+function getGuestInterviewRevertButton(questionId) {
+  return Array.from(document.querySelectorAll('[data-revert-question-id]')).find(function(el) {
+    return el.getAttribute('data-revert-question-id') === questionId;
+  });
+}
+function setGuestInterviewRevertButtonState(questionId, enabled) {
+  var btn = getGuestInterviewRevertButton(questionId);
+  if (!btn) return;
+  btn.disabled = !enabled;
+  btn.style.opacity = enabled ? '' : '0.5';
+  btn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+}
+function revertGuestInterviewAnswer(questionId) {
+  var original = window._guestInterviewOriginalAnswers && window._guestInterviewOriginalAnswers[questionId];
+  var answerEl = getGuestInterviewAnswerElement(questionId);
+  var status = getGuestInterviewRefineStatus(questionId);
+  if (!original || !answerEl) return;
+  answerEl.innerHTML = original.answerHtml;
+  delete window._guestInterviewOriginalAnswers[questionId];
+  setGuestInterviewRevertButtonState(questionId, false);
+  markUnsavedChanges();
+  if (status) status.textContent = 'Original answer restored.';
+}
 function refineGuestInterviewAnswer(questionId) {
   var answerEl = getGuestInterviewAnswerElement(questionId);
   var status = getGuestInterviewRefineStatus(questionId);
@@ -2261,12 +2930,14 @@ function refineGuestInterviewAnswer(questionId) {
   var data = collectGuestInterviewAnswers();
   var answer = data.rawAnswers.find(function(a){ return a.questionId === questionId; });
   if (!answer) return;
+  var originalAnswer = {answerHtml: answer.answerHtml, answerText: answer.answerText};
+  var refinedHtml = '';
+  var refinedText = '';
+  var updatedData = null;
   if (status) status.textContent = 'Refining this answer...';
   if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; btn.style.cursor = 'not-allowed'; }
   db.collection('interview_sessions').doc(window._guestInterviewKey).update({
     status: 'in_progress',
-    guestName: data.guestName,
-    guestEmail: data.guestEmail,
     rawAnswers: data.rawAnswers,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function() {
@@ -2312,18 +2983,25 @@ Return ONLY valid JSON:
     var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
     if (s===-1) throw new Error('No JSON in response');
     var parsed = JSON.parse(txt.slice(s,e+1));
-    var refinedHtml = parsed.refinedAnswerHtml || plainTextToHtml(parsed.refinedAnswerText || answerText);
-    answerEl.innerHTML = refinedHtml;
-    var updatedData = collectGuestInterviewAnswers();
+    refinedText = parsed.refinedAnswerText || answerText;
+    refinedHtml = parsed.refinedAnswerHtml || plainTextToHtml(refinedText);
+    updatedData = Object.assign({}, data, {
+      rawAnswers: data.rawAnswers.map(function(a) {
+        if (a.questionId !== questionId) return a;
+        return Object.assign({}, a, {answerHtml:refinedHtml, answerText:refinedText});
+      })
+    });
     return db.collection('interview_sessions').doc(window._guestInterviewKey).update({
       status: 'in_progress',
-      guestName: updatedData.guestName,
-      guestEmail: updatedData.guestEmail,
       rawAnswers: updatedData.rawAnswers,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   }).then(function() {
-    window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, collectGuestInterviewAnswers(), {status:'in_progress'});
+    window._guestInterviewOriginalAnswers = window._guestInterviewOriginalAnswers || {};
+    window._guestInterviewOriginalAnswers[questionId] = originalAnswer;
+    answerEl.innerHTML = refinedHtml;
+    setGuestInterviewRevertButtonState(questionId, true);
+    window._guestInterviewSession = Object.assign({}, window._guestInterviewSession||{}, updatedData || collectGuestInterviewAnswers(), {status:'in_progress'});
     clearUnsavedChanges();
     if (status) status.textContent = 'Answer refined. Review it before submitting.';
   }).catch(function(err) {
@@ -2335,8 +3013,6 @@ Return ONLY valid JSON:
 function saveGuestRawSubmission(data, finalData) {
   return db.collection('interview_sessions').doc(window._guestInterviewKey).update(finalData || {
     status: 'submitted',
-    guestName: data.guestName,
-    guestEmail: data.guestEmail,
     rawAnswers: data.rawAnswers,
     submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -2376,8 +3052,6 @@ function submitGuestInterviewAsIs() {
   if (status) status.textContent = 'Submitting your responses...';
   db.collection('interview_sessions').doc(window._guestInterviewKey).update({
     status: 'final',
-    guestName: data.guestName,
-    guestEmail: data.guestEmail,
     rawAnswers: data.rawAnswers,
     refinedAnswers: refinedAnswers,
     submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2485,9 +3159,10 @@ function renderGuestRefinedReview(refinedAnswers) {
       + '<div class="guest-refined-answer" contenteditable="true" data-question-id="'+escapeHtml(a.questionId||('q'+(i+1)))+'" data-order="'+(a.order||i+1)+'" data-question="'+escapeHtml(a.question||'')+'" style="border:1px solid var(--bdr);border-radius:8px;min-height:120px;padding:12px;background:#fff;outline:none;font-size:14px;line-height:1.7">'+(a.refinedAnswerHtml||'')+'</div>'
       + '</div>';
   }).join('');
+  var guestLine = session.guestName ? '<div style="font-size:13px;color:var(--g3);margin-bottom:18px">Interview for: '+escapeHtml(session.guestName)+'</div>' : '';
   content.innerHTML = '<h2>Review your refined responses</h2>'
     + '<p class="sub">We have lightly refined your answers for clarity. Please review and edit anything before final submission.</p>'
-    + '<div style="font-size:13px;color:var(--g3);margin-bottom:18px">Name: '+escapeHtml(session.guestName||'')+'<br>Email: '+escapeHtml(session.guestEmail||'')+'</div>'
+    + guestLine
     + '<div style="display:flex;flex-direction:column;gap:14px">'+answersHtml+'</div>'
     + '<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><button class="btn-lg" onclick="renderGuestInterview(window._guestInterviewSession)" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to responses</button><button class="btn-lg btn-y" onclick="finalSubmitGuestInterview()">Final submit</button></div>'
     + '<div id="guest-review-status" class="hint" style="margin-top:12px"></div>';
@@ -2569,7 +3244,8 @@ function hideStaffLandingPanels() {
     'landing-prepare-interview',
     'landing-interview-submissions',
     'landing-guest-writer-applications',
-    'landing-guest-writer-stories'
+    'landing-guest-writer-stories',
+    'landing-editorial-tracker'
   ].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
@@ -2599,6 +3275,8 @@ function showPrepareInterview() {
 function resetInterviewPreparationForm() {
   interviewQuestionState = {
     title: '',
+    guestName: '',
+    guestEmail: '',
     brief: '',
     guestIntro: '',
     count: 0,
@@ -2607,6 +3285,8 @@ function resetInterviewPreparationForm() {
     guestLink: ''
   };
   var title = document.getElementById('interview-title');
+  var guestName = document.getElementById('interview-guest-name');
+  var guestEmail = document.getElementById('interview-guest-email');
   var brief = document.getElementById('interview-brief');
   var guestIntro = document.getElementById('interview-guest-intro');
   var count = document.getElementById('interview-count');
@@ -2619,6 +3299,8 @@ function resetInterviewPreparationForm() {
   var btn = document.getElementById('interview-link-btn');
   var updateBtn = document.getElementById('interview-update-btn');
   if (title) title.value = '';
+  if (guestName) guestName.value = '';
+  if (guestEmail) guestEmail.value = '';
   if (brief) brief.value = '';
   if (guestIntro) guestIntro.value = guestIntro.defaultValue || '';
   if (count) count.value = '8';
@@ -2741,6 +3423,8 @@ function saveInterviewSession() {
     return;
   }
   var title = document.getElementById('interview-title').value.trim();
+  var guestName = document.getElementById('interview-guest-name') ? document.getElementById('interview-guest-name').value.trim() : '';
+  var guestEmail = document.getElementById('interview-guest-email') ? document.getElementById('interview-guest-email').value.trim() : '';
   var brief = document.getElementById('interview-brief').value.trim();
   var guestIntro = document.getElementById('interview-guest-intro-refined') ? document.getElementById('interview-guest-intro-refined').value.trim() : interviewQuestionState.guestIntro;
   syncRenderedInterviewQuestions();
@@ -2766,8 +3450,8 @@ function saveInterviewSession() {
     guestIntro: guestIntro,
     questionCount: questions.length,
     questions: questions,
-    guestName: '',
-    guestEmail: '',
+    guestName: guestName,
+    guestEmail: guestEmail,
     rawAnswers: [],
     refinedAnswers: [],
     submittedAt: '',
@@ -2780,6 +3464,8 @@ function saveInterviewSession() {
   db.collection('interview_sessions').doc(guestKey).set(data).then(function() {
     linkCreated = true;
     interviewQuestionState.title = title;
+    interviewQuestionState.guestName = guestName;
+    interviewQuestionState.guestEmail = guestEmail;
     interviewQuestionState.brief = brief;
     interviewQuestionState.guestIntro = guestIntro;
     interviewQuestionState.count = questions.length;
@@ -2810,6 +3496,8 @@ function updateInterviewSession() {
   var btn = document.getElementById('interview-update-btn');
   var status = document.getElementById('interview-status');
   var title = document.getElementById('interview-title').value.trim();
+  var guestName = document.getElementById('interview-guest-name') ? document.getElementById('interview-guest-name').value.trim() : '';
+  var guestEmail = document.getElementById('interview-guest-email') ? document.getElementById('interview-guest-email').value.trim() : '';
   var brief = document.getElementById('interview-brief').value.trim();
   var guestIntro = document.getElementById('interview-guest-intro-refined') ? document.getElementById('interview-guest-intro-refined').value.trim() : interviewQuestionState.guestIntro;
   var guestKey = interviewQuestionState.guestKey || '';
@@ -2828,13 +3516,15 @@ function updateInterviewSession() {
     if (!doc.exists) throw new Error('Interview session was not found.');
     var session = Object.assign({id:doc.id, guestKey:doc.id}, doc.data());
     if (isInterviewQuestionEditLocked(session)) {
-      if (status) status.textContent = 'This interview has already been submitted. Questions should not be edited now.';
+      if (status) status.textContent = isPublishedOrLocked(session) ? 'This item has been published and is locked from further editing.' : 'This interview has already been submitted. Questions should not be edited now.';
       setInterviewGeneratedButtonState(true, false);
       return null;
     }
     if (status) status.textContent = 'Saving updates...';
     return db.collection('interview_sessions').doc(guestKey).update({
       interviewTitle: title,
+      guestName: guestName,
+      guestEmail: guestEmail,
       topicBrief: brief,
       guestIntro: guestIntro,
       questions: questions,
@@ -2842,6 +3532,8 @@ function updateInterviewSession() {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }).then(function() {
       interviewQuestionState.title = title;
+      interviewQuestionState.guestName = guestName;
+      interviewQuestionState.guestEmail = guestEmail;
       interviewQuestionState.brief = brief;
       interviewQuestionState.guestIntro = guestIntro;
       interviewQuestionState.questions = questions;
@@ -3297,6 +3989,7 @@ window._memoryNotesLoaded = false;
 window._memoryNotesLoading = false;
 window._guestInterviewSession = null;
 window._guestInterviewKey = '';
+window._guestInterviewOriginalAnswers = {};
 window._pendingGuestInterviewData = null;
 window._interviewSubmissions = [];
 window._interviewSubmissionFilter = 'all';
@@ -3304,8 +3997,14 @@ window._interviewSubmissionsLoaded = false;
 window._interviewSubmissionsLoading = false;
 window._interviewSubmissionsLastVisible = null;
 window._interviewSubmissionsHasMore = false;
+window._editorialTrackerItems = [];
+window._editorialTrackerLoading = false;
+window._editorialTrackerLoaded = false;
+window._editorialTrackerSelected = {};
 var interviewQuestionState = {
   title: '',
+  guestName: '',
+  guestEmail: '',
   brief: '',
   guestIntro: '',
   count: 0,
@@ -4340,9 +5039,10 @@ setupBrowserBackGuard();
 renderSaved();
 loadAll();
 var accessKeyFromUrl = new URLSearchParams(window.location.search).get('key');
+var staffViewFromUrl = getStaffViewParams();
 if (accessKeyFromUrl && accessKeyFromUrl.trim().toUpperCase().indexOf('INT-') === 0) {
   handleAccessKey(accessKeyFromUrl);
-} else if (!restoreAccessSession()) {
+} else if (staffViewFromUrl || !restoreAccessSession()) {
   if (auth) {
     auth.onAuthStateChanged(function(user) {
       if (user) routeSignedInUser(user);
