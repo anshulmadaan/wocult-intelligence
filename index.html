@@ -123,6 +123,8 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .guest-word-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;width:100%}
 .guest-word-actions .guest-word-action-btn{width:100%;height:56px;min-height:56px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 18px;margin:0;border:1px solid var(--bdr);border-radius:8px;background:#f3eee6;color:var(--blk);font-family:inherit;font-size:14px;font-weight:600;line-height:1.2;text-align:center;cursor:pointer;appearance:none;-webkit-appearance:none}
 @media (max-width:640px){.guest-word-actions{grid-template-columns:1fr}}
+.notification-bell{position:relative;background:none;border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:8px;height:30px;min-width:34px;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:15px}
+.notification-badge{position:absolute;top:-7px;right:-7px;background:var(--red);color:#fff;border-radius:999px;min-width:16px;height:16px;padding:0 4px;font-size:10px;line-height:16px;font-weight:700;display:none}
 .source-card{background:var(--gray);border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start}
 .source-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;background:var(--blk);color:var(--y);white-space:nowrap;margin-top:2px}
 .source-title{font-size:14px;font-weight:500;line-height:1.4}
@@ -173,14 +175,23 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v7.1</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v7.4</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
     <button class="btn" id="rbtn" onclick="loadAll()" style="display:none">Refresh</button>
+    <button class="notification-bell" id="notification-bell" onclick="toggleNotificationsPanel()" title="Notifications">🔔<span class="notification-badge" id="notification-count">0</span></button>
     <button class="btn btn-ghost" onclick="handleHomeClick()" style="font-size:11px;display:none" id="btn-back-landing">Home</button>
     <button class="btn btn-ghost" onclick="logout()" style="font-size:11px;display:none" id="btn-logout">Logout</button>
   </div>
+</div>
+
+<div id="notifications-panel" style="display:none;position:fixed;right:20px;top:58px;width:min(420px,calc(100vw - 40px));max-height:70vh;overflow:auto;background:#fff;border:1px solid var(--bdr);border-radius:10px;box-shadow:0 18px 60px rgba(0,0,0,0.22);z-index:9996">
+  <div style="position:sticky;top:0;background:#fff;border-bottom:1px solid var(--bdr);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+    <strong style="font-size:14px">Notifications</strong>
+    <div style="display:flex;gap:8px"><button class="btn" onclick="markAllNotificationsRead()" style="font-size:12px;padding:6px 10px">Mark all as read</button><button class="btn" onclick="toggleNotificationsPanel(false)" style="font-size:12px;padding:6px 10px">Close</button></div>
+  </div>
+  <div id="notifications-list" style="padding:12px;display:flex;flex-direction:column;gap:10px"></div>
 </div>
 
 <div class="stats" id="stats-bar" style="display:none">
@@ -585,6 +596,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
             <option value="In progress">In progress</option>
             <option value="Idea under review">Idea under review</option>
             <option value="Feedback shared">Feedback shared</option>
+            <option value="Changes requested">Changes requested</option>
             <option value="Draft">Draft</option>
             <option value="Story under review">Story under review</option>
             <option value="Submitted">Submitted</option>
@@ -1114,6 +1126,8 @@ function hideAllAppScreens() {
   document.getElementById('btn-back-landing').style.display = currentUser ? 'inline-flex' : 'none';
   document.getElementById('rbtn').style.display = 'none';
   document.getElementById('btn-logout').style.display = currentUser ? 'inline-flex' : 'none';
+  var bell = document.getElementById('notification-bell');
+  if (bell) bell.style.display = currentUser ? 'inline-flex' : 'none';
   var uploadBlock = document.getElementById('guest-writer-upload-block');
   if (uploadBlock) uploadBlock.style.display = 'none';
   var submitBtn = document.getElementById('guest-writer-submit-story-btn');
@@ -1144,6 +1158,8 @@ function logout() {
   currentGuestWriterProfile = null;
   currentGuestWriterArticleId = '';
   currentGuestWriterStory = null;
+  window._notifications = [];
+  updateNotificationBell();
   if (auth) auth.signOut().finally(function(){ showAccessScreen(); });
   else showAccessScreen();
 }
@@ -1171,6 +1187,9 @@ function routeSignedInUser(user) {
   if (!user) { currentAccessMode = ''; showAccessScreen(); return; }
   clearUnsavedChanges();
   document.getElementById('btn-logout').style.display = 'inline-flex';
+  var bell = document.getElementById('notification-bell');
+  if (bell) bell.style.display = 'inline-flex';
+  loadNotifications();
   if (isStaffUser(user)) {
     currentAccessMode = 'staff';
     currentAccessKey = '';
@@ -1313,8 +1332,9 @@ function loadGuestWriterStories() {
 function routeGuestWriterStoryStage(story) {
   if (!story) { showSubmitStoryIdeaScreen(); return; }
   if (story.status === 'idea_under_review' || story.status === 'idea_needs_work') { showIdeaDiscussionScreen(story); return; }
+  if (story.status === 'changes_requested') { openGuestWriterRevisionScreen(story); return; }
+  if (['under_review','submitted','scheduled','published'].indexOf(story.status) !== -1) { showGuestWriterStoryStatus(story); return; }
   if (story.status === 'draft' || story.writingUnlocked === true) { openGuestWriterWritingScreen(story); return; }
-  if (['under_review','scheduled','published'].indexOf(story.status) !== -1) { showGuestWriterStoryStatus(story); return; }
   showSubmitStoryIdeaScreen();
 }
 function showSubmitStoryIdeaScreen() {
@@ -1367,6 +1387,7 @@ function submitGuestWriterIdea() {
     writerUid: currentUser.uid,
     writerEmail: currentUser.email || profile.email || '',
     writerName: profile.fullName || currentUser.displayName || '',
+    alias: profile.alias || (currentGuestWriterStory && currentGuestWriterStory.alias) || '',
     preferredSection: document.getElementById('gwi-section').value.trim(),
     title: document.getElementById('gwi-title').value.trim() || 'Untitled story idea',
     ideaSummary: idea,
@@ -1394,6 +1415,7 @@ function guestWriterIdeaStatusLabel(story) {
   if (story.status === 'idea_under_review') return 'Idea under review';
   if (story.status === 'idea_needs_work') return 'Feedback shared';
   if (story.status === 'under_review') return 'Story under review';
+  if (story.status === 'changes_requested') return 'Changes requested';
   if (story.status === 'scheduled') return 'Scheduled';
   if (story.status === 'published') return 'Published';
   if (story.status === 'draft') return 'Start writing';
@@ -1432,6 +1454,69 @@ function renderIdeaMessage(m) {
     + '<div style="font-size:12px;color:var(--g3);margin-bottom:6px">'+escapeHtml(m.senderName||m.senderEmail||'Wocult')+' · '+escapeHtml(isStaff?'staff':'guest writer')+' · '+escapeHtml(formatFirestoreDate(m.createdAt))+'</div>'
     + '<div style="font-size:14px;line-height:1.7;color:var(--blk)">'+escapeHtml(m.message||'').replace(/\n/g,'<br>')+'</div>'
     + '</div>';
+}
+function loadStoryReviewMessages(articleId, targetId) {
+  var target = document.getElementById(targetId);
+  if (!target || !db || !articleId) return Promise.resolve([]);
+  target.innerHTML = '<div class="hint">Loading review messages...</div>';
+  return db.collection('articles').doc(articleId).collection('review_messages').orderBy('createdAt','asc').limit(50).get().then(function(snap) {
+    var messages = [];
+    snap.forEach(function(doc){ messages.push(Object.assign({id:doc.id}, doc.data())); });
+    target.innerHTML = messages.length ? messages.map(renderIdeaMessage).join('') : '<div class="hint">No review messages yet.</div>';
+    return messages;
+  }).catch(function(err) {
+    target.innerHTML = '<div class="hint" style="color:var(--red)">Could not load review messages: '+escapeHtml(err.message)+'</div>';
+    return [];
+  });
+}
+function sendStoryReviewMessage(articleId, role, inputId, statusId, targetId) {
+  var isStaff = role === 'staff';
+  var input = document.getElementById(inputId || (isStaff ? 'staff-review-message' : 'writer-review-message'));
+  var status = document.getElementById(statusId || (isStaff ? 'staff-review-message-status' : 'writer-review-message-status'));
+  var story = isStaff ? (window._staffGuestWriterStories||[]).find(function(s){return s.id===articleId;}) : currentGuestWriterStory;
+  var message = input ? input.value.trim() : '';
+  if (!message) { if (status) status.textContent = 'Please write a message first.'; else alert('Please write a message first.'); return; }
+  if (isGuestWriterStoryHardLocked(story)) { if (status) status.textContent = 'This item has been published and is locked from further editing.'; return; }
+  var sender = currentUser || {};
+  var data = {
+    articleId: articleId,
+    senderUid: sender.uid || '',
+    senderEmail: sender.email || '',
+    senderName: sender.displayName || (isStaff ? 'Wocult editor' : (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || ''),
+    senderRole: isStaff ? 'staff' : 'guest_writer',
+    message: message,
+    messageType: isStaff ? 'review_note' : 'writer_reply',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if (status) status.textContent = 'Sending message...';
+  db.collection('articles').doc(articleId).collection('review_messages').add(data).then(function() {
+    if (input) input.value = '';
+    if (status) status.textContent = 'Message sent.';
+    if (isStaff && story) {
+      return createNotification({
+        recipientUid: story.writerUid || '',
+        recipientEmail: story.writerEmail || '',
+        recipientRole: 'guest_writer',
+        type: 'story_review_message',
+        title: 'New story review message',
+        message: 'Wocult added a note on your story.',
+        relatedId: articleId,
+        relatedStatus: story.status || ''
+      });
+    }
+    return createNotification({
+      recipientRole: 'staff',
+      type: 'writer_reply',
+      title: 'Writer replied',
+      message: ((currentGuestWriterProfile && currentGuestWriterProfile.fullName) || 'A guest writer') + ' replied in the story review chat.',
+      relatedId: articleId,
+      relatedStatus: story && story.status || ''
+    });
+  }).then(function() {
+    return loadStoryReviewMessages(articleId, targetId || (isStaff ? 'staff-review-messages' : 'writer-review-messages'));
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not send message: '+err.message;
+  });
 }
 function sendIdeaMessage(articleId, role) {
   var isStaff = role === 'staff';
@@ -1520,19 +1605,32 @@ function submitGuestWriterStoryAsIs() {
     writerUid: currentUser.uid,
     writerEmail: currentUser.email || profile.email || '',
     writerName: profile.fullName || currentUser.displayName || '',
+    alias: profile.alias || (currentGuestWriterStory && currentGuestWriterStory.alias) || '',
     preferredSection: (currentGuestWriterStory && currentGuestWriterStory.preferredSection) || profile.preferredSection || '',
     title: title || (currentGuestWriterStory && currentGuestWriterStory.title) || 'Untitled story',
     body: plainTextToHtml(storyText),
     rawStoryText: storyText,
     uploadedStory: !!guestWriterUploadedStoryText,
     status: 'under_review',
-    writingUnlocked: true,
+    writingUnlocked: false,
+    locked: false,
     submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   var btn = document.getElementById('guest-writer-submit-story-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
   db.collection('articles').doc(currentGuestWriterArticleId).set(data, {merge:true}).then(function() {
+    return saveGuestWriterStoryVersion(currentGuestWriterArticleId, data, 'under_review');
+  }).then(function() {
+    return createNotification({
+      recipientRole: 'staff',
+      type: 'story_submitted',
+      title: 'Story submitted',
+      message: (data.writerName || 'A guest writer') + ' submitted a story for review.',
+      relatedId: currentGuestWriterArticleId,
+      relatedStatus: 'under_review'
+    });
+  }).then(function() {
     clearUnsavedChanges();
     currentGuestWriterStory = Object.assign({}, currentGuestWriterStory||{}, data);
     showGuestWriterStoryStatus(currentGuestWriterStory);
@@ -1562,8 +1660,64 @@ function openGuestWriterWritingScreen(story) {
 function showGuestWriterStoryStatus(story) {
   hideAllAppScreens();
   document.getElementById('guest-writer-status-title').textContent = guestWriterIdeaStatusLabel(story);
-  document.getElementById('guest-writer-status-copy').textContent = 'Your story is with Wocult. You can check back later for updates.';
+  var storyHtml = guestWriterSubmittedStoryHtml(story);
+  document.getElementById('guest-writer-status-copy').innerHTML = 'Your story is with Wocult. You can check back later for updates.'
+    + (storyHtml ? '<br><br><strong>Your submitted story</strong><br><span style="display:block;margin-top:8px;line-height:1.7">'+storyHtml+'</span>' : '')
+    + '<br><br><details><summary style="cursor:pointer;font-weight:600">Story review chat</summary><div id="writer-review-messages" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div></details>'
+    + '<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Version history</summary><div id="writer-story-version-history" style="margin-top:10px"></div></details>';
   document.getElementById('guest-writer-status-screen').style.display = 'flex';
+  loadStoryReviewMessages(story.id, 'writer-review-messages');
+  loadGuestWriterVersionHistory(story.id, 'writer-story-version-history');
+}
+function populateGuestWriterReviewFields(story) {
+  generatedContent = Object.assign({}, generatedContent || {}, story || {});
+  document.getElementById('r-title').value = story.title || '';
+  document.getElementById('r-slug').value = story.slug || '';
+  document.getElementById('r-short').value = story.shortIntro || '';
+  document.getElementById('r-40').value = story.intro40 || '';
+  document.getElementById('r-excerpt').value = story.excerpt || '';
+  document.getElementById('r-intro-rt').value = story.introRichText || '';
+  document.getElementById('r-intro-render').innerHTML = story.introRichText || '';
+  document.getElementById('r-body-render').innerHTML = story.body || plainTextToHtml(story.rawStoryText || story.ideaSummary || '');
+  document.getElementById('r-readtime').value = story.readTime || '5 min read';
+  if (document.getElementById('r-writer-name')) document.getElementById('r-writer-name').value = story.writerName || (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || '';
+  if (document.getElementById('r-img-url')) document.getElementById('r-img-url').value = story.coverImageUrl || story.imageUrl || '';
+  if (document.getElementById('r-img-name')) document.getElementById('r-img-name').textContent = (story.coverImageUrl || story.imageUrl) ? 'URL ready' : '';
+  updateReviewWordCount();
+}
+function openGuestWriterRevisionScreen(story) {
+  currentGuestWriterStory = story;
+  currentGuestWriterArticleId = story.id;
+  hideAllAppScreens();
+  workflowPreviousLandingScreen = 'guest-writer-status-screen';
+  workflowHasBriefStep = false;
+  maxWorkflowStepReached = workflowStepIndex('review');
+  currentWorkflowStep = 'review';
+  document.getElementById('workflow').style.display = 'block';
+  populateGuestWriterReviewFields(story);
+  document.getElementById('publish-result').style.display = 'none';
+  document.getElementById('publish-actions').style.display = 'flex';
+  var guestDraftBtn = document.getElementById('guest-writer-save-draft-btn');
+  if (guestDraftBtn) guestDraftBtn.style.display = 'inline-flex';
+  if (document.getElementById('publish-btn')) document.getElementById('publish-btn').textContent = 'Resubmit for review';
+  showWorkflowStep('review');
+  var existingPanel = document.getElementById('writer-review-panel');
+  if (existingPanel) existingPanel.remove();
+  var reviewStep = document.getElementById('step3');
+  if (reviewStep) {
+    reviewStep.insertAdjacentHTML('beforeend',
+      '<div id="writer-review-panel" class="wf-section" style="margin-top:18px">'
+      + '<div style="font-size:16px;font-weight:700;margin-bottom:8px">Story review chat</div>'
+      + '<div id="writer-review-messages-editor" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>'
+      + '<textarea id="writer-review-message-editor" class="wf-textarea" rows="4" placeholder="Reply to Wocult..."></textarea>'
+      + '<button class="btn" onclick="sendStoryReviewMessage(currentGuestWriterArticleId,\'guest_writer\',\'writer-review-message-editor\',\'writer-review-message-status-editor\',\'writer-review-messages-editor\')">Send reply</button>'
+      + '<div id="writer-review-message-status-editor" class="hint" style="margin-top:10px"></div>'
+      + '<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:600">Version history</summary><div id="writer-story-version-history-editor" style="margin-top:10px"></div></details>'
+      + '</div>');
+  }
+  loadStoryReviewMessages(story.id, 'writer-review-messages-editor');
+  loadGuestWriterVersionHistory(story.id, 'writer-story-version-history-editor');
+  clearUnsavedChanges();
 }
 function handleAccessKey(key) {
   var cleaned = (key||'').trim().toUpperCase();
@@ -1636,6 +1790,93 @@ function formatFirestoreDate(value) {
   if (!d || isNaN(d.getTime())) return '-';
   return d.toLocaleString('en-IN', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
 }
+function createNotification(data) {
+  if (!db || !data) return Promise.resolve();
+  var actor = currentUser || {};
+  return db.collection('notifications').add(Object.assign({
+    recipientUid: '',
+    recipientEmail: '',
+    recipientRole: '',
+    type: '',
+    title: '',
+    message: '',
+    relatedCollection: 'articles',
+    relatedId: '',
+    relatedStatus: '',
+    isRead: false,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy: actor.email || '',
+    createdByRole: currentAccessMode === 'staff' ? 'staff' : currentAccessMode
+  }, data)).catch(function(err){ console.warn('Notification failed:', err); });
+}
+function loadNotifications() {
+  if (!db || !currentUser) return;
+  var query = isStaffUser(currentUser)
+    ? db.collection('notifications').where('recipientRole','==','staff').orderBy('createdAt','desc').limit(50)
+    : db.collection('notifications').where('recipientUid','==',currentUser.uid).orderBy('createdAt','desc').limit(50);
+  query.get().then(function(snap) {
+    window._notifications = [];
+    snap.forEach(function(doc){ window._notifications.push(Object.assign({id:doc.id}, doc.data())); });
+    updateNotificationBell();
+    renderNotificationsPanel();
+  }).catch(function(err){ console.warn('Could not load notifications:', err); });
+}
+function updateNotificationBell() {
+  var countEl = document.getElementById('notification-count');
+  var unread = (window._notifications || []).filter(function(n){ return n.isRead !== true; }).length;
+  if (countEl) {
+    countEl.textContent = unread > 99 ? '99+' : String(unread);
+    countEl.style.display = unread ? 'inline-block' : 'none';
+  }
+}
+function toggleNotificationsPanel(force) {
+  var panel = document.getElementById('notifications-panel');
+  if (!panel) return;
+  var show = typeof force === 'boolean' ? force : panel.style.display === 'none';
+  panel.style.display = show ? 'block' : 'none';
+  if (show) { loadNotifications(); renderNotificationsPanel(); }
+}
+function renderNotificationsPanel() {
+  var list = document.getElementById('notifications-list');
+  if (!list) return;
+  var items = window._notifications || [];
+  if (!items.length) {
+    list.innerHTML = '<div class="hint" style="padding:10px">No notifications yet.</div>';
+    return;
+  }
+  list.innerHTML = items.map(function(n) {
+    return '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:'+(n.isRead===true?'#fff':'var(--gray)')+'">'
+      + '<div style="font-size:13px;font-weight:700;margin-bottom:4px">'+escapeHtml(n.title||'Notification')+'</div>'
+      + '<div style="font-size:12px;color:var(--g3);line-height:1.5">'+escapeHtml(n.message||'')+'</div>'
+      + '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn" onclick="openNotificationItem(\''+escapeHtml(n.id)+'\')">Open</button><button class="btn" onclick="markNotificationRead(\''+escapeHtml(n.id)+'\')">Mark as read</button></div>'
+      + '</div>';
+  }).join('');
+}
+function markNotificationRead(id) {
+  if (!db || !id) return;
+  db.collection('notifications').doc(id).update({isRead:true}).then(loadNotifications);
+}
+function markAllNotificationsRead() {
+  if (!db || !window._notifications) return;
+  var unread = window._notifications.filter(function(n){ return n.isRead !== true; }).slice(0,50);
+  Promise.all(unread.map(function(n){ return db.collection('notifications').doc(n.id).update({isRead:true}); })).then(loadNotifications);
+}
+function openNotificationItem(id) {
+  var n = (window._notifications || []).find(function(x){ return x.id === id; });
+  if (!n) return;
+  markNotificationRead(id);
+  toggleNotificationsPanel(false);
+  if (isStaffUser(currentUser) && n.relatedCollection === 'articles' && n.relatedId) {
+    if (document.getElementById('landing-editorial-tracker') && document.getElementById('landing-editorial-tracker').style.display !== 'none') {
+      openEditorialTrackerItem('guest_story', n.relatedId);
+    } else {
+      showStaffGuestWriterStories();
+      setTimeout(function(){ openStaffGuestWriterStory(n.relatedId); }, 500);
+    }
+    return;
+  }
+  if (currentAccessMode === 'guest_writer' && currentUser) loadActiveGuestWriterStory(currentUser.uid);
+}
 function statusLabel(status) {
   var map = {
     sent: 'Sent',
@@ -1683,6 +1924,7 @@ function friendlyWocultStoryStatus(status) {
   var map = {
     draft: 'Draft',
     under_review: 'Under review',
+    changes_requested: 'Changes requested',
     submitted: 'Submitted',
     scheduled: 'Scheduled',
     published: 'Published'
@@ -1692,7 +1934,7 @@ function friendlyWocultStoryStatus(status) {
 function trackerStatusDot(label) {
   var color = '#9ca3af';
   if (['Sent','Not started'].indexOf(label) !== -1) color = '#dc2626';
-  if (['Seen','Feedback shared','Needs work'].indexOf(label) !== -1) color = '#f97316';
+  if (['Seen','Feedback shared','Needs work','Changes requested'].indexOf(label) !== -1) color = '#f97316';
   if (['In progress','Idea under review','Under review','Story under review','Draft'].indexOf(label) !== -1) color = '#facc15';
   if (['Submitted','Approved','Published'].indexOf(label) !== -1) color = '#16a34a';
   if (label === 'Scheduled') color = '#2563eb';
@@ -1704,12 +1946,19 @@ function isPublishedOrLocked(item) {
 function publishedLockedMessage() {
   alert('This item has been published and is locked from further editing.');
 }
+function isGuestWriterStoryHardLocked(story) {
+  return !!(story && story.status === 'published');
+}
+function isGuestWriterStoryScheduled(story) {
+  return !!(story && story.status === 'scheduled');
+}
 function guestWriterStatusLabel(status) {
   var map = {
     draft: 'Draft',
     idea_under_review: 'Idea under review',
     idea_needs_work: 'Feedback shared',
     under_review: 'Story under review',
+    changes_requested: 'Changes requested',
     submitted: 'Submitted',
     scheduled: 'Scheduled',
     published: 'Published'
@@ -2092,6 +2341,18 @@ function markStaffItemAsPublished(collection, id, itemType, targetId) {
         }
       });
       if (itemType === 'guest_story') {
+        if (story) {
+          createNotification({
+            recipientUid: story.writerUid || '',
+            recipientEmail: story.writerEmail || '',
+            recipientRole: 'guest_writer',
+            type: 'story_published',
+            title: 'Story published',
+            message: 'Your Wocult story has been marked as published.',
+            relatedId: id,
+            relatedStatus: 'published'
+          });
+        }
         renderStaffGuestWriterStories();
         openStaffGuestWriterStory(id, targetId);
       } else {
@@ -2581,6 +2842,70 @@ function renderStaffGuestWriterStories() {
       + '</div>';
   }).join('');
 }
+function guestWriterSubmittedStoryHtml(story) {
+  if (!story) return '';
+  var parts = [];
+  ['introRichText','body','articleBody','submittedStory','generatedStory'].forEach(function(field) {
+    var value = story[field];
+    if (typeof value === 'string' && value.trim()) parts.push(value.trim());
+  });
+  if (!parts.length && typeof story.rawStoryText === 'string' && story.rawStoryText.trim()) {
+    parts.push(plainTextToHtml(story.rawStoryText.trim()));
+  }
+  return parts.join('');
+}
+function hasGuestWriterSubmittedStory(story) {
+  if (!story) return false;
+  var status = story.status || '';
+  return ['under_review','submitted','story_under_review','scheduled','published'].indexOf(status) !== -1
+    || !!(story.submittedAt || story.finalSubmittedAt)
+    || !!guestWriterSubmittedStoryHtml(story);
+}
+function canAskForGuestWriterChanges(story) {
+  if (!story || !guestWriterSubmittedStoryHtml(story)) return false;
+  var status = story.status || '';
+  if (['idea_under_review','idea_needs_work','draft','changes_requested','scheduled','published'].indexOf(status) !== -1) return false;
+  return ['under_review','submitted','story_under_review'].indexOf(status) !== -1 || !!(story.submittedAt || story.resubmittedAt);
+}
+function saveGuestWriterStoryVersion(articleId, data, statusAtSubmission) {
+  if (!db || !articleId || !data) return Promise.resolve();
+  var versions = db.collection('articles').doc(articleId).collection('versions');
+  return versions.orderBy('versionNumber','desc').limit(1).get().then(function(snap) {
+    var versionNumber = snap.empty ? 1 : ((snap.docs[0].data().versionNumber || 0) + 1);
+    return versions.add({
+      articleId: articleId,
+      versionNumber: versionNumber,
+      title: data.title || '',
+      shortIntro: data.shortIntro || '',
+      intro40: data.intro40 || '',
+      excerpt: data.excerpt || '',
+      introRichText: data.introRichText || '',
+      body: data.body || '',
+      sources: data.sources || data.sourceInfo || '',
+      coverImageUrl: data.coverImageUrl || data.imageUrl || '',
+      imageUrl: data.imageUrl || '',
+      submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      submittedBy: currentUser && currentUser.email ? currentUser.email : '',
+      statusAtSubmission: statusAtSubmission || data.status || '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  });
+}
+function loadGuestWriterVersionHistory(articleId, targetId) {
+  var target = document.getElementById(targetId);
+  if (!target || !db || !articleId) return;
+  target.innerHTML = '<div class="hint">Loading version history...</div>';
+  db.collection('articles').doc(articleId).collection('versions').orderBy('versionNumber','desc').limit(20).get().then(function(snap) {
+    var versions = [];
+    snap.forEach(function(doc){ versions.push(Object.assign({id:doc.id}, doc.data())); });
+    target.innerHTML = versions.length ? versions.map(function(v) {
+      var preview = v.body || v.introRichText || v.excerpt || '';
+      return '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Version '+escapeHtml(v.versionNumber||'')+' · '+escapeHtml(formatFirestoreDate(v.createdAt||v.submittedAt))+' · '+escapeHtml(guestWriterStatusLabel(v.statusAtSubmission||''))+'</summary><div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-top:8px;font-size:13px;line-height:1.7"><strong>'+escapeHtml(v.title||'Untitled story')+'</strong><div style="margin-top:8px">'+preview+'</div></div></details>';
+    }).join('') : '<div class="hint">No saved versions yet.</div>';
+  }).catch(function(err) {
+    target.innerHTML = '<div class="hint" style="color:var(--red)">Could not load version history: '+escapeHtml(err.message)+'</div>';
+  });
+}
 function openStaffGuestWriterStory(id, targetId) {
   var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
   var detail = document.getElementById(targetId || 'staff-guest-writer-story-detail');
@@ -2588,8 +2913,11 @@ function openStaffGuestWriterStory(id, targetId) {
   var publishedLocked = isPublishedOrLocked(story);
   var inIdeaDiscussion = story.status === 'idea_under_review' || story.status === 'idea_needs_work';
   var ideaApproved = story.status === 'draft' || story.writingUnlocked === true || story.ideaStatus === 'approved';
-  var hasArticleContent = !!((story.introRichText||'') || (story.body||''));
-  var hasSubmittedStoryContent = ['under_review','submitted','scheduled','published'].indexOf(story.status) !== -1 && hasArticleContent;
+  var submittedStoryHtml = guestWriterSubmittedStoryHtml(story);
+  var hasArticleContent = !!submittedStoryHtml;
+  var hasSubmittedReviewState = hasGuestWriterSubmittedStory(story) && !inIdeaDiscussion && story.status !== 'draft';
+  var hasSubmittedStoryContent = hasSubmittedReviewState && hasArticleContent;
+  var canAskForChanges = canAskForGuestWriterChanges(story);
   var historyWrap = (ideaApproved || publishedLocked)
     ? '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:14px;font-weight:600">Idea discussion history</summary><div id="staff-idea-messages" style="display:flex;flex-direction:column;gap:10px;margin-top:10px;margin-bottom:12px"></div></details>'
     : '<h4 style="font-size:14px;margin:12px 0 8px">Idea discussion</h4><div id="staff-idea-messages" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>';
@@ -2600,8 +2928,8 @@ function openStaffGuestWriterStory(id, targetId) {
   var approveButton = (ideaApproved || publishedLocked)
     ? '<button class="btn" disabled style="opacity:0.5;cursor:not-allowed">Idea approved</button>'
     : '<button class="btn" onclick="approveGuestWriterIdea(\''+escapeHtml(id)+'\')">Approve idea</button>';
-  var askButton = hasSubmittedStoryContent && !publishedLocked
-    ? '<button class="btn" onclick="askGuestWriterIdeaChanges(\''+escapeHtml(id)+'\')">Ask for changes</button>'
+  var askButton = canAskForChanges
+    ? '<button class="btn" onclick="showStoryChangeRequestBox(\''+escapeHtml(id)+'\')">Ask for changes</button>'
     : '<button class="btn" disabled style="opacity:0.5;cursor:not-allowed">Ask for changes</button>';
   var copyButton = hasSubmittedStoryContent
     ? '<button class="btn" onclick="copyStaffGuestWriterStory(\''+escapeHtml(id)+'\')">Copy article content</button>'
@@ -2610,6 +2938,26 @@ function openStaffGuestWriterStory(id, targetId) {
     ? ''
     : '<button class="btn" onclick="markStaffItemAsPublished(\'articles\',\''+escapeHtml(id)+'\',\'guest_story\',\''+escapeHtml(targetId || 'staff-guest-writer-story-detail')+'\')">Mark as published</button>';
   detail.style.color = 'var(--blk)';
+  if (hasSubmittedReviewState) {
+    var submittedDate = story.submittedAt ? '<br>Submitted: '+escapeHtml(formatFirestoreDate(story.submittedAt)) : '';
+    var submittedStoryBlock = hasArticleContent
+      ? '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;font-size:14px;line-height:1.8;margin-bottom:14px"><strong>Submitted story</strong><div style="margin-top:10px">'+submittedStoryHtml+'</div></div>'
+      : '<div style="padding:12px;border:1px solid var(--red);border-radius:8px;background:#fff;font-size:14px;line-height:1.7;margin-bottom:14px;color:var(--red)">Story is marked under review, but no submitted story content was found.</div>';
+    detail.innerHTML = '<h3 style="font-size:16px;margin-bottom:8px">'+escapeHtml(story.title||'Untitled story')+'</h3>'
+      + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Writer: '+escapeHtml(story.writerName||'')+'<br>Email: '+escapeHtml(story.writerEmail||'')+'<br>Preferred section: '+escapeHtml(story.preferredSection||'')+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+submittedDate+'</div>'
+      + submittedStoryBlock
+      + '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:14px;font-weight:600">Original story idea</summary><div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);font-size:14px;line-height:1.7;margin-top:10px;margin-bottom:12px">'+escapeHtml(story.ideaSummary||'')+'</div></details>'
+      + historyWrap
+      + '<details style="margin-top:12px" open><summary style="cursor:pointer;font-size:14px;font-weight:600">Story review chat</summary><div id="staff-review-messages" style="display:flex;flex-direction:column;gap:10px;margin-top:10px;margin-bottom:12px"></div></details>'
+      + '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:14px;font-weight:600">Version history</summary><div id="staff-story-version-history" style="margin-top:10px"></div></details>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+askButton+copyButton+publishButton+'</div>'
+      + '<div id="staff-change-request-box" style="display:none;margin-top:12px"><textarea id="staff-review-message" class="wf-textarea" rows="4" placeholder="Tell the writer what needs to change..."></textarea><button class="btn" onclick="sendStoryChangeRequest(\''+escapeHtml(id)+'\')">Send</button></div>'
+      + '<div id="staff-review-message-status" class="hint" style="margin-top:10px"></div><div id="staff-idea-message-status" class="hint" style="margin-top:10px"></div>';
+    loadIdeaMessages(id, 'staff-idea-messages');
+    loadStoryReviewMessages(id, 'staff-review-messages');
+    loadGuestWriterVersionHistory(id, 'staff-story-version-history');
+    return;
+  }
   detail.innerHTML = '<h3 style="font-size:16px;margin-bottom:8px">'+escapeHtml(story.title||'Untitled story idea')+'</h3>'
     + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Writer: '+escapeHtml(story.writerName||'')+'<br>Email: '+escapeHtml(story.writerEmail||'')+'<br>Preferred section: '+escapeHtml(story.preferredSection||'')+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+'</div>'
     + '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);font-size:14px;line-height:1.7;margin-bottom:14px"><strong>Story idea</strong><br>'+escapeHtml(story.ideaSummary||'')+'</div>'
@@ -2631,6 +2979,18 @@ function approveGuestWriterIdea(id) {
   }).then(function(){
     story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
     if (story) {
+      createNotification({
+        recipientUid: story.writerUid || '',
+        recipientEmail: story.writerEmail || '',
+        recipientRole: 'guest_writer',
+        type: 'idea_approved',
+        title: 'Idea approved',
+        message: 'Your story idea has been approved. You can start writing the full story.',
+        relatedId: id,
+        relatedStatus: 'draft'
+      });
+    }
+    if (story) {
       story.status = 'draft';
       story.ideaStatus = 'approved';
       story.writingUnlocked = true;
@@ -2649,11 +3009,92 @@ function askGuestWriterIdeaChanges(id) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function(){ loadStaffGuestWriterStories({force:true}); }).catch(function(err){ alert('Could not update idea: '+err.message); });
 }
+function showStoryChangeRequestBox(id) {
+  var box = document.getElementById('staff-change-request-box');
+  var input = document.getElementById('staff-review-message');
+  if (box) box.style.display = 'block';
+  if (input) input.focus();
+}
+function sendStoryChangeRequest(id) {
+  var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
+  var input = document.getElementById('staff-review-message');
+  var status = document.getElementById('staff-review-message-status');
+  var message = input ? input.value.trim() : '';
+  if (!message) { if (status) status.textContent = 'Please write feedback before sending.'; else alert('Please write feedback before sending.'); return; }
+  if (!story || !db) return;
+  if (isGuestWriterStoryHardLocked(story)) { publishedLockedMessage(); return; }
+  if (isGuestWriterStoryScheduled(story)) { if (status) status.textContent = 'This story is scheduled and cannot be changed here.'; else alert('This story is scheduled and cannot be changed here.'); return; }
+  if (story.status === 'changes_requested') { if (status) status.textContent = 'Changes have already been requested.'; else alert('Changes have already been requested.'); return; }
+  if (!canAskForGuestWriterChanges(story)) { if (status) status.textContent = 'Changes can only be requested after a submitted story is under review.'; return; }
+  if (status) status.textContent = 'Sending change request...';
+  var updateData = {
+    status: 'changes_requested',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    changesRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    changesRequestedBy: currentUser && currentUser.email ? currentUser.email : '',
+    writingUnlocked: true,
+    locked: false
+  };
+  db.collection('articles').doc(id).update(updateData).then(function() {
+    return db.collection('articles').doc(id).collection('review_messages').add({
+      articleId: id,
+      senderUid: currentUser && currentUser.uid || '',
+      senderEmail: currentUser && currentUser.email || '',
+      senderName: currentUser && currentUser.displayName || 'Wocult editor',
+      senderRole: 'staff',
+      message: message,
+      messageType: 'changes_requested',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }).then(function() {
+    return createNotification({
+      recipientUid: story.writerUid || '',
+      recipientEmail: story.writerEmail || '',
+      recipientRole: 'guest_writer',
+      type: 'changes_requested',
+      title: 'Changes requested',
+      message: 'Wocult has requested changes on your story.',
+      relatedId: id,
+      relatedStatus: 'changes_requested'
+    });
+  }).then(function() {
+    Object.assign(story, updateData, {status:'changes_requested', writingUnlocked:true, locked:false});
+    (window._editorialTrackerItems||[]).forEach(function(item) {
+      if (item.id === id) { item.statusLabel = 'Changes requested'; if (item.raw) Object.assign(item.raw, story); }
+    });
+    if (input) input.value = '';
+    if (status) status.textContent = 'Change request sent.';
+    var overlay = document.getElementById('editorial-tracker-overlay');
+    openStaffGuestWriterStory(id, overlay && overlay.style.display !== 'none' ? 'editorial-tracker-overlay-body' : undefined);
+    renderStaffGuestWriterStories();
+    renderEditorialTracker();
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not send change request: '+err.message;
+  });
+}
 function copyStaffGuestWriterStory(id) {
   var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
   if (!story) return;
-  var text = [story.title, story.ideaSummary, stripHtml((story.introRichText||'')+(story.body||''))].filter(Boolean).join('\n\n');
-  if (!((story.introRichText||'') || (story.body||''))) { alert('No article content is available to copy yet.'); return; }
+  var storyHtml = guestWriterSubmittedStoryHtml(story);
+  if (!storyHtml) { alert('No submitted story content found to copy.'); return; }
+  var fields = [
+    ['Title', story.title],
+    ['Writer name', story.writerName],
+    ['Writer email', story.writerEmail],
+    ['Alias', story.alias],
+    ['Preferred section', story.preferredSection],
+    ['Story status', guestWriterIdeaStatusLabel(story)],
+    ['Submitted date', story.submittedAt ? formatFirestoreDate(story.submittedAt) : ''],
+    ['Story idea', story.ideaSummary],
+    ['Short intro', story.shortIntro],
+    ['40-word intro', story.intro40],
+    ['Excerpt', story.excerpt],
+    ['Story intro', stripHtml(story.introRichText || '')],
+    ['Full body', stripHtml(storyHtml)],
+    ['Sources', story.sources || story.sourceInfo],
+    ['Image / cover URL', story.coverImageUrl || story.imageUrl]
+  ];
+  var text = fields.filter(function(pair){ return pair[1]; }).map(function(pair){ return pair[0]+':\n'+pair[1]; }).join('\n\n');
   navigator.clipboard.writeText(text);
 }
 function loadGuestInterview(key) {
@@ -4001,6 +4442,7 @@ window._editorialTrackerItems = [];
 window._editorialTrackerLoading = false;
 window._editorialTrackerLoaded = false;
 window._editorialTrackerSelected = {};
+window._notifications = [];
 var interviewQuestionState = {
   title: '',
   guestName: '',
@@ -4690,6 +5132,8 @@ function sendChatMessage() {
 }
 
 function proceedToReview() {
+  var existingPanel = document.getElementById('writer-review-panel');
+  if (existingPanel) existingPanel.remove();
   var preview = document.getElementById('chat-article-preview');
   // Get latest version block if versioning has happened, else use full preview
   var vNum = window._versionCount || 1;
@@ -4908,31 +5352,54 @@ function collectReviewArticleData(status) {
 function saveGuestWriterDraft(status, options) {
   options = options || {};
   if (!currentUser || !db || !currentGuestWriterArticleId) return Promise.reject(new Error('Story is not ready to save'));
+  var saveStatus = (status === 'draft' && currentGuestWriterStory && currentGuestWriterStory.status === 'changes_requested') ? 'changes_requested' : (status || 'draft');
   var btn = document.getElementById('guest-writer-save-draft-btn');
   var publishBtn = document.getElementById('publish-btn');
   var profile = currentGuestWriterProfile || {};
-  var articleData = collectReviewArticleData(status || 'draft');
+  var articleData = collectReviewArticleData(saveStatus);
   var data = Object.assign({}, articleData, {
     sourceType: 'guest_writer',
     writerUid: currentUser.uid,
     writerEmail: currentUser.email || profile.email || '',
     writerName: profile.fullName || currentUser.displayName || '',
+    alias: profile.alias || (currentGuestWriterStory && currentGuestWriterStory.alias) || '',
     preferredSection: (currentGuestWriterStory && currentGuestWriterStory.preferredSection) || profile.preferredSection || '',
     writingUnlocked: true,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   });
-  if (status === 'under_review') data.submittedAt = firebase.firestore.FieldValue.serverTimestamp();
+  if (saveStatus === 'under_review') {
+    data.submittedAt = firebase.firestore.FieldValue.serverTimestamp();
+    if (currentGuestWriterStory && currentGuestWriterStory.status === 'changes_requested') data.resubmittedAt = firebase.firestore.FieldValue.serverTimestamp();
+    data.writingUnlocked = false;
+    data.locked = false;
+  }
   if (!options.silent) {
-    if (status === 'under_review' && publishBtn) { publishBtn.disabled = true; publishBtn.textContent = 'Submitting...'; }
+    if (saveStatus === 'under_review' && publishBtn) { publishBtn.disabled = true; publishBtn.textContent = 'Submitting...'; }
     else if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
   }
   return db.collection('articles').doc(currentGuestWriterArticleId).set(data, {merge:true}).then(function() {
+    if (saveStatus === 'under_review') {
+      return saveGuestWriterStoryVersion(currentGuestWriterArticleId, data, 'under_review').then(function() {
+        return createNotification({
+          recipientRole: 'staff',
+          type: currentGuestWriterStory && currentGuestWriterStory.status === 'changes_requested' ? 'story_resubmitted' : 'story_submitted',
+          title: currentGuestWriterStory && currentGuestWriterStory.status === 'changes_requested' ? 'Story resubmitted' : 'Story submitted',
+          message: (data.writerName || 'A guest writer') + ' submitted a story for review.',
+          relatedId: currentGuestWriterArticleId,
+          relatedStatus: 'under_review'
+        });
+      });
+    }
+  }).then(function() {
     clearUnsavedChanges();
+    currentGuestWriterStory = Object.assign({}, currentGuestWriterStory||{}, data, {status:saveStatus});
+    if (saveStatus === 'under_review') currentGuestWriterStory = Object.assign({}, currentGuestWriterStory, {status:'under_review', writingUnlocked:false});
     if (!options.silent) {
-      if (status === 'under_review') {
+      if (saveStatus === 'under_review') {
         document.getElementById('publish-result').style.display = 'block';
         document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Submitted for review</div><div class="publish-sub">Your story has been submitted to Wocult for review. You can check back later for updates.</div></div>';
         document.getElementById('publish-actions').style.display = 'none';
+        showGuestWriterStoryStatus(currentGuestWriterStory);
       } else {
         fbToast('Draft saved');
       }
