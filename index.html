@@ -125,10 +125,13 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 @media (max-width:640px){.guest-word-actions{grid-template-columns:1fr}}
 .notification-bell{position:relative;background:none;border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:8px;height:30px;min-width:34px;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:15px}
 .notification-badge{position:absolute;top:-7px;right:-7px;background:var(--red);color:#fff;border-radius:999px;min-width:16px;height:16px;padding:0 4px;font-size:10px;line-height:16px;font-weight:700;display:none}
-.guest-revision-layout{display:grid!important;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:20px;align-items:start;max-width:1180px;margin:0 auto;padding:0 24px 32px}
+.guest-revision-layout{display:grid!important;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:20px;align-items:start;max-width:1180px;margin:0 auto;padding:0 24px 96px}
 .guest-revision-main{min-width:0}
 .guest-revision-side{min-width:0}
+.guest-revision-main .wf-actions{padding-bottom:32px;margin-bottom:24px}
 @media (max-width:900px){.guest-revision-layout{grid-template-columns:1fr}}
+.guest-writer-readonly-story{display:block;line-height:1.8;margin-top:8px;max-height:none;overflow:visible}
+.guest-writer-status-scroll{max-height:none;overflow:visible;padding-bottom:48px}
 .source-card{background:var(--gray);border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start}
 .source-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;background:var(--blk);color:var(--y);white-space:nowrap;margin-top:2px}
 .source-title{font-size:14px;font-weight:500;line-height:1.4}
@@ -179,7 +182,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v7.5</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v7.6</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -342,9 +345,9 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 </div>
 
 <div id="guest-writer-status-screen" class="landing" style="display:none">
-  <div class="scratch-screen">
+  <div class="scratch-screen guest-writer-status-scroll">
     <h2 id="guest-writer-status-title">Story status</h2>
-    <p class="sub" id="guest-writer-status-copy"></p>
+    <div class="sub" id="guest-writer-status-copy"></div>
   </div>
 </div>
 
@@ -1669,11 +1672,15 @@ function openGuestWriterWritingScreen(story) {
 function showGuestWriterStoryStatus(story) {
   disableGuestRevisionLayout();
   hideAllAppScreens();
+  currentGuestWriterStory = story;
+  currentGuestWriterArticleId = story.id;
   document.getElementById('guest-writer-status-title').textContent = guestWriterIdeaStatusLabel(story);
   var storyHtml = guestWriterSubmittedStoryHtml(story);
+  var isPublished = story && story.status === 'published';
+  var replyBox = isPublished ? '' : '<textarea id="writer-review-message" class="wf-textarea" rows="4" placeholder="Reply to Wocult..." style="margin-top:12px"></textarea><button class="btn" onclick="sendStoryReviewMessage(currentGuestWriterArticleId,\'guest_writer\')" style="margin-top:8px">Send reply</button><div id="writer-review-message-status" class="hint" style="margin-top:10px"></div>';
   document.getElementById('guest-writer-status-copy').innerHTML = 'Your story is with Wocult. You can check back later for updates.'
-    + (storyHtml ? '<br><br><strong>Your submitted story</strong><br><span style="display:block;margin-top:8px;line-height:1.7">'+storyHtml+'</span>' : '')
-    + '<br><br><details><summary style="cursor:pointer;font-weight:600">Story review chat</summary><div id="writer-review-messages" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div></details>'
+    + (storyHtml ? '<br><br><strong>Your submitted story</strong><span class="guest-writer-readonly-story">'+storyHtml+'</span>' : '')
+    + '<br><br><details open><summary style="cursor:pointer;font-weight:600">Story review chat</summary><div id="writer-review-messages" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>'+replyBox+'</details>'
     + '<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Version history</summary><div id="writer-story-version-history" style="margin-top:10px"></div></details>';
   document.getElementById('guest-writer-status-screen').style.display = 'flex';
   loadStoryReviewMessages(story.id, 'writer-review-messages');
@@ -1694,6 +1701,7 @@ function populateGuestWriterReviewFields(story) {
   if (document.getElementById('r-img-url')) document.getElementById('r-img-url').value = story.coverImageUrl || story.imageUrl || '';
   if (document.getElementById('r-img-name')) document.getElementById('r-img-name').textContent = (story.coverImageUrl || story.imageUrl) ? 'URL ready' : '';
   updateReviewWordCount();
+  setGuestWriterPublishDateVisibility(true);
 }
 function openGuestWriterRevisionScreen(story) {
   currentGuestWriterStory = story;
@@ -1710,6 +1718,7 @@ function openGuestWriterRevisionScreen(story) {
   var guestDraftBtn = document.getElementById('guest-writer-save-draft-btn');
   if (guestDraftBtn) guestDraftBtn.style.display = 'inline-flex';
   if (document.getElementById('publish-btn')) document.getElementById('publish-btn').textContent = 'Resubmit for review';
+  setGuestWriterPublishDateVisibility(true);
   showWorkflowStep('review');
   var existingPanel = document.getElementById('writer-review-panel');
   if (existingPanel) existingPanel.remove();
@@ -1757,6 +1766,13 @@ function disableGuestRevisionLayout() {
   }
   if (panel) panel.classList.remove('guest-revision-side');
   if (step) step.classList.remove('guest-revision-layout');
+  setGuestWriterPublishDateVisibility(false);
+}
+function setGuestWriterPublishDateVisibility(hideForGuestWriter) {
+  var date = document.getElementById('r-date');
+  if (!date) return;
+  var field = date.closest ? date.closest('.wf-field') : null;
+  if (field) field.style.display = hideForGuestWriter ? 'none' : '';
 }
 function handleAccessKey(key) {
   var cleaned = (key||'').trim().toUpperCase();
@@ -5249,6 +5265,7 @@ function proceedToReview() {
   if (currentAccessMode === 'guest_writer' && document.getElementById('r-writer-name')) {
     document.getElementById('r-writer-name').value = (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || (currentUser && currentUser.displayName) || '';
   }
+  setGuestWriterPublishDateVisibility(currentAccessMode === 'guest_writer');
   document.getElementById('r-img-name').textContent = '';
   if (document.getElementById('r-img-url')) document.getElementById('r-img-url').value = '';
   updateReviewWordCount();
@@ -5452,6 +5469,7 @@ function saveGuestWriterDraft(status, options) {
   var publishBtn = document.getElementById('publish-btn');
   var profile = currentGuestWriterProfile || {};
   var articleData = collectReviewArticleData(saveStatus);
+  if (currentAccessMode === 'guest_writer') delete articleData.publishDate;
   var previousStoryStatus = currentGuestWriterStory && currentGuestWriterStory.status;
   var savedVersionNumber = null;
   var data = Object.assign({}, articleData, {
