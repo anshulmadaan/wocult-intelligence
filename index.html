@@ -125,6 +125,10 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 @media (max-width:640px){.guest-word-actions{grid-template-columns:1fr}}
 .notification-bell{position:relative;background:none;border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:8px;height:30px;min-width:34px;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:15px}
 .notification-badge{position:absolute;top:-7px;right:-7px;background:var(--red);color:#fff;border-radius:999px;min-width:16px;height:16px;padding:0 4px;font-size:10px;line-height:16px;font-weight:700;display:none}
+.guest-revision-layout{display:grid!important;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:20px;align-items:start;max-width:1180px;margin:0 auto;padding:0 24px 32px}
+.guest-revision-main{min-width:0}
+.guest-revision-side{min-width:0}
+@media (max-width:900px){.guest-revision-layout{grid-template-columns:1fr}}
 .source-card{background:var(--gray);border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start}
 .source-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;background:var(--blk);color:var(--y);white-space:nowrap;margin-top:2px}
 .source-title{font-size:14px;font-weight:500;line-height:1.4}
@@ -1618,9 +1622,13 @@ function submitGuestWriterStoryAsIs() {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   var btn = document.getElementById('guest-writer-submit-story-btn');
+  var savedVersionNumber = null;
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
   db.collection('articles').doc(currentGuestWriterArticleId).set(data, {merge:true}).then(function() {
     return saveGuestWriterStoryVersion(currentGuestWriterArticleId, data, 'under_review');
+  }).then(function(versionNumber) {
+    savedVersionNumber = versionNumber || 1;
+    return db.collection('articles').doc(currentGuestWriterArticleId).update({currentVersion:savedVersionNumber});
   }).then(function() {
     return createNotification({
       recipientRole: 'staff',
@@ -1633,6 +1641,7 @@ function submitGuestWriterStoryAsIs() {
   }).then(function() {
     clearUnsavedChanges();
     currentGuestWriterStory = Object.assign({}, currentGuestWriterStory||{}, data);
+    if (savedVersionNumber) currentGuestWriterStory.currentVersion = savedVersionNumber;
     showGuestWriterStoryStatus(currentGuestWriterStory);
   }).catch(function(err) {
     alert('Could not submit story: '+err.message);
@@ -1658,6 +1667,7 @@ function openGuestWriterWritingScreen(story) {
   }, 50);
 }
 function showGuestWriterStoryStatus(story) {
+  disableGuestRevisionLayout();
   hideAllAppScreens();
   document.getElementById('guest-writer-status-title').textContent = guestWriterIdeaStatusLabel(story);
   var storyHtml = guestWriterSubmittedStoryHtml(story);
@@ -1715,9 +1725,38 @@ function openGuestWriterRevisionScreen(story) {
       + '<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:600">Version history</summary><div id="writer-story-version-history-editor" style="margin-top:10px"></div></details>'
       + '</div>');
   }
+  enableGuestRevisionLayout();
   loadStoryReviewMessages(story.id, 'writer-review-messages-editor');
   loadGuestWriterVersionHistory(story.id, 'writer-story-version-history-editor');
   clearUnsavedChanges();
+}
+function enableGuestRevisionLayout() {
+  var step = document.getElementById('step3');
+  var panel = document.getElementById('writer-review-panel');
+  if (!step || !panel) return;
+  var main = document.getElementById('guest-revision-main');
+  if (!main) {
+    main = document.createElement('div');
+    main.id = 'guest-revision-main';
+    main.className = 'guest-revision-main';
+    Array.from(step.children).forEach(function(child) {
+      if (child !== panel) main.appendChild(child);
+    });
+    step.insertBefore(main, panel);
+  }
+  panel.classList.add('guest-revision-side');
+  step.classList.add('guest-revision-layout');
+}
+function disableGuestRevisionLayout() {
+  var step = document.getElementById('step3');
+  var main = document.getElementById('guest-revision-main');
+  var panel = document.getElementById('writer-review-panel');
+  if (main && step) {
+    while (main.firstChild) step.insertBefore(main.firstChild, main);
+    main.remove();
+  }
+  if (panel) panel.classList.remove('guest-revision-side');
+  if (step) step.classList.remove('guest-revision-layout');
 }
 function handleAccessKey(key) {
   var cleaned = (key||'').trim().toUpperCase();
@@ -2867,6 +2906,23 @@ function canAskForGuestWriterChanges(story) {
   if (['idea_under_review','idea_needs_work','draft','changes_requested','scheduled','published'].indexOf(status) !== -1) return false;
   return ['under_review','submitted','story_under_review'].indexOf(status) !== -1 || !!(story.submittedAt || story.resubmittedAt);
 }
+function updateGuestWriterStoryCaches(story) {
+  if (!story || !story.id) return story;
+  window._staffGuestWriterStories = window._staffGuestWriterStories || [];
+  var idx = window._staffGuestWriterStories.findIndex(function(s){ return s.id === story.id; });
+  if (idx === -1) window._staffGuestWriterStories.push(story);
+  else window._staffGuestWriterStories[idx] = Object.assign({}, window._staffGuestWriterStories[idx], story);
+  (window._editorialTrackerItems||[]).forEach(function(item) {
+    if (item.id === story.id && item.itemType === 'guest_story') {
+      item.raw = Object.assign({}, item.raw || {}, story);
+      item.title = story.title || item.title;
+      item.statusLabel = guestWriterStatusLabel(story.status);
+      item.updatedAt = story.updatedAt || item.updatedAt;
+      item.submittedAt = story.resubmittedAt || story.submittedAt || item.submittedAt;
+    }
+  });
+  return story;
+}
 function saveGuestWriterStoryVersion(articleId, data, statusAtSubmission) {
   if (!db || !articleId || !data) return Promise.resolve();
   var versions = db.collection('articles').doc(articleId).collection('versions');
@@ -2888,7 +2944,7 @@ function saveGuestWriterStoryVersion(articleId, data, statusAtSubmission) {
       submittedBy: currentUser && currentUser.email ? currentUser.email : '',
       statusAtSubmission: statusAtSubmission || data.status || '',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    }).then(function(){ return versionNumber; });
   });
 }
 function loadGuestWriterVersionHistory(articleId, targetId) {
@@ -2898,6 +2954,14 @@ function loadGuestWriterVersionHistory(articleId, targetId) {
   db.collection('articles').doc(articleId).collection('versions').orderBy('versionNumber','desc').limit(20).get().then(function(snap) {
     var versions = [];
     snap.forEach(function(doc){ versions.push(Object.assign({id:doc.id}, doc.data())); });
+    if (versions.length) {
+      var story = (window._staffGuestWriterStories||[]).find(function(s){ return s.id === articleId; });
+      if (story && !story.currentVersion) {
+        story.currentVersion = versions[0].versionNumber || 1;
+        var meta = document.getElementById('staff-story-current-version');
+        if (meta) meta.textContent = story.currentVersion;
+      }
+    }
     target.innerHTML = versions.length ? versions.map(function(v) {
       var preview = v.body || v.introRichText || v.excerpt || '';
       return '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Version '+escapeHtml(v.versionNumber||'')+' · '+escapeHtml(formatFirestoreDate(v.createdAt||v.submittedAt))+' · '+escapeHtml(guestWriterStatusLabel(v.statusAtSubmission||''))+'</summary><div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-top:8px;font-size:13px;line-height:1.7"><strong>'+escapeHtml(v.title||'Untitled story')+'</strong><div style="margin-top:8px">'+preview+'</div></div></details>';
@@ -2906,11 +2970,23 @@ function loadGuestWriterVersionHistory(articleId, targetId) {
     target.innerHTML = '<div class="hint" style="color:var(--red)">Could not load version history: '+escapeHtml(err.message)+'</div>';
   });
 }
-function openStaffGuestWriterStory(id, targetId) {
-  var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
+function openStaffGuestWriterStory(id, targetId, options) {
+  options = options || {};
   var detail = document.getElementById(targetId || 'staff-guest-writer-story-detail');
+  if (!detail) return;
+  if (!options.skipFetch && db) {
+    detail.innerHTML = '<div class="hint">Loading latest story...</div>';
+    return db.collection('articles').doc(id).get().then(function(doc) {
+      if (!doc.exists) { detail.innerHTML = '<div class="hint" style="color:var(--red)">Story not found.</div>'; return; }
+      updateGuestWriterStoryCaches(Object.assign({id:doc.id}, doc.data()));
+      openStaffGuestWriterStory(id, targetId, {skipFetch:true});
+    }).catch(function(err) {
+      detail.innerHTML = '<div class="hint" style="color:var(--red)">Could not load story: '+escapeHtml(err.message)+'</div>';
+    });
+  }
+  var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
   if (!story || !detail) return;
-  var publishedLocked = isPublishedOrLocked(story);
+  var publishedLocked = isGuestWriterStoryHardLocked(story);
   var inIdeaDiscussion = story.status === 'idea_under_review' || story.status === 'idea_needs_work';
   var ideaApproved = story.status === 'draft' || story.writingUnlocked === true || story.ideaStatus === 'approved';
   var submittedStoryHtml = guestWriterSubmittedStoryHtml(story);
@@ -2940,11 +3016,13 @@ function openStaffGuestWriterStory(id, targetId) {
   detail.style.color = 'var(--blk)';
   if (hasSubmittedReviewState) {
     var submittedDate = story.submittedAt ? '<br>Submitted: '+escapeHtml(formatFirestoreDate(story.submittedAt)) : '';
+    var resubmittedDate = story.resubmittedAt ? '<br>Resubmitted: '+escapeHtml(formatFirestoreDate(story.resubmittedAt)) : '';
+    var currentVersion = story.currentVersion || story.versionNumber || 1;
     var submittedStoryBlock = hasArticleContent
       ? '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;font-size:14px;line-height:1.8;margin-bottom:14px"><strong>Submitted story</strong><div style="margin-top:10px">'+submittedStoryHtml+'</div></div>'
       : '<div style="padding:12px;border:1px solid var(--red);border-radius:8px;background:#fff;font-size:14px;line-height:1.7;margin-bottom:14px;color:var(--red)">Story is marked under review, but no submitted story content was found.</div>';
     detail.innerHTML = '<h3 style="font-size:16px;margin-bottom:8px">'+escapeHtml(story.title||'Untitled story')+'</h3>'
-      + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Writer: '+escapeHtml(story.writerName||'')+'<br>Email: '+escapeHtml(story.writerEmail||'')+'<br>Preferred section: '+escapeHtml(story.preferredSection||'')+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+submittedDate+'</div>'
+      + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Writer: '+escapeHtml(story.writerName||'')+'<br>Email: '+escapeHtml(story.writerEmail||'')+'<br>Preferred section: '+escapeHtml(story.preferredSection||'')+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+'<br>Version: <span id="staff-story-current-version">'+escapeHtml(currentVersion)+'</span>'+submittedDate+resubmittedDate+'</div>'
       + submittedStoryBlock
       + '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:14px;font-weight:600">Original story idea</summary><div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);font-size:14px;line-height:1.7;margin-top:10px;margin-bottom:12px">'+escapeHtml(story.ideaSummary||'')+'</div></details>'
       + historyWrap
@@ -2968,7 +3046,7 @@ function openStaffGuestWriterStory(id, targetId) {
 }
 function approveGuestWriterIdea(id) {
   var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
-  if (isPublishedOrLocked(story)) { publishedLockedMessage(); return; }
+  if (isGuestWriterStoryHardLocked(story)) { publishedLockedMessage(); return; }
   if (!window.confirm('Are you sure you want to approve this idea? Once approved, the writer will be able to start writing the full story.')) return;
   db.collection('articles').doc(id).update({
     status: 'draft',
@@ -3001,7 +3079,7 @@ function approveGuestWriterIdea(id) {
 }
 function askGuestWriterIdeaChanges(id) {
   var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
-  if (isPublishedOrLocked(story)) { publishedLockedMessage(); return; }
+  if (isGuestWriterStoryHardLocked(story)) { publishedLockedMessage(); return; }
   db.collection('articles').doc(id).update({
     status: 'idea_needs_work',
     ideaStatus: 'needs_work',
@@ -3075,6 +3153,16 @@ function sendStoryChangeRequest(id) {
 function copyStaffGuestWriterStory(id) {
   var story = (window._staffGuestWriterStories||[]).find(function(s){return s.id===id;});
   if (!story) return;
+  if (db) {
+    return db.collection('articles').doc(id).get().then(function(doc) {
+      if (!doc.exists) throw new Error('Story not found.');
+      var freshStory = updateGuestWriterStoryCaches(Object.assign({id:doc.id}, doc.data()));
+      copyStaffGuestWriterStoryFromData(freshStory);
+    }).catch(function(err){ alert('Could not copy article content: '+err.message); });
+  }
+  copyStaffGuestWriterStoryFromData(story);
+}
+function copyStaffGuestWriterStoryFromData(story) {
   var storyHtml = guestWriterSubmittedStoryHtml(story);
   if (!storyHtml) { alert('No submitted story content found to copy.'); return; }
   var fields = [
@@ -3085,6 +3173,8 @@ function copyStaffGuestWriterStory(id) {
     ['Preferred section', story.preferredSection],
     ['Story status', guestWriterIdeaStatusLabel(story)],
     ['Submitted date', story.submittedAt ? formatFirestoreDate(story.submittedAt) : ''],
+    ['Resubmitted date', story.resubmittedAt ? formatFirestoreDate(story.resubmittedAt) : ''],
+    ['Current version', story.currentVersion || story.versionNumber || '1'],
     ['Story idea', story.ideaSummary],
     ['Short intro', story.shortIntro],
     ['40-word intro', story.intro40],
@@ -5134,6 +5224,7 @@ function sendChatMessage() {
 function proceedToReview() {
   var existingPanel = document.getElementById('writer-review-panel');
   if (existingPanel) existingPanel.remove();
+  disableGuestRevisionLayout();
   var preview = document.getElementById('chat-article-preview');
   // Get latest version block if versioning has happened, else use full preview
   var vNum = window._versionCount || 1;
@@ -5346,6 +5437,10 @@ function collectReviewArticleData(status) {
     introRichText: introHtml,
     body: bodyHtml,
     readTime: document.getElementById('r-readtime').value,
+    publishDate: document.getElementById('r-date') ? document.getElementById('r-date').value : '',
+    imageUrl: document.getElementById('r-img-url') ? document.getElementById('r-img-url').value : '',
+    coverImageUrl: document.getElementById('r-img-url') ? document.getElementById('r-img-url').value : '',
+    sources: currentGuestWriterStory && currentGuestWriterStory.sources || '',
     status: status || 'draft'
   };
 }
@@ -5357,6 +5452,8 @@ function saveGuestWriterDraft(status, options) {
   var publishBtn = document.getElementById('publish-btn');
   var profile = currentGuestWriterProfile || {};
   var articleData = collectReviewArticleData(saveStatus);
+  var previousStoryStatus = currentGuestWriterStory && currentGuestWriterStory.status;
+  var savedVersionNumber = null;
   var data = Object.assign({}, articleData, {
     sourceType: 'guest_writer',
     writerUid: currentUser.uid,
@@ -5379,21 +5476,26 @@ function saveGuestWriterDraft(status, options) {
   }
   return db.collection('articles').doc(currentGuestWriterArticleId).set(data, {merge:true}).then(function() {
     if (saveStatus === 'under_review') {
-      return saveGuestWriterStoryVersion(currentGuestWriterArticleId, data, 'under_review').then(function() {
-        return createNotification({
+      return saveGuestWriterStoryVersion(currentGuestWriterArticleId, data, 'under_review').then(function(versionNumber) {
+        savedVersionNumber = versionNumber || 1;
+        return db.collection('articles').doc(currentGuestWriterArticleId).update({currentVersion:savedVersionNumber}).then(function() {
+          return createNotification({
           recipientRole: 'staff',
-          type: currentGuestWriterStory && currentGuestWriterStory.status === 'changes_requested' ? 'story_resubmitted' : 'story_submitted',
-          title: currentGuestWriterStory && currentGuestWriterStory.status === 'changes_requested' ? 'Story resubmitted' : 'Story submitted',
+          type: previousStoryStatus === 'changes_requested' ? 'story_resubmitted' : 'story_submitted',
+          title: previousStoryStatus === 'changes_requested' ? 'Story resubmitted' : 'Story submitted',
           message: (data.writerName || 'A guest writer') + ' submitted a story for review.',
           relatedId: currentGuestWriterArticleId,
           relatedStatus: 'under_review'
+          });
         });
       });
     }
   }).then(function() {
     clearUnsavedChanges();
     currentGuestWriterStory = Object.assign({}, currentGuestWriterStory||{}, data, {status:saveStatus});
-    if (saveStatus === 'under_review') currentGuestWriterStory = Object.assign({}, currentGuestWriterStory, {status:'under_review', writingUnlocked:false});
+    if (savedVersionNumber) currentGuestWriterStory.currentVersion = savedVersionNumber;
+    if (saveStatus === 'under_review') currentGuestWriterStory = Object.assign({}, currentGuestWriterStory, {status:'under_review', writingUnlocked:false, locked:false});
+    generatedContent = Object.assign({}, generatedContent || {}, data);
     if (!options.silent) {
       if (saveStatus === 'under_review') {
         document.getElementById('publish-result').style.display = 'block';
