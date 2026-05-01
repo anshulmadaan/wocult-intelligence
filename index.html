@@ -132,6 +132,10 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 @media (max-width:900px){.guest-revision-layout{grid-template-columns:1fr}}
 .guest-writer-readonly-story{display:block;line-height:1.8;margin-top:8px;max-height:none;overflow:visible}
 .guest-writer-status-scroll{max-height:none;overflow:visible;padding-bottom:48px}
+.guest-story-readonly-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:20px;align-items:start;max-width:1180px;margin:0 auto;padding:0 24px 32px}
+.guest-story-readonly-main{min-width:0}
+.guest-story-readonly-side{min-width:0}
+@media (max-width:900px){.guest-story-readonly-layout{grid-template-columns:1fr}}
 .source-card{background:var(--gray);border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start}
 .source-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;background:var(--blk);color:var(--y);white-space:nowrap;margin-top:2px}
 .source-title{font-size:14px;font-weight:500;line-height:1.4}
@@ -182,7 +186,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v7.6</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v7.7</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -397,9 +401,9 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       </div>
       <div class="lcard" onclick="showInterviewSubmissions()">
         <div class="lcard-icon">IN</div>
-        <div class="lcard-title">Guest submissions</div>
+        <div class="lcard-title">Guest interview submissions</div>
         <div class="lcard-desc">Review guest interview responses and final Q&A submissions.</div>
-        <div class="lcard-cta">Review submissions →</div>
+        <div class="lcard-cta">Review interview submissions →</div>
       </div>
         </div>
       </section>
@@ -1678,10 +1682,17 @@ function showGuestWriterStoryStatus(story) {
   var storyHtml = guestWriterSubmittedStoryHtml(story);
   var isPublished = story && story.status === 'published';
   var replyBox = isPublished ? '' : '<textarea id="writer-review-message" class="wf-textarea" rows="4" placeholder="Reply to Wocult..." style="margin-top:12px"></textarea><button class="btn" onclick="sendStoryReviewMessage(currentGuestWriterArticleId,\'guest_writer\')" style="margin-top:8px">Send reply</button><div id="writer-review-message-status" class="hint" style="margin-top:10px"></div>';
-  document.getElementById('guest-writer-status-copy').innerHTML = 'Your story is with Wocult. You can check back later for updates.'
-    + (storyHtml ? '<br><br><strong>Your submitted story</strong><span class="guest-writer-readonly-story">'+storyHtml+'</span>' : '')
-    + '<br><br><details open><summary style="cursor:pointer;font-weight:600">Story review chat</summary><div id="writer-review-messages" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>'+replyBox+'</details>'
-    + '<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Version history</summary><div id="writer-story-version-history" style="margin-top:10px"></div></details>';
+  document.getElementById('guest-writer-status-copy').innerHTML =
+    '<div class="guest-story-readonly-layout">'
+      + '<div class="guest-story-readonly-main">'
+        + '<div>Your story is with Wocult. You can check back later for updates.</div>'
+        + (storyHtml ? '<br><strong>Your submitted story</strong><span class="guest-writer-readonly-story">'+storyHtml+'</span>' : '')
+      + '</div>'
+      + '<div class="guest-story-readonly-side">'
+        + '<details open><summary style="cursor:pointer;font-weight:600">Story review chat</summary><div id="writer-review-messages" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>'+replyBox+'</details>'
+        + '<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Version history</summary><div id="writer-story-version-history" style="margin-top:10px"></div></details>'
+      + '</div>'
+    + '</div>';
   document.getElementById('guest-writer-status-screen').style.display = 'flex';
   loadStoryReviewMessages(story.id, 'writer-review-messages');
   loadGuestWriterVersionHistory(story.id, 'writer-story-version-history');
