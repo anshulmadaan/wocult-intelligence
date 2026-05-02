@@ -469,6 +469,18 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       </div>
         </div>
       </section>
+      <div style="height:1px;background:var(--bdr);width:100%"></div>
+      <section>
+        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Website Communications</h2>
+        <div class="landing-cards" style="grid-template-columns:1fr">
+      <div class="lcard" onclick="showUnsentAdmin()">
+        <div class="lcard-icon">UN</div>
+        <div class="lcard-title">UNSENT</div>
+        <div class="lcard-desc">Review, edit, and delete unsent messages.</div>
+        <div class="lcard-cta">Open UNSENT</div>
+      </div>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -692,6 +704,26 @@ There are no right or wrong answers here. Please answer openly and in your own v
           <div id="editorial-tracker-overlay-body" style="padding:18px;color:var(--blk);font-size:14px;line-height:1.6"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="landing-unsent-admin" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:1100px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
+        <button class="btn" onclick="loadUnsentSubmissions({force:true})">Refresh</button>
+      </div>
+      <h2>UNSENT</h2>
+      <p class="sub">Review, edit, and delete unsent messages.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <input class="wf-input" id="unsent-search" placeholder="Search messages..." style="flex:1;min-width:220px" oninput="renderUnsentSubmissions()" />
+        <select class="wf-input" id="unsent-sort" style="width:180px" onchange="renderUnsentSubmissions()">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
+      </div>
+      <div id="unsent-status" class="hint" style="margin-bottom:12px"></div>
+      <div id="unsent-list" style="border:1px solid var(--bdr);border-radius:8px;background:#fff;overflow:auto"></div>
     </div>
   </div>
 
@@ -1049,6 +1081,9 @@ window._guestWriterApplicationsLoading = false;
 window._staffGuestWriterStories = [];
 window._staffGuestWriterStoriesLoaded = false;
 window._staffGuestWriterStoriesLoading = false;
+window._unsentSubmissions = [];
+window._unsentSubmissionsLoaded = false;
+window._unsentSubmissionsLoading = false;
 
 function isStaffUser(user) {
   return !!(user && STAFF_EMAILS.indexOf((user.email || '').toLowerCase()) !== -1);
@@ -1066,7 +1101,7 @@ function guardStaffScreen() {
 }
 function enforceStaffScreenAccess() {
   if (isStaffUser(currentUser)) return;
-  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
+  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-unsent-admin','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
     var el = document.getElementById(id);
     return el && el.style.display !== 'none';
   });
@@ -3124,6 +3159,103 @@ function showStaffGuestWriterStories() {
   if (window._staffGuestWriterStoriesLoaded) renderStaffGuestWriterStories();
   else loadStaffGuestWriterStories();
 }
+function showUnsentAdmin() {
+  if (!guardStaffScreen()) return;
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-unsent-admin').style.display = 'flex';
+  if (window._unsentSubmissionsLoaded) renderUnsentSubmissions();
+  else loadUnsentSubmissions();
+}
+function unsentDateValue(item) {
+  var v = item.createdAt || item.submittedAt || item.timestamp || item.updatedAt;
+  if (!v) return 0;
+  if (v.toDate) return v.toDate().getTime();
+  if (v.seconds) return v.seconds * 1000;
+  var d = new Date(v);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+function loadUnsentSubmissions(options) {
+  options = options || {};
+  var status = document.getElementById('unsent-status');
+  var list = document.getElementById('unsent-list');
+  if (!db || window._unsentSubmissionsLoading) return;
+  if (options.force) window._unsentSubmissionsLoaded = false;
+  window._unsentSubmissionsLoading = true;
+  if (status) status.textContent = 'Loading unsent messages...';
+  db.collection('unsent_submissions').get().then(function(snap) {
+    window._unsentSubmissions = [];
+    snap.forEach(function(doc){ window._unsentSubmissions.push(Object.assign({id:doc.id}, doc.data())); });
+    window._unsentSubmissionsLoaded = true;
+    renderUnsentSubmissions();
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not load unsent messages: '+err.message;
+    if (list) list.innerHTML = '';
+  }).finally(function(){ window._unsentSubmissionsLoading = false; });
+}
+function renderUnsentSubmissions() {
+  var list = document.getElementById('unsent-list');
+  var status = document.getElementById('unsent-status');
+  if (!list) return;
+  var q = (document.getElementById('unsent-search') && document.getElementById('unsent-search').value || '').toLowerCase().trim();
+  var sort = document.getElementById('unsent-sort') ? document.getElementById('unsent-sort').value : 'newest';
+  var items = (window._unsentSubmissions || []).filter(function(item) {
+    var hay = [item.recipient, item.to, item.message, item.name, item.from, item.email].map(function(v){return String(v||'').toLowerCase();}).join(' ');
+    return !q || hay.indexOf(q) !== -1;
+  }).sort(function(a,b) {
+    return sort === 'oldest' ? unsentDateValue(a) - unsentDateValue(b) : unsentDateValue(b) - unsentDateValue(a);
+  });
+  if (status) status.textContent = items.length + ' of ' + (window._unsentSubmissions || []).length + ' unsent message(s).';
+  if (!items.length) {
+    list.innerHTML = '<div style="padding:18px;color:var(--g3);font-size:13px">No unsent messages found.</div>';
+    return;
+  }
+  list.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:820px"><thead style="background:var(--gray);text-align:left"><tr>'
+    + '<th style="padding:10px;border-bottom:1px solid var(--bdr)">To</th>'
+    + '<th style="padding:10px;border-bottom:1px solid var(--bdr)">Message</th>'
+    + '<th style="padding:10px;border-bottom:1px solid var(--bdr)">From</th>'
+    + '<th style="padding:10px;border-bottom:1px solid var(--bdr)">Date</th>'
+    + '<th style="padding:10px;border-bottom:1px solid var(--bdr)">Actions</th></tr></thead><tbody>'
+    + items.map(function(item) {
+      return '<tr id="unsent-row-'+escapeHtml(item.id)+'">'
+        + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top">'+escapeHtml(item.recipient || item.to || '')+'</td>'
+        + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top;max-width:380px;white-space:pre-wrap">'+escapeHtml(item.message || '')+'</td>'
+        + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top">'+escapeHtml(item.name || item.from || '')+'</td>'
+        + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top;white-space:nowrap">'+escapeHtml(formatFirestoreDate(item.createdAt || item.submittedAt || item.timestamp || item.updatedAt))+'</td>'
+        + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top;white-space:nowrap"><button class="btn" onclick="editUnsentSubmission(\''+escapeHtml(item.id)+'\')">Edit</button> <button class="btn" onclick="deleteUnsentSubmission(\''+escapeHtml(item.id)+'\')">Delete</button></td>'
+        + '</tr>';
+    }).join('') + '</tbody></table>';
+}
+function editUnsentSubmission(id) {
+  var item = (window._unsentSubmissions || []).find(function(x){return x.id === id;});
+  var row = document.getElementById('unsent-row-'+id);
+  if (!item || !row) return;
+  row.innerHTML = '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top"><input class="wf-input" id="unsent-recipient-'+escapeHtml(id)+'" value="'+escapeHtml(item.recipient || item.to || '')+'" /></td>'
+    + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top"><textarea class="wf-textarea" id="unsent-message-'+escapeHtml(id)+'" style="min-height:90px">'+escapeHtml(item.message || '')+'</textarea></td>'
+    + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top"><input class="wf-input" id="unsent-name-'+escapeHtml(id)+'" value="'+escapeHtml(item.name || item.from || '')+'" /></td>'
+    + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top;white-space:nowrap">'+escapeHtml(formatFirestoreDate(item.createdAt || item.submittedAt || item.timestamp || item.updatedAt))+'</td>'
+    + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top;white-space:nowrap"><button class="btn" onclick="saveUnsentSubmission(\''+escapeHtml(id)+'\')">Save</button> <button class="btn" onclick="renderUnsentSubmissions()">Cancel</button></td>';
+}
+function saveUnsentSubmission(id) {
+  var data = {
+    recipient: document.getElementById('unsent-recipient-'+id).value.trim(),
+    message: document.getElementById('unsent-message-'+id).value.trim(),
+    name: document.getElementById('unsent-name-'+id).value.trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  db.collection('unsent_submissions').doc(id).update(data).then(function() {
+    var item = (window._unsentSubmissions || []).find(function(x){return x.id === id;});
+    if (item) Object.assign(item, data);
+    renderUnsentSubmissions();
+  }).catch(function(err){ alert('Could not save message: '+err.message); });
+}
+function deleteUnsentSubmission(id) {
+  if (!window.confirm('Delete this unsent message?')) return;
+  db.collection('unsent_submissions').doc(id).delete().then(function() {
+    window._unsentSubmissions = (window._unsentSubmissions || []).filter(function(item){return item.id !== id;});
+    renderUnsentSubmissions();
+  }).catch(function(err){ alert('Could not delete message: '+err.message); });
+}
 function resetStaffGuestWriterStoryDetail() {
   var detail = document.getElementById('staff-guest-writer-story-detail');
   if (!detail) return;
@@ -4122,7 +4254,8 @@ function hideStaffLandingPanels() {
     'landing-interview-submissions',
     'landing-guest-writer-applications',
     'landing-guest-writer-stories',
-    'landing-editorial-tracker'
+    'landing-editorial-tracker',
+    'landing-unsent-admin'
   ].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
