@@ -87,7 +87,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .empty{text-align:center;padding:60px 20px;color:var(--g3);grid-column:1/-1}
 .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--g2);border-top-color:var(--y);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
-#workflow{display:none;height:100vh;overflow-y:auto;background:#f5f0e8}
+#workflow{display:none;height:100vh;overflow-y:auto;background:#f5f0e8;padding-bottom:96px}
 .wf-header{background:var(--blk);padding:0 24px;height:52px;display:flex;align-items:center;gap:16px;border-bottom:3px solid var(--y);position:sticky;top:0;z-index:150}
 .wf-back{background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px}
 .wf-back:hover{color:#fff}
@@ -96,7 +96,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .wf-step.done{color:rgba(255,255,255,0.6)}.wf-step.active{color:var(--y);border-bottom-color:var(--y)}
 .wf-step.nav-ok{cursor:pointer}.wf-step.nav-ok:hover{color:#fff}
 .wf-step.disabled{color:rgba(255,255,255,0.25)}
-.wf-body{max-width:800px;margin:0 auto;padding:32px 24px}
+.wf-body{max-width:800px;margin:0 auto;padding:32px 24px 120px}
 .wf-section{background:var(--w);border-radius:12px;border:1px solid var(--bdr);padding:24px;margin-bottom:20px}
 .wf-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--g3);margin-bottom:8px;display:block}
 .wf-input{width:100%;padding:10px 14px;border:1px solid var(--g2);border-radius:8px;font-size:14px;background:var(--w);color:var(--blk);outline:none;font-family:inherit}
@@ -114,16 +114,25 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 #chat-article-preview em, #chat-article-preview i{font-style:normal}
 #r-body-render em, #r-body-render i{font-style:normal}
 .chat-msg-user{background:var(--y);color:var(--blk);padding:8px 12px;border-radius:12px 12px 2px 12px;font-size:13px;align-self:flex-end;max-width:80%}
+.chat-msg-update-action{background:#FFF4CC;color:#6B5A1E;border:1px solid #E8D89B;padding:8px 12px;border-radius:12px 12px 2px 12px;font-size:13px;align-self:flex-end;max-width:80%}
 .chat-msg-claude{background:#fff;border:1px solid var(--bdr);padding:8px 12px;border-radius:12px 12px 12px 2px;font-size:13px;align-self:flex-start;max-width:90%;line-height:1.5}
 .chat-msg-thinking{color:var(--g3);font-size:12px;font-style:italic;align-self:flex-start}
 .wf-actions{display:flex;gap:12px;justify-content:flex-end;padding-top:8px}
+#step2b{height:calc(100vh - 52px);max-height:calc(100vh - 52px);max-width:none!important;margin:0!important;padding:0!important;overflow:hidden;flex-direction:column}
+#step2b #refine-header{position:relative!important;top:auto!important;flex:0 0 auto}
+#refine-content{max-width:820px;width:100%;margin:0 auto;min-height:0;flex:1;display:flex;flex-direction:column}
+#step2b #chat-article-preview{height:auto!important;min-height:220px;max-height:calc(100vh - 330px);flex:1 1 auto;overflow-y:auto!important;overscroll-behavior:contain}
+#step2b #word-count-bar{flex:0 0 auto}
+#step2b .refine-chat-panel{flex:0 0 auto;max-height:220px;display:flex;flex-direction:column}
+#step2b #chat-messages{max-height:126px;overflow-y:auto}
+#step3{padding-bottom:140px!important}
 .btn-lg{padding:10px 28px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:none}
 .btn-y{background:var(--y);color:var(--ydeep)}.btn-y:hover{background:#EFB860}
 .btn-dark{background:var(--blk);color:var(--y)}.btn-dark:hover{background:#333}
 .guest-word-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;width:100%}
 .guest-word-actions .guest-word-action-btn{width:100%;height:56px;min-height:56px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 18px;margin:0;border:1px solid var(--bdr);border-radius:8px;background:#f3eee6;color:var(--blk);font-family:inherit;font-size:14px;font-weight:600;line-height:1.2;text-align:center;cursor:pointer;appearance:none;-webkit-appearance:none}
 @media (max-width:640px){.guest-word-actions{grid-template-columns:1fr}}
-.notification-bell{position:relative;background:none;border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:8px;height:30px;min-width:34px;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:15px}
+.notification-bell{position:relative;background:none;border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:8px;height:34px;min-width:34px;padding:0 10px;box-sizing:border-box;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:15px;align-self:center}
 .notification-badge{position:absolute;top:-7px;right:-7px;background:var(--red);color:#fff;border-radius:999px;min-width:16px;height:16px;padding:0 4px;font-size:10px;line-height:16px;font-weight:700;display:none}
 .guest-revision-layout{display:grid!important;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:20px;align-items:start;max-width:1180px;margin:0 auto;padding:0 24px 96px}
 .guest-revision-main{min-width:0}
@@ -137,6 +146,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .guest-story-readonly-main{min-width:0;max-height:calc(100vh - 180px);overflow-y:auto;padding-right:8px;text-align:left}
 .guest-story-readonly-main>*{margin-left:0}
 .guest-story-readonly-side{min-width:0;max-height:calc(100vh - 180px);overflow-y:auto;position:sticky;top:88px}
+.staff-story-section-label{color:#E24B4A;font-weight:700}
 @media (max-width:900px){.guest-story-readonly-layout{grid-template-columns:1fr;min-height:auto}.guest-story-readonly-main,.guest-story-readonly-side{max-height:none;overflow:visible;position:static}}
 .source-card{background:var(--gray);border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start}
 .source-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;background:var(--blk);color:var(--y);white-space:nowrap;margin-top:2px}
@@ -188,12 +198,13 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v7.9</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v8</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
     <button class="btn" id="rbtn" onclick="loadAll()" style="display:none">Refresh</button>
     <button class="notification-bell" id="notification-bell" onclick="toggleNotificationsPanel()" title="Notifications">🔔<span class="notification-badge" id="notification-count">0</span></button>
+    <button class="btn" onclick="showSubmitStoryIdeaScreen()" style="font-size:11px;display:none;background:#FAC775;color:var(--blk)" id="btn-new-guest-story">+ New Story</button>
     <button class="btn btn-ghost" onclick="handleHomeClick()" style="font-size:11px;display:none" id="btn-back-landing">Home</button>
     <button class="btn btn-ghost" onclick="logout()" style="font-size:11px;display:none" id="btn-logout">Logout</button>
   </div>
@@ -288,22 +299,24 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 </div>
 
 <div id="guest-writer-dashboard" class="landing" style="display:none">
-  <div class="landing-hero">
-    <h1>Guest Writer dashboard</h1>
-    <p>Draft and submit your Wocult story.</p>
-  </div>
-  <div class="landing-cards" style="grid-template-columns:repeat(2,1fr)">
-    <div class="lcard" onclick="startGuestWriterStory()">
-      <div class="lcard-icon">✍</div>
-      <div class="lcard-title">Start a new story</div>
-      <div class="lcard-desc">Use the Wocult writing tool to shape your experience or perspective into a story.</div>
-      <div class="lcard-cta">Start writing →</div>
-    </div>
-    <div class="lcard" onclick="showGuestWriterStories()">
-      <div class="lcard-icon">MS</div>
-      <div class="lcard-title">My stories</div>
-      <div class="lcard-desc">See saved drafts and submitted stories.</div>
-      <div class="lcard-cta">Open stories →</div>
+  <div class="scratch-screen" style="max-width:1120px">
+    <h2>My stories</h2>
+    <p class="sub">Track your submitted ideas, revisions, and published stories.</p>
+    <div id="guest-writer-dashboard-status" class="hint" style="margin-bottom:12px"></div>
+    <div style="overflow:auto;border:1px solid var(--bdr);border-radius:8px;background:#fff">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:760px">
+        <thead style="background:var(--gray);text-align:left">
+          <tr>
+            <th style="padding:10px;border-bottom:1px solid var(--bdr)">S. No.</th>
+            <th style="padding:10px;border-bottom:1px solid var(--bdr)">Story title</th>
+            <th style="padding:10px;border-bottom:1px solid var(--bdr)">Status</th>
+            <th style="padding:10px;border-bottom:1px solid var(--bdr)">Date submitted</th>
+            <th style="padding:10px;border-bottom:1px solid var(--bdr)">Date published</th>
+            <th style="padding:10px;border-bottom:1px solid var(--bdr)">View</th>
+          </tr>
+        </thead>
+        <tbody id="guest-writer-dashboard-body"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -326,6 +339,21 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <div class="sfield"><label>Working title</label><input id="gwi-title" placeholder="Working title" /></div>
     <div class="sfield"><label>Preferred section</label><input id="gwi-section" placeholder="Example: Health" /></div>
     <div class="sfield">
+      <label>Which themes does it fit? <span style="font-weight:400;color:var(--g3)">(choose all that apply)</span></label>
+      <div class="check-grid" id="gwi-themes-grid">
+        <div class="check-opt" onclick="toggleCheck(this)">Work culture</div>
+        <div class="check-opt" onclick="toggleCheck(this)">Leadership</div>
+        <div class="check-opt" onclick="toggleCheck(this)">Career growth</div>
+        <div class="check-opt" onclick="toggleCheck(this)">Health and wellbeing</div>
+        <div class="check-opt" onclick="toggleCheck(this)">Money and ambition</div>
+        <div class="check-opt" onclick="toggleCheck(this)">Relationships and family</div>
+        <div class="check-opt" onclick="toggleCheck(this)">Identity and self-worth</div>
+        <div class="check-opt" onclick="toggleCheck(this)">Life outside work</div>
+        <div class="check-opt" onclick="toggleCheck(this)">Failure and reinvention</div>
+        <div class="check-opt" onclick="toggleCheck(this)">Something else</div>
+      </div>
+    </div>
+    <div class="sfield">
       <label>Story idea</label>
       <div class="hint">Tell us what you want to write about, why it matters, and what personal experience or perspective you will bring to it.</div>
       <textarea id="gwi-idea" rows="7" oninput="updateStoryIdeaWordCount()"></textarea>
@@ -338,7 +366,8 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 
 <div id="guest-writer-idea-discussion" class="landing" style="display:none;padding-top:32px">
   <div class="scratch-screen" style="max-width:780px">
-    <h2>Idea discussion</h2>
+    <button onclick="goGuestWriterDashboardWithUnsavedCheck()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Go back to dashboard</button>
+    <h2 style="margin-bottom:18px">Idea discussion</h2>
     <div id="gwi-discussion-summary" style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-bottom:16px"></div>
     <div id="gwi-messages" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px"></div>
     <div class="sfield">
@@ -352,6 +381,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 
 <div id="guest-writer-status-screen" class="landing" style="display:none">
   <div class="scratch-screen guest-writer-status-scroll">
+    <button onclick="goGuestWriterDashboardWithUnsavedCheck()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin:0 24px 20px">← Go back to dashboard</button>
     <h2 id="guest-writer-status-title">Story status</h2>
     <div class="sub" id="guest-writer-status-copy"></div>
   </div>
@@ -572,7 +602,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
     <div class="scratch-screen" style="max-width:980px">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
         <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
-        <button class="btn" onclick="loadStaffGuestWriterStories({force:true})">Refresh</button>
+        <button class="btn" onclick="loadStaffGuestWriterStories({force:true,resetDetail:true})">Refresh</button>
       </div>
       <h2>Guest writer stories</h2>
       <p class="sub">Review Guest Writer stories and update status.</p>
@@ -726,6 +756,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
         </div>
       </div>
 
+      <div style="font-size:15px;font-weight:700;margin:0 0 14px;color:var(--blk)">Use Wocult AI to draft your story</div>
       <div class="sfield">
         <label>Your name and email</label>
         <input id="sc-name" placeholder="Name · email@example.com" />
@@ -752,22 +783,6 @@ There are no right or wrong answers here. Please answer openly and in your own v
       </div>
 
       <div class="sfield">
-        <label>Which themes does it fit? <span style="font-weight:400;color:var(--g3)">(choose all that apply)</span></label>
-        <div class="check-grid" id="sc-themes-grid">
-          <div class="check-opt" onclick="toggleCheck(this)">Work culture</div>
-          <div class="check-opt" onclick="toggleCheck(this)">Leadership</div>
-          <div class="check-opt" onclick="toggleCheck(this)">Career growth</div>
-          <div class="check-opt" onclick="toggleCheck(this)">Health and wellbeing</div>
-          <div class="check-opt" onclick="toggleCheck(this)">Money and ambition</div>
-          <div class="check-opt" onclick="toggleCheck(this)">Relationships and family</div>
-          <div class="check-opt" onclick="toggleCheck(this)">Identity and self-worth</div>
-          <div class="check-opt" onclick="toggleCheck(this)">Life outside work</div>
-          <div class="check-opt" onclick="toggleCheck(this)">Failure and reinvention</div>
-          <div class="check-opt" onclick="toggleCheck(this)">Something else</div>
-        </div>
-      </div>
-
-      <div class="sfield">
         <label>Tell us your story</label>
         <div class="hint">Write freely — a full draft, rough notes, or just the idea. Tell us what happened, what it taught you, and why other working professionals may relate.</div>
         <textarea id="sc-story" rows="8" placeholder="Start writing here..." oninput="updateGuestWriterSubmitState()"></textarea>
@@ -777,6 +792,13 @@ There are no right or wrong answers here. Please answer openly and in your own v
         <label style="display:flex;align-items:flex-start;gap:10px;font-weight:400;cursor:pointer">
           <input type="checkbox" id="sc-consent" style="width:auto;margin-top:2px" />
           <span style="font-size:12px;color:var(--g3);line-height:1.5">I confirm this is my original experience or perspective, and I'm comfortable with Wocult editing it for clarity and style before publishing.</span>
+        </label>
+      </div>
+
+      <div class="sfield" id="guest-writer-ai-refine-wrap" style="display:none">
+        <label style="display:flex;align-items:flex-start;gap:10px;font-weight:400;cursor:pointer">
+          <input type="checkbox" id="guest-writer-ai-refine-upload" style="width:auto;margin-top:2px" />
+          <span style="font-size:12px;color:var(--g3);line-height:1.5">Use Wocult AI to refine my uploaded story</span>
         </label>
       </div>
 
@@ -841,7 +863,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
     <div style="font-size:16px;font-weight:600;margin-bottom:4px">Editorial brief</div>
     <div style="font-size:13px;color:var(--g3);margin-bottom:20px">Add your angle before generating</div>
     <div class="wf-field">
-      <label class="wf-label">Your headline idea <span class="field-badge">Leave blank for Claude to create</span></label>
+      <label class="wf-label">Your headline idea <span class="field-badge">Leave blank for Wocult AI to create</span></label>
       <input class="wf-input" id="b-title" placeholder="Optional headline angle..." />
     </div>
     <div class="wf-field">
@@ -855,7 +877,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <div class="gen-loading">
     <div class="gen-spinner"></div>
     <div class="gen-label">Writing your story...</div>
-    <div class="gen-sub">Claude is drafting all fields</div>
+    <div class="gen-sub">Wocult AI is drafting all fields</div>
     <div class="gen-steps">
       <div class="gen-step-item active" id="gs1"><div class="step-dot"></div>Analysing source and angle</div>
       <div class="gen-step-item" id="gs2"><div class="step-dot"></div>Writing intro and excerpt</div>
@@ -870,10 +892,11 @@ There are no right or wrong answers here. Please answer openly and in your own v
     <div style="max-width:820px;margin:0 auto;padding:10px 24px;display:flex;justify-content:space-between;align-items:center">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="font-size:15px;font-weight:600">Refine your story</div>
-        <div style="font-size:10px;color:var(--g3);background:var(--gray);border:1px solid var(--bdr);padding:2px 8px;border-radius:10px">claude-sonnet-4</div>
+        <div style="font-size:10px;color:var(--g3);background:var(--gray);border:1px solid var(--bdr);padding:2px 8px;border-radius:10px">Wocult AI</div>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn" id="update-draft-btn" onclick="updateDraft()" style="padding:6px 14px;font-size:13px" title="Sync your manual edits and let Claude polish them">↻ Update</button>
+        <button class="btn" id="update-draft-btn" onclick="updateDraft()" style="padding:6px 14px;font-size:13px" title="Sync your manual edits and let Wocult AI polish them">↻ Update</button>
+        <button class="btn" id="revert-draft-btn" onclick="revertDraftUpdate()" disabled style="padding:6px 14px;font-size:13px;opacity:0.5;cursor:not-allowed" title="Restore the story from before the last Update">Revert</button>
         <button class="btn-lg btn-y" style="white-space:nowrap;padding:6px 16px;font-size:13px" onclick="proceedToReview()">Proceed to Review →</button>
       </div>
     </div>
@@ -892,18 +915,19 @@ There are no right or wrong answers here. Please answer openly and in your own v
     </div>
   </div>
   <!-- Content area -->
-  <div style="max-width:820px;margin:0 auto">
+  <div id="refine-content" style="max-width:820px;margin:0 auto">
     <div id="chat-article-preview" contenteditable="true" style="padding:24px;background:#fff;height:500px;overflow-y:scroll;outline:none;cursor:text;font-size:14px;line-height:1.8;border-bottom:1px solid var(--bdr)" oninput="updateWordCount()"></div>
     <div id="word-count-bar" style="padding:6px 24px;background:#fff;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--g3)">
       <span id="word-count-num">0 words</span>
       <span id="word-count-warn" style="display:none;color:#E24B4A;font-weight:500">⚠ Over 1200 words — recommended max exceeded</span>
     </div>
-    <div style="background:var(--gray);border-top:2px solid var(--bdr)">
+    <div class="refine-chat-panel" style="background:var(--gray);border-top:2px solid var(--bdr)">
       <div id="chat-messages" style="padding:16px;display:flex;flex-direction:column;gap:10px"></div>
       <div style="padding:10px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;align-items:flex-end;background:#fff;position:sticky;bottom:0;z-index:100;box-shadow:0 -2px 8px rgba(0,0,0,0.06)">
-        <textarea id="chat-input" class="wf-textarea" style="margin:0;flex:1;min-height:40px;max-height:120px;resize:none;font-size:13px" placeholder="Ask Claude to edit, research, add sections, change tone..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}"></textarea>
+        <textarea id="chat-input" class="wf-textarea" style="margin:0;flex:1;min-height:40px;max-height:120px;resize:none;font-size:13px" placeholder="Ask Wocult AI to edit, research, add sections, change tone..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}"></textarea>
         <button class="btn" onclick="sendChatMessage()" id="chat-send-btn" style="height:40px;padding:0 16px;white-space:nowrap">Send</button>
       </div>
+      <div class="guest-writer-autosave-status hint" style="padding:8px 16px;text-align:right;background:#fff"></div>
     </div>
   </div>
 </div>
@@ -950,6 +974,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
     <button class="btn-lg" onclick="exportCSV()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Export CSV</button>
     <button class="btn-lg btn-y" id="publish-btn" onclick="submitArticle()">Submit</button>
   </div>
+  <div class="guest-writer-autosave-status hint" style="margin-top:10px;text-align:right"></div>
 </div>
 </div>
 
@@ -990,6 +1015,13 @@ var DEFAULT_ARTICLE_CATEGORY = 'Affairs';
 var currentWorkflowStep = '';
 var maxWorkflowStepReached = 0;
 var workflowHasBriefStep = true;
+var workflowGeneratedDraftOnly = false;
+var guestWriterAutosaveTimer = null;
+var guestWriterAutosaveInFlight = false;
+var guestWriterUploadedBypassAI = false;
+var lastPreUpdateDraftHtml = '';
+var lastPreUpdateVersionCount = 0;
+var workflowReviewPrepared = false;
 var workflowPreviousLandingScreen = '';
 var currentAccessMode = '';
 var currentAccessKey = '';
@@ -1034,7 +1066,7 @@ function guardStaffScreen() {
 }
 function enforceStaffScreenAccess() {
   if (isStaffUser(currentUser)) return;
-  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','main'].some(function(id) {
+  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
     var el = document.getElementById(id);
     return el && el.style.display !== 'none';
   });
@@ -1088,10 +1120,16 @@ function isDirtyTrackedTarget(target) {
 }
 function setupUnsavedChangeTracking() {
   document.addEventListener('input', function(e) {
-    if (isDirtyTrackedTarget(e.target)) markUnsavedChanges();
+    if (isDirtyTrackedTarget(e.target)) {
+      markUnsavedChanges();
+      scheduleGuestWriterAutosave();
+    }
   });
   document.addEventListener('change', function(e) {
-    if (isDirtyTrackedTarget(e.target)) markUnsavedChanges();
+    if (isDirtyTrackedTarget(e.target)) {
+      markUnsavedChanges();
+      scheduleGuestWriterAutosave();
+    }
   });
 }
 function setupBrowserBackGuard() {
@@ -1100,6 +1138,18 @@ function setupBrowserBackGuard() {
   history.pushState({wocultStudioGuard:true}, '', window.location.href);
   window.addEventListener('popstate', function() {
     if (browserBackGuardDisabled) return;
+    if (currentAccessMode === 'guest_writer' && currentUser && !isStaffUser(currentUser)) {
+      history.pushState({wocultStudioGuard:true}, '', window.location.href);
+      if (hasUnsavedChanges && !window.confirm(getLeaveWarningMessage())) {
+        enforceStaffScreenAccess();
+        return;
+      }
+      clearUnsavedChanges();
+      hideAllAppScreens();
+      showGuestWriterDashboard();
+      setTimeout(enforceStaffScreenAccess, 0);
+      return;
+    }
     if (!hasUnsavedChanges) {
       browserBackGuardDisabled = true;
       history.back();
@@ -1139,6 +1189,8 @@ function hideAllAppScreens() {
   document.getElementById('btn-back-landing').style.display = currentUser ? 'inline-flex' : 'none';
   document.getElementById('rbtn').style.display = 'none';
   document.getElementById('btn-logout').style.display = currentUser ? 'inline-flex' : 'none';
+  var newStoryBtn = document.getElementById('btn-new-guest-story');
+  if (newStoryBtn) newStoryBtn.style.display = 'none';
   var bell = document.getElementById('notification-bell');
   if (bell) bell.style.display = currentUser ? 'inline-flex' : 'none';
   var uploadBlock = document.getElementById('guest-writer-upload-block');
@@ -1311,51 +1363,117 @@ function submitGuestWriterRegistration() {
   });
 }
 function loadActiveGuestWriterStory(uid) {
+  return loadGuestWriterDashboardStories(uid);
+}
+function loadGuestWriterDashboardStories(uid) {
   hideAllAppScreens();
-  showGuestWriterPending('Loading your story...', 'Please wait while Wocult Studio checks your current story stage.', '');
+  showGuestWriterPending('Loading your stories...', 'Please wait while Wocult Studio checks your story dashboard.', '');
   db.collection('articles')
     .where('sourceType','==','guest_writer')
     .where('writerUid','==',uid)
     .orderBy('updatedAt','desc')
-    .limit(1)
+    .limit(50)
     .get().then(function(snap) {
-      if (snap.empty) { showSubmitStoryIdeaScreen(); return; }
-      var doc = snap.docs[0];
-      currentGuestWriterStory = Object.assign({id:doc.id}, doc.data());
-      currentGuestWriterArticleId = doc.id;
-      routeGuestWriterStoryStage(currentGuestWriterStory);
+      window._guestWriterStories = [];
+      snap.forEach(function(doc) { window._guestWriterStories.push(Object.assign({id:doc.id}, doc.data())); });
+      if (!window._guestWriterStories.length) currentGuestWriterStory = null;
+      updateGuestWriterNewStoryButton();
+      if (!window._guestWriterStories.length) { showSubmitStoryIdeaScreen(); return; }
+      renderGuestWriterDashboardTable();
     }).catch(function(err) {
-    showGuestWriterPending('Could not load your story', err.message, 'Please try refreshing later.');
+    showGuestWriterPending('Could not load your stories', err.message, 'Please try refreshing later.');
   });
 }
 function showGuestWriterDashboard() {
-  if (currentUser) loadActiveGuestWriterStory(currentUser.uid);
+  if (currentUser) loadGuestWriterDashboardStories(currentUser.uid);
   else showAccessScreen();
+}
+function goGuestWriterDashboardWithUnsavedCheck() {
+  confirmBeforeLeavingScreen(function() {
+    showGuestWriterDashboard();
+  });
 }
 function startGuestWriterStory() {
   showSubmitStoryIdeaScreen();
 }
 function showGuestWriterStories() {
-  if (currentUser) loadActiveGuestWriterStory(currentUser.uid);
+  if (currentUser) loadGuestWriterDashboardStories(currentUser.uid);
   else showAccessScreen();
 }
 function loadGuestWriterStories() {
   showGuestWriterStories();
 }
+function guestWriterStoryIsActive(story) {
+  if (!story || story.archived === true) return false;
+  return ['idea_under_review','idea_needs_work','draft','changes_requested','under_review','submitted','story_under_review','scheduled'].indexOf(story.status || '') !== -1;
+}
+function updateGuestWriterNewStoryButton() {
+  var btn = document.getElementById('btn-new-guest-story');
+  if (!btn) return;
+  var stories = window._guestWriterStories || [];
+  var hasActive = stories.length ? stories.some(guestWriterStoryIsActive) : guestWriterStoryIsActive(currentGuestWriterStory);
+  btn.style.display = currentAccessMode === 'guest_writer' && currentUser && !hasActive ? 'inline-flex' : 'none';
+}
+function renderGuestWriterDashboardTable() {
+  hideAllAppScreens();
+  var body = document.getElementById('guest-writer-dashboard-body');
+  var status = document.getElementById('guest-writer-dashboard-status');
+  var stories = window._guestWriterStories || [];
+  if (!body) return;
+  if (status) status.textContent = stories.length ? stories.length + ' story/stories found.' : 'No stories yet.';
+  body.innerHTML = stories.length ? stories.map(function(story, idx) {
+    var title = escapeHtml(story.title || 'Untitled story');
+    var titleHtml = story.status === 'published' && story.publishedLink
+      ? '<a href="'+escapeHtml(story.publishedLink)+'" target="_blank" rel="noopener" style="color:var(--yd);font-weight:700;text-decoration:none">'+title+'</a>'
+      : title;
+    return '<tr>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+(idx+1)+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);font-weight:600">'+titleHtml+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr)">'+escapeHtml(guestWriterStatusLabel(story.status))+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+(story.resubmittedAt || story.submittedAt ? escapeHtml(formatFirestoreDate(story.resubmittedAt || story.submittedAt)) : '—')+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+(story.publishedAt ? escapeHtml(formatFirestoreDate(story.publishedAt)) : '—')+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr)"><button class="btn" style="background:#FAC775;color:var(--blk)" onclick="viewGuestWriterStory(\''+escapeHtml(story.id)+'\')">View</button></td>'
+      + '</tr>';
+  }).join('') : '<tr><td colspan="6" style="padding:16px;color:var(--g3)">No stories yet.</td></tr>';
+  document.getElementById('guest-writer-dashboard').style.display = 'flex';
+  updateGuestWriterNewStoryButton();
+  clearUnsavedChanges();
+}
+function viewGuestWriterStory(id) {
+  var story = (window._guestWriterStories || []).find(function(s) { return s.id === id; });
+  if (!story) return;
+  currentGuestWriterStory = story;
+  currentGuestWriterArticleId = id;
+  routeGuestWriterStoryStage(story);
+}
+function hasGeneratedGuestWriterDraft(story) {
+  return !!(story && (
+    story.generatedStory ||
+    story.body ||
+    story.introRichText ||
+    story.excerpt ||
+    story.shortIntro ||
+    story.slug
+  ));
+}
 function routeGuestWriterStoryStage(story) {
   if (!story) { showSubmitStoryIdeaScreen(); return; }
   if (story.status === 'idea_under_review' || story.status === 'idea_needs_work') { showIdeaDiscussionScreen(story); return; }
   if (story.status === 'changes_requested') { openGuestWriterRevisionScreen(story); return; }
-  if (['under_review','submitted','scheduled','published'].indexOf(story.status) !== -1) { showGuestWriterStoryStatus(story); return; }
+  if (['under_review','submitted','story_under_review','scheduled','published'].indexOf(story.status) !== -1) { showGuestWriterStoryStatus(story); return; }
+  if (story.status === 'draft' && hasGeneratedGuestWriterDraft(story)) { openGuestWriterGeneratedDraftWorkflow(story); return; }
   if (story.status === 'draft' || story.writingUnlocked === true) { openGuestWriterWritingScreen(story); return; }
   showSubmitStoryIdeaScreen();
 }
 function showSubmitStoryIdeaScreen() {
   hideAllAppScreens();
+  updateGuestWriterNewStoryButton();
   var section = currentGuestWriterProfile ? (currentGuestWriterProfile.preferredSection === 'Other' ? currentGuestWriterProfile.otherSection : currentGuestWriterProfile.preferredSection) : '';
   document.getElementById('gwi-title').value = '';
   document.getElementById('gwi-section').value = section || '';
   document.getElementById('gwi-idea').value = '';
+  var themeGrid = document.getElementById('gwi-themes-grid');
+  if (themeGrid) themeGrid.querySelectorAll('.sel').forEach(function(el){ el.classList.remove('sel'); });
   updateStoryIdeaWordCount();
   document.getElementById('guest-writer-idea').style.display = 'flex';
   maybeShowGuestWriterWelcome();
@@ -1364,6 +1482,7 @@ function showSubmitStoryIdeaScreen() {
 function maybeShowGuestWriterWelcome() {
   if (currentAccessMode !== 'guest_writer' || !currentUser || !db || !currentGuestWriterProfile) return;
   if (currentGuestWriterProfile.status !== 'approved' || currentGuestWriterProfile.approvalWelcomeSeen === true) return;
+  if ((window._guestWriterStories || []).length) return;
   var modal = document.getElementById('gw-welcome-modal');
   if (!modal) return;
   modal.style.display = 'flex';
@@ -1394,6 +1513,7 @@ function submitGuestWriterIdea() {
   if (!idea) { alert('Please add your story idea before submitting.'); return; }
   if (words > 150) { status.textContent = 'Your story idea is '+words+' words. Please keep it to 150 words or fewer.'; status.style.color = 'var(--red)'; return; }
   var profile = currentGuestWriterProfile || {};
+  var themes = Array.from(document.getElementById('gwi-themes-grid').querySelectorAll('.sel')).map(function(e){return e.textContent;});
   var ref = db.collection('articles').doc();
   var data = {
     sourceType: 'guest_writer',
@@ -1402,6 +1522,7 @@ function submitGuestWriterIdea() {
     writerName: profile.fullName || currentUser.displayName || '',
     alias: profile.alias || (currentGuestWriterStory && currentGuestWriterStory.alias) || '',
     preferredSection: document.getElementById('gwi-section').value.trim(),
+    themes: themes,
     title: document.getElementById('gwi-title').value.trim() || 'Untitled story idea',
     ideaSummary: idea,
     status: 'idea_under_review',
@@ -1417,6 +1538,8 @@ function submitGuestWriterIdea() {
     clearUnsavedChanges();
     currentGuestWriterArticleId = ref.id;
     currentGuestWriterStory = Object.assign({id:ref.id}, data);
+    window._guestWriterStories = [currentGuestWriterStory].concat(window._guestWriterStories || []);
+    updateGuestWriterNewStoryButton();
     showIdeaDiscussionScreen(currentGuestWriterStory);
   }).catch(function(err) {
     status.textContent = 'Could not submit story idea: '+err.message;
@@ -1438,6 +1561,7 @@ function showIdeaDiscussionScreen(story) {
   hideAllAppScreens();
   currentGuestWriterStory = story;
   currentGuestWriterArticleId = story.id;
+  updateGuestWriterNewStoryButton();
   document.getElementById('gwi-discussion-summary').innerHTML =
     '<div style="font-size:18px;font-weight:700;margin-bottom:6px">'+escapeHtml(story.title||'Untitled story idea')+'</div>'
     + '<div style="font-size:13px;color:var(--g3);line-height:1.6">Preferred section: '+escapeHtml(story.preferredSection||'')+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+'</div>'
@@ -1574,6 +1698,19 @@ function updateGuestWriterSubmitState() {
   btn.style.opacity = hasStory ? '1' : '0.5';
   btn.style.cursor = hasStory ? 'pointer' : 'not-allowed';
 }
+function setGuestWriterAiRefineVisibility(show) {
+  var wrap = document.getElementById('guest-writer-ai-refine-wrap');
+  var cb = document.getElementById('guest-writer-ai-refine-upload');
+  if (wrap) wrap.style.display = show ? 'block' : 'none';
+  if (!show && cb) cb.checked = false;
+}
+function shouldRefineUploadedStoryWithAI() {
+  var cb = document.getElementById('guest-writer-ai-refine-upload');
+  return !!(currentAccessMode === 'guest_writer' && guestWriterUploadedStoryText && cb && cb.checked);
+}
+function shouldBypassAIForUploadedStory() {
+  return currentAccessMode === 'guest_writer' && !!guestWriterUploadedStoryText && !shouldRefineUploadedStoryWithAI();
+}
 function handleGuestWriterStoryUpload(file) {
   var status = document.getElementById('guest-writer-upload-status');
   if (!file) return;
@@ -1583,28 +1720,33 @@ function handleGuestWriterStoryUpload(file) {
       guestWriterUploadedStoryText = text || '';
       if (document.getElementById('sc-story')) document.getElementById('sc-story').value = guestWriterUploadedStoryText;
       if (status) status.textContent = guestWriterUploadedStoryText ? 'Story uploaded. Review it below before submitting.' : 'This file did not contain readable text.';
+      setGuestWriterAiRefineVisibility(!!guestWriterUploadedStoryText);
       markUnsavedChanges();
       updateGuestWriterSubmitState();
     }).catch(function() {
+      setGuestWriterAiRefineVisibility(false);
       if (status) status.textContent = 'Could not read this file. Please paste your story below.';
     });
     return;
   }
   if (/\.docx$/i.test(name)) {
-    if (!window.mammoth) { if (status) status.textContent = 'Could not read this Word document. Please paste your story below.'; return; }
+    if (!window.mammoth) { setGuestWriterAiRefineVisibility(false); if (status) status.textContent = 'Could not read this Word document. Please paste your story below.'; return; }
     file.arrayBuffer().then(function(buffer) {
       return mammoth.extractRawText({arrayBuffer:buffer});
     }).then(function(result) {
       guestWriterUploadedStoryText = result.value || '';
       if (document.getElementById('sc-story')) document.getElementById('sc-story').value = guestWriterUploadedStoryText;
       if (status) status.textContent = guestWriterUploadedStoryText ? 'Story uploaded. Review it below before submitting.' : 'This document did not contain readable text.';
+      setGuestWriterAiRefineVisibility(!!guestWriterUploadedStoryText);
       markUnsavedChanges();
       updateGuestWriterSubmitState();
     }).catch(function() {
+      setGuestWriterAiRefineVisibility(false);
       if (status) status.textContent = 'Could not read this Word document. Please paste your story below.';
     });
     return;
   }
+  setGuestWriterAiRefineVisibility(false);
   if (status) status.textContent = 'This file type is not supported yet. Please upload a .txt or .docx file.';
 }
 function submitGuestWriterStoryAsIs() {
@@ -1620,6 +1762,7 @@ function submitGuestWriterStoryAsIs() {
     writerName: profile.fullName || currentUser.displayName || '',
     alias: profile.alias || (currentGuestWriterStory && currentGuestWriterStory.alias) || '',
     preferredSection: (currentGuestWriterStory && currentGuestWriterStory.preferredSection) || profile.preferredSection || '',
+    themes: (currentGuestWriterStory && currentGuestWriterStory.themes) || [],
     title: title || (currentGuestWriterStory && currentGuestWriterStory.title) || 'Untitled story',
     body: plainTextToHtml(storyText),
     rawStoryText: storyText,
@@ -1666,6 +1809,7 @@ function openGuestWriterWritingScreen(story) {
   showScratchForm();
   setTimeout(function() {
     guestWriterUploadedStoryText = '';
+    setGuestWriterAiRefineVisibility(false);
     if (document.getElementById('sc-name')) document.getElementById('sc-name').value = (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || (currentUser && currentUser.email) || '';
     if (document.getElementById('sc-topic')) document.getElementById('sc-topic').value = story.title || '';
     if (document.getElementById('sc-story')) document.getElementById('sc-story').value = story.body ? stripHtml(story.body) : (story.ideaSummary || '');
@@ -1680,15 +1824,19 @@ function showGuestWriterStoryStatus(story) {
   hideAllAppScreens();
   currentGuestWriterStory = story;
   currentGuestWriterArticleId = story.id;
+  updateGuestWriterNewStoryButton();
   document.getElementById('guest-writer-status-title').textContent = guestWriterIdeaStatusLabel(story);
   var storyHtml = guestWriterSubmittedStoryHtml(story);
+  var storySectionsHtml = renderGuestWriterStorySections(story);
   var isPublished = story && story.status === 'published';
   var replyBox = isPublished ? '' : '<textarea id="writer-review-message" class="wf-textarea" rows="4" placeholder="Reply to Wocult..." style="margin-top:12px"></textarea><button class="btn" onclick="sendStoryReviewMessage(currentGuestWriterArticleId,\'guest_writer\')" style="margin-top:8px">Send reply</button><div id="writer-review-message-status" class="hint" style="margin-top:10px"></div>';
+  var statusCopy = isPublished ? 'Congratulations — your story has been published.' : 'Your story is with Wocult. You can check back later for updates.';
+  var publishedLinkHtml = isPublished && story.publishedLink ? '<div style="margin-top:10px"><a href="'+escapeHtml(story.publishedLink)+'" target="_blank" rel="noopener" style="color:var(--yd);font-weight:700">Open published story</a></div>' : '';
   document.getElementById('guest-writer-status-copy').innerHTML =
     '<div class="guest-story-readonly-layout">'
       + '<div class="guest-story-readonly-main">'
-        + '<div>Your story is with Wocult. You can check back later for updates.</div>'
-        + (storyHtml ? '<br><strong>Your submitted story</strong><span class="guest-writer-readonly-story">'+storyHtml+'</span>' : '')
+        + '<div>'+statusCopy+'</div>'+publishedLinkHtml
+        + (storyHtml ? storySectionsHtml : '')
       + '</div>'
       + '<div class="guest-story-readonly-side">'
         + '<details open><summary style="cursor:pointer;font-weight:600">Story review chat</summary><div id="writer-review-messages" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>'+replyBox+'</details>'
@@ -1699,11 +1847,40 @@ function showGuestWriterStoryStatus(story) {
   loadStoryReviewMessages(story.id, 'writer-review-messages');
   loadGuestWriterVersionHistory(story.id, 'writer-story-version-history');
 }
+function firstNonEmptyValue() {
+  for (var i = 0; i < arguments.length; i++) {
+    var v = arguments[i];
+    if (v !== undefined && v !== null && String(v).trim()) return String(v);
+  }
+  return '';
+}
+function deriveShortIntroText(sourceText) {
+  var tmp = document.createElement('div');
+  tmp.innerHTML = sourceText || '';
+  var text = (tmp.innerText || tmp.textContent || String(sourceText || '')).replace(/\s+/g,' ').trim();
+  if (!text) return '';
+  var words = text.split(/\s+/).filter(Boolean);
+  return words.slice(0, Math.min(20, Math.max(15, words.length))).join(' ').replace(/[,:;]$/,'');
+}
+function getBestShortIntro(existingValue) {
+  return firstNonEmptyValue(
+    generatedContent && generatedContent.shortIntro,
+    generatedContent && generatedContent.shortStoryIntro,
+    generatedContent && generatedContent.storyIntroPara,
+    currentGuestWriterStory && currentGuestWriterStory.shortIntro,
+    currentGuestWriterStory && currentGuestWriterStory.shortStoryIntro,
+    currentGuestWriterStory && currentGuestWriterStory.storyIntroPara,
+    deriveShortIntroText(generatedContent && generatedContent.intro40),
+    deriveShortIntroText(generatedContent && generatedContent.excerpt),
+    deriveShortIntroText(generatedContent && generatedContent.body),
+    existingValue
+  );
+}
 function populateGuestWriterReviewFields(story) {
   generatedContent = Object.assign({}, generatedContent || {}, story || {});
   document.getElementById('r-title').value = story.title || '';
   document.getElementById('r-slug').value = story.slug || '';
-  document.getElementById('r-short').value = story.shortIntro || '';
+  document.getElementById('r-short').value = getBestShortIntro(document.getElementById('r-short').value);
   document.getElementById('r-40').value = story.intro40 || '';
   document.getElementById('r-excerpt').value = story.excerpt || '';
   document.getElementById('r-intro-rt').value = story.introRichText || '';
@@ -1716,12 +1893,57 @@ function populateGuestWriterReviewFields(story) {
   updateReviewWordCount();
   setGuestWriterPublishDateVisibility(true);
 }
+function openGuestWriterGeneratedDraftWorkflow(story) {
+  currentGuestWriterStory = story;
+  currentGuestWriterArticleId = story.id;
+  guestWriterUploadedBypassAI = false;
+  setUploadedStoryNoAiControls(false);
+  updateGuestWriterNewStoryButton();
+  hideAllAppScreens();
+  disableGuestRevisionLayout();
+  generatedContent = Object.assign({}, story || {});
+  if (!generatedContent.body && generatedContent.generatedStory) generatedContent.body = generatedContent.generatedStory;
+  workflowGeneratedDraftOnly = true;
+  workflowPreviousLandingScreen = 'guest-writer-dashboard';
+  workflowHasBriefStep = false;
+  workflowReviewPrepared = false;
+  maxWorkflowStepReached = workflowStepIndex('review');
+  currentWorkflowStep = 'refine';
+  document.getElementById('workflow').style.display = 'block';
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('main').style.display = 'none';
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+  document.getElementById('publish-result').style.display = 'none';
+  document.getElementById('publish-actions').style.display = 'flex';
+  var guestDraftBtn = document.getElementById('guest-writer-save-draft-btn');
+  if (guestDraftBtn) guestDraftBtn.style.display = 'inline-flex';
+  if (document.getElementById('publish-btn')) document.getElementById('publish-btn').textContent = 'Submit for review';
+  populateGuestWriterReviewFields(story);
+  document.getElementById('chat-article-preview').innerHTML = normalizeRefineDraftHtml(renderPreview(generatedContent), generatedContent.title);
+  window._versionCount = 1;
+  resetDraftRevert();
+  updateWordCount();
+  window._chatHistory = [
+    {role:'user', content:'You are a Wocult senior editor. Continue refining this guest writer draft. Preserve the contributor\'s voice and specific details.\n\nCurrent article:\n'+document.getElementById('chat-article-preview').innerHTML},
+    {role:'assistant', content:'Ready. What would you like to refine?'}
+  ];
+  var chatMessages = document.getElementById('chat-messages');
+  if (chatMessages) chatMessages.innerHTML = '';
+  showWorkflowStep('refine');
+  clearUnsavedChanges();
+}
 function openGuestWriterRevisionScreen(story) {
   currentGuestWriterStory = story;
   currentGuestWriterArticleId = story.id;
+  guestWriterUploadedBypassAI = false;
+  setUploadedStoryNoAiControls(false);
+  updateGuestWriterNewStoryButton();
+  workflowGeneratedDraftOnly = false;
   hideAllAppScreens();
   workflowPreviousLandingScreen = 'guest-writer-status-screen';
   workflowHasBriefStep = false;
+  workflowReviewPrepared = true;
   maxWorkflowStepReached = workflowStepIndex('review');
   currentWorkflowStep = 'review';
   document.getElementById('workflow').style.display = 'block';
@@ -1733,12 +1955,15 @@ function openGuestWriterRevisionScreen(story) {
   if (document.getElementById('publish-btn')) document.getElementById('publish-btn').textContent = 'Resubmit for review';
   setGuestWriterPublishDateVisibility(true);
   showWorkflowStep('review');
+  var backToRefineBtn = document.querySelector('#publish-actions button[onclick="showWorkflowStep(\'refine\')"]');
+  if (backToRefineBtn) backToRefineBtn.style.display = 'none';
   var existingPanel = document.getElementById('writer-review-panel');
   if (existingPanel) existingPanel.remove();
   var reviewStep = document.getElementById('step3');
   if (reviewStep) {
     reviewStep.insertAdjacentHTML('beforeend',
       '<div id="writer-review-panel" class="wf-section" style="margin-top:18px">'
+      + '<button onclick="goGuestWriterDashboardWithUnsavedCheck()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:14px">← Go back to dashboard</button>'
       + '<div style="font-size:16px;font-weight:700;margin-bottom:8px">Story review chat</div>'
       + '<div id="writer-review-messages-editor" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>'
       + '<textarea id="writer-review-message-editor" class="wf-textarea" rows="4" placeholder="Reply to Wocult..."></textarea>'
@@ -2026,6 +2251,7 @@ function guestWriterStatusLabel(status) {
     idea_under_review: 'Idea under review',
     idea_needs_work: 'Feedback shared',
     under_review: 'Story under review',
+    story_under_review: 'Story under review',
     changes_requested: 'Changes requested',
     submitted: 'Submitted',
     scheduled: 'Scheduled',
@@ -2154,7 +2380,7 @@ function loadEditorialTracker(options) {
         person: isGuest ? (a.writerName || a.writerEmail || 'Guest writer') : (a.authorName || a.createdBy || 'Wocult'),
         email: a.writerEmail || a.authorEmail || '',
         createdAt: a.createdAt || a.savedAt,
-        submittedAt: a.finalSubmittedAt || a.submittedAt,
+        submittedAt: isGuest && a.status === 'published' ? (a.publishedAt || a.finalSubmittedAt || a.submittedAt) : (a.finalSubmittedAt || a.submittedAt),
         updatedAt: a.updatedAt || a.savedAt || a.createdAt,
         statusLabel: label,
         raw: a
@@ -2228,10 +2454,14 @@ function renderEditorialTracker() {
   if (status) status.textContent = items.length + ' item(s) shown.';
   body.innerHTML = items.map(function(item, idx) {
     var key = editorialTrackerItemKey(item);
+    var titleText = escapeHtml(item.title);
+    var titleHtml = item.itemType === 'guest_story' && item.raw && item.raw.status === 'published' && item.raw.publishedLink
+      ? '<a href="'+escapeHtml(item.raw.publishedLink)+'" target="_blank" rel="noopener" style="color:var(--yd);font-weight:700;text-decoration:none">'+titleText+'</a>'
+      : titleText;
     return '<tr>'
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+(idx+1)+'</td>'
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr)"><input type="checkbox" data-tracker-row-key="'+escapeHtml(key)+'" onchange="toggleEditorialTrackerRowSelection(\''+escapeHtml(key)+'\', this.checked)" '+(window._editorialTrackerSelected && window._editorialTrackerSelected[key] ? 'checked' : '')+' /></td>'
-      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);font-weight:600;color:var(--blk)">'+escapeHtml(item.title)+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);font-weight:600;color:var(--blk)">'+titleHtml+'</td>'
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr)">'+escapeHtml(item.typeLabel)+'</td>'
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr)">'+escapeHtml(item.person || '-')+'</td>'
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+escapeHtml(formatFirestoreDate(item.createdAt))+'</td>'
@@ -2371,18 +2601,35 @@ function renderWocultStoryPreview(story, targetId) {
 }
 function markStaffItemAsPublished(collection, id, itemType, targetId) {
   if (!isStaffUser(currentUser) || !db || !collection || !id) return;
+  if (itemType === 'guest_story') {
+    var story = (window._staffGuestWriterStories||[]).find(function(s){ return s.id === id; });
+    if (story && !canPublishGuestWriterStory(story)) { alert('A full submitted story is required before marking it as published.'); return; }
+  }
+  var publishedLink = '';
+  if (itemType === 'guest_story') {
+    publishedLink = (window.prompt('Add the published story link') || '').trim();
+    if (!publishedLink) { alert('Please add the published story link before marking this as published.'); return; }
+    if (!/^https?:\/\//i.test(publishedLink)) { alert('Please enter a valid published story link.'); return; }
+  }
   if (!window.confirm('Are you sure you want to mark this as published? Once published, it will be locked from further editing.')) return;
-  db.collection(collection).doc(id).update({
+  var publishData = {
     status: 'published',
     publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
     publishedBy: currentUser && currentUser.email ? currentUser.email : '',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     locked: true
-  }).then(function() {
+  };
+  if (itemType === 'guest_story') {
+    publishData.writingUnlocked = false;
+    publishData.publishedLink = publishedLink;
+  }
+  db.collection(collection).doc(id).update(publishData).then(function() {
     var updateLocal = function(item) {
       if (!item) return;
       item.status = 'published';
       item.locked = true;
+      if (publishedLink) item.publishedLink = publishedLink;
+      if (itemType === 'guest_story') item.writingUnlocked = false;
     };
     if (itemType === 'interview') {
       var session = (window._interviewSubmissions||[]).find(function(s){ return (s.guestKey||s.id) === id; });
@@ -2873,8 +3120,15 @@ function showStaffGuestWriterStories() {
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-guest-writer-stories').style.display = 'flex';
+  resetStaffGuestWriterStoryDetail();
   if (window._staffGuestWriterStoriesLoaded) renderStaffGuestWriterStories();
   else loadStaffGuestWriterStories();
+}
+function resetStaffGuestWriterStoryDetail() {
+  var detail = document.getElementById('staff-guest-writer-story-detail');
+  if (!detail) return;
+  detail.style.color = 'var(--g3)';
+  detail.innerHTML = 'Click Open on a story to view details.';
 }
 function loadStaffGuestWriterStories(options) {
   options = options || {};
@@ -2882,13 +3136,13 @@ function loadStaffGuestWriterStories(options) {
   var list = document.getElementById('staff-guest-writer-stories-list');
   if (!db || window._staffGuestWriterStoriesLoading) return;
   if (options.force) window._staffGuestWriterStoriesLoaded = false;
+  if (options.resetDetail) resetStaffGuestWriterStoryDetail();
   window._staffGuestWriterStoriesLoading = true;
   if (status) status.textContent = 'Loading Guest Writer stories...';
   db.collection('articles').where('sourceType','==','guest_writer').orderBy('updatedAt','desc').limit(20).get().then(function(snap) {
     window._staffGuestWriterStories = [];
     snap.forEach(function(doc){ window._staffGuestWriterStories.push(Object.assign({id:doc.id}, doc.data())); });
     window._staffGuestWriterStoriesLoaded = true;
-    if (status) status.textContent = window._staffGuestWriterStories.length ? window._staffGuestWriterStories.length+' story/stories loaded.' : 'No Guest Writer stories yet.';
     renderStaffGuestWriterStories();
   }).catch(function(err) {
     if (status) status.textContent = 'Could not load stories: '+err.message;
@@ -2897,12 +3151,17 @@ function loadStaffGuestWriterStories(options) {
 }
 function renderStaffGuestWriterStories() {
   var list = document.getElementById('staff-guest-writer-stories-list');
+  var status = document.getElementById('staff-guest-writer-stories-status');
   if (!list) return;
-  if (!window._staffGuestWriterStories.length) {
-    list.innerHTML = '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:13px">No Guest Writer stories yet.</div>';
+  var queueStories = (window._staffGuestWriterStories || []).filter(function(s) {
+    return s && s.status !== 'published' && s.archived !== true;
+  });
+  if (status) status.textContent = queueStories.length ? queueStories.length+' story/stories loaded.' : 'No active Guest Writer stories to review.';
+  if (!queueStories.length) {
+    list.innerHTML = '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:13px">No active Guest Writer stories to review.</div>';
     return;
   }
-  list.innerHTML = window._staffGuestWriterStories.map(function(s) {
+  list.innerHTML = queueStories.map(function(s) {
     return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
       + '<div style="font-size:14px;font-weight:700">'+escapeHtml(s.title||'Untitled story idea')+'</div>'
       + '<div style="font-size:12px;color:var(--g3);line-height:1.6">'+escapeHtml(s.writerName||'')+'<br>'+escapeHtml(s.writerEmail||'')+'<br>'+escapeHtml(s.preferredSection||'')+'<br>'+escapeHtml(guestWriterIdeaStatusLabel(s))+'</div>'
@@ -2922,6 +3181,53 @@ function guestWriterSubmittedStoryHtml(story) {
   }
   return parts.join('');
 }
+function normalizeStorySectionText(html) {
+  var tmp = document.createElement('div');
+  tmp.innerHTML = html || '';
+  return (tmp.textContent || tmp.innerText || '').replace(/\s+/g, ' ').trim();
+}
+function renderStaffGuestWriterStorySections(story) {
+  if (!story) return '';
+  var intro = typeof story.introRichText === 'string' && story.introRichText.trim() ? story.introRichText.trim() : '';
+  var body = '';
+  ['body','articleBody','submittedStory','generatedStory'].some(function(field) {
+    var value = story[field];
+    if (typeof value === 'string' && value.trim()) {
+      body = value.trim();
+      return true;
+    }
+    return false;
+  });
+  if (!body && typeof story.rawStoryText === 'string' && story.rawStoryText.trim()) body = plainTextToHtml(story.rawStoryText.trim());
+  if (intro && body && normalizeStorySectionText(intro) === normalizeStorySectionText(body)) body = '';
+  if (!intro && !body) return '';
+  return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;font-size:14px;line-height:1.8;margin-bottom:14px">'
+    + '<div class="staff-story-section-label" style="margin-bottom:12px">Submitted story</div>'
+    + (intro ? '<div class="staff-story-section-label" style="margin:0 0 6px">Story Intro</div><div style="margin-bottom:14px">'+intro+'</div>' : '')
+    + (body ? '<div class="staff-story-section-label" style="margin:0 0 6px">Main Article</div><div>'+body+'</div>' : '')
+    + '</div>';
+}
+function renderGuestWriterStorySections(story) {
+  if (!story) return '';
+  var intro = typeof story.introRichText === 'string' && story.introRichText.trim() ? story.introRichText.trim() : '';
+  var body = '';
+  ['body','articleBody','submittedStory','generatedStory'].some(function(field) {
+    var value = story[field];
+    if (typeof value === 'string' && value.trim()) {
+      body = value.trim();
+      return true;
+    }
+    return false;
+  });
+  if (!body && typeof story.rawStoryText === 'string' && story.rawStoryText.trim()) body = plainTextToHtml(story.rawStoryText.trim());
+  if (intro && body && normalizeStorySectionText(intro) === normalizeStorySectionText(body)) body = '';
+  if (!intro && !body) return '';
+  return '<div class="guest-writer-readonly-story" style="margin-top:18px">'
+    + '<div class="staff-story-section-label" style="margin-bottom:12px">Your submitted story</div>'
+    + (intro ? '<div class="staff-story-section-label" style="margin:0 0 6px">Story Intro</div><div style="margin-bottom:14px">'+intro+'</div>' : '')
+    + (body ? '<div class="staff-story-section-label" style="margin:0 0 6px">Main Article</div><div>'+body+'</div>' : '')
+    + '</div>';
+}
 function hasGuestWriterSubmittedStory(story) {
   if (!story) return false;
   var status = story.status || '';
@@ -2934,6 +3240,12 @@ function canAskForGuestWriterChanges(story) {
   var status = story.status || '';
   if (['idea_under_review','idea_needs_work','draft','changes_requested','scheduled','published'].indexOf(status) !== -1) return false;
   return ['under_review','submitted','story_under_review'].indexOf(status) !== -1 || !!(story.submittedAt || story.resubmittedAt);
+}
+function canPublishGuestWriterStory(story) {
+  if (!story || story.archived === true || !guestWriterSubmittedStoryHtml(story)) return false;
+  var status = story.status || '';
+  if (['idea_under_review','idea_needs_work','draft','changes_requested','published'].indexOf(status) !== -1) return false;
+  return ['under_review','submitted','story_under_review','scheduled'].indexOf(status) !== -1 || !!(story.submittedAt || story.resubmittedAt);
 }
 function updateGuestWriterStoryCaches(story) {
   if (!story || !story.id) return story;
@@ -3039,19 +3351,22 @@ function openStaffGuestWriterStory(id, targetId, options) {
   var copyButton = hasSubmittedStoryContent
     ? '<button class="btn" onclick="copyStaffGuestWriterStory(\''+escapeHtml(id)+'\')">Copy article content</button>'
     : '<button class="btn" disabled style="opacity:0.5;cursor:not-allowed" title="No submitted article content to copy yet">Copy article content</button>';
-  var publishButton = publishedLocked
+  var canPublishStory = canPublishGuestWriterStory(story);
+  var publishButton = publishedLocked || !canPublishStory
     ? ''
     : '<button class="btn" onclick="markStaffItemAsPublished(\'articles\',\''+escapeHtml(id)+'\',\'guest_story\',\''+escapeHtml(targetId || 'staff-guest-writer-story-detail')+'\')">Mark as published</button>';
   detail.style.color = 'var(--blk)';
   if (hasSubmittedReviewState) {
     var submittedDate = story.submittedAt ? '<br>Submitted: '+escapeHtml(formatFirestoreDate(story.submittedAt)) : '';
     var resubmittedDate = story.resubmittedAt ? '<br>Resubmitted: '+escapeHtml(formatFirestoreDate(story.resubmittedAt)) : '';
+    var publishedLinkLine = story.publishedLink ? '<br>Published link: <a href="'+escapeHtml(story.publishedLink)+'" target="_blank" rel="noopener" style="color:var(--yd)">'+escapeHtml(story.publishedLink)+'</a>' : '';
+    var themesLine = story.themes && story.themes.length ? '<br>Themes: '+escapeHtml(story.themes.join(', ')) : '';
     var currentVersion = story.currentVersion || story.versionNumber || 1;
     var submittedStoryBlock = hasArticleContent
-      ? '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;font-size:14px;line-height:1.8;margin-bottom:14px"><strong>Submitted story</strong><div style="margin-top:10px">'+submittedStoryHtml+'</div></div>'
+      ? renderStaffGuestWriterStorySections(story)
       : '<div style="padding:12px;border:1px solid var(--red);border-radius:8px;background:#fff;font-size:14px;line-height:1.7;margin-bottom:14px;color:var(--red)">Story is marked under review, but no submitted story content was found.</div>';
     detail.innerHTML = '<h3 style="font-size:16px;margin-bottom:8px">'+escapeHtml(story.title||'Untitled story')+'</h3>'
-      + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Writer: '+escapeHtml(story.writerName||'')+'<br>Email: '+escapeHtml(story.writerEmail||'')+'<br>Preferred section: '+escapeHtml(story.preferredSection||'')+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+'<br>Version: <span id="staff-story-current-version">'+escapeHtml(currentVersion)+'</span>'+submittedDate+resubmittedDate+'</div>'
+      + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Writer: '+escapeHtml(story.writerName||'')+'<br>Email: '+escapeHtml(story.writerEmail||'')+'<br>Preferred section: '+escapeHtml(story.preferredSection||'')+themesLine+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+'<br>Version: <span id="staff-story-current-version">'+escapeHtml(currentVersion)+'</span>'+submittedDate+resubmittedDate+publishedLinkLine+'</div>'
       + submittedStoryBlock
       + '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:14px;font-weight:600">Original story idea</summary><div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);font-size:14px;line-height:1.7;margin-top:10px;margin-bottom:12px">'+escapeHtml(story.ideaSummary||'')+'</div></details>'
       + historyWrap
@@ -3066,7 +3381,7 @@ function openStaffGuestWriterStory(id, targetId, options) {
     return;
   }
   detail.innerHTML = '<h3 style="font-size:16px;margin-bottom:8px">'+escapeHtml(story.title||'Untitled story idea')+'</h3>'
-    + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Writer: '+escapeHtml(story.writerName||'')+'<br>Email: '+escapeHtml(story.writerEmail||'')+'<br>Preferred section: '+escapeHtml(story.preferredSection||'')+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+'</div>'
+    + '<div style="font-size:13px;color:var(--g3);line-height:1.7;margin-bottom:12px">Writer: '+escapeHtml(story.writerName||'')+'<br>Email: '+escapeHtml(story.writerEmail||'')+'<br>Preferred section: '+escapeHtml(story.preferredSection||'')+(story.themes && story.themes.length ? '<br>Themes: '+escapeHtml(story.themes.join(', ')) : '')+'<br>Current status: '+escapeHtml(guestWriterIdeaStatusLabel(story))+'</div>'
     + '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);font-size:14px;line-height:1.7;margin-bottom:14px"><strong>Story idea</strong><br>'+escapeHtml(story.ideaSummary||'')+'</div>'
     + historyWrap
     + messageBox
@@ -3203,7 +3518,9 @@ function copyStaffGuestWriterStoryFromData(story) {
     ['Story status', guestWriterIdeaStatusLabel(story)],
     ['Submitted date', story.submittedAt ? formatFirestoreDate(story.submittedAt) : ''],
     ['Resubmitted date', story.resubmittedAt ? formatFirestoreDate(story.resubmittedAt) : ''],
+    ['Published date', story.publishedAt ? formatFirestoreDate(story.publishedAt) : ''],
     ['Current version', story.currentVersion || story.versionNumber || '1'],
+    ['Published link', story.publishedLink],
     ['Story idea', story.ideaSummary],
     ['Short intro', story.shortIntro],
     ['40-word intro', story.intro40],
@@ -3903,18 +4220,20 @@ function showExistingDraftForm() {
 }
 function showScratchForm() {
   if (currentAccessMode === 'staff' && !guardStaffScreen()) return;
+  workflowGeneratedDraftOnly = false;
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-scratch').style.display = 'flex';
   var uploadBlock = document.getElementById('guest-writer-upload-block');
   var submitBtn = document.getElementById('guest-writer-submit-story-btn');
   if (uploadBlock) uploadBlock.style.display = currentAccessMode === 'guest_writer' ? 'block' : 'none';
-  if (submitBtn) submitBtn.style.display = currentAccessMode === 'guest_writer' ? 'inline-flex' : 'none';
+  if (submitBtn) submitBtn.style.display = 'none';
   updateGuestWriterSubmitState();
 }
 function startFromUrl() {
   var url = document.getElementById('landing-url-input').value.trim();
   if (!url) return;
+  workflowGeneratedDraftOnly = false;
   _workflowSource = 'landing';
   document.getElementById('landing').style.display = 'none';
   var host = 'link';
@@ -4249,10 +4568,12 @@ function startFromExistingDraft() {
   var draftText = document.getElementById('existing-draft-text').value.trim();
   if (!draftText) { alert('Please paste your draft before refining.'); return; }
 
+  workflowGeneratedDraftOnly = false;
   currentCard = {title:'Existing draft', src:'Submission', cat:'general', heat:8, ago:'now', link:'', _url:'', _scratch: true, _sourceInfo: draftText};
   _workflowSource = 'landing';
   workflowHasBriefStep = false;
   workflowPreviousLandingScreen = 'landing-existing-draft';
+  workflowReviewPrepared = false;
   currentWorkflowStep = '';
   maxWorkflowStepReached = 1;
   document.getElementById('landing').style.display = 'none';
@@ -4357,8 +4678,9 @@ Return ONLY valid JSON, no markdown:
       }
     }
     showWorkflowStep('refine');
-    document.getElementById('chat-article-preview').innerHTML = '<div class="version-block" id="version-1">'+renderPreview(generatedContent)+'</div>';
+    document.getElementById('chat-article-preview').innerHTML = normalizeRefineDraftHtml(renderPreview(generatedContent), generatedContent.title);
     window._versionCount = 1;
+    resetDraftRevert();
     updateWordCount();
     document.getElementById('chat-messages').innerHTML = '';
     window._chatHistory = [
@@ -4373,24 +4695,31 @@ Return ONLY valid JSON, no markdown:
   });
 }
 function startFromScratch() {
+  workflowGeneratedDraftOnly = false;
+  guestWriterUploadedBypassAI = false;
   var name = document.getElementById('sc-name').value.trim();
   var topic = document.getElementById('sc-topic').value.trim();
   var type = document.getElementById('sc-type').value;
   var story = document.getElementById('sc-story').value.trim();
-  var themes = Array.from(document.getElementById('sc-themes-grid').querySelectorAll('.sel')).map(function(e){return e.textContent;}).join(', ');
+  var themes = currentGuestWriterStory && Array.isArray(currentGuestWriterStory.themes) ? currentGuestWriterStory.themes.join(', ') : '';
   if (!story) { alert('Please tell us your story before generating.'); return; }
+  if (shouldBypassAIForUploadedStory()) { openUploadedGuestWriterStoryWithoutAI(topic, story); return; }
+  setUploadedStoryNoAiControls(false);
+  var preserveUploadedBody = false;
   // Build source info from scratch form
   var sourceInfo = 'This is a first-person submission from a working professional.\n'
     + (name ? 'Contributor: '+name+'\n' : '')
     + 'Story type: '+(type||'Personal experience')+'\n'
     + (themes ? 'Themes: '+themes+'\n' : '')
     + 'What they want to write about: '+topic+'\n\n'
+    + (preserveUploadedBody ? 'The contributor uploaded a complete draft. Preserve the uploaded body exactly; use it only to prepare supporting article fields.\n\n' : '')
     + 'Their story / draft:\n'+story;
   // Set up currentCard with scratch data
   currentCard = {title: topic||'Personal story', src:'Submission', cat:'general', heat:8, ago:'now', link:'', _url:'', _scratch: true, _sourceInfo: sourceInfo};
   _workflowSource = 'landing';
   workflowHasBriefStep = false;
   workflowPreviousLandingScreen = 'landing-scratch';
+  workflowReviewPrepared = false;
   currentWorkflowStep = '';
   maxWorkflowStepReached = 1;
   // Hide landing
@@ -4401,7 +4730,137 @@ function startFromScratch() {
   document.documentElement.style.overflow = 'hidden';
   document.body.style.overflow = 'hidden';
   showWorkflowStep('generate');
+  window._preserveUploadedStoryBody = preserveUploadedBody;
+  window._uploadedStoryBodyToPreserve = preserveUploadedBody ? story : '';
   startGenerationDirect(sourceInfo);
+}
+function setUploadedStoryNoAiControls(disabled) {
+  var updateBtn = document.getElementById('update-draft-btn');
+  var chatInput = document.getElementById('chat-input');
+  var chatSend = document.getElementById('chat-send-btn');
+  if (updateBtn) {
+    updateBtn.disabled = !!disabled;
+    updateBtn.style.opacity = disabled ? '0.5' : '';
+    updateBtn.style.cursor = disabled ? 'not-allowed' : '';
+    updateBtn.title = disabled ? 'Wocult AI refinement is off for this uploaded story.' : 'Sync your manual edits and let Wocult AI polish them';
+  }
+  if (chatInput) {
+    chatInput.disabled = !!disabled;
+    chatInput.placeholder = disabled ? 'Wocult AI refinement is off for this uploaded story.' : 'Ask Wocult AI to edit, research, add sections, change tone...';
+  }
+  if (chatSend) {
+    chatSend.disabled = !!disabled;
+    chatSend.style.opacity = disabled ? '0.5' : '';
+    chatSend.style.cursor = disabled ? 'not-allowed' : '';
+  }
+}
+function setDraftRevertEnabled(enabled) {
+  var btn = document.getElementById('revert-draft-btn');
+  if (!btn) return;
+  btn.disabled = !enabled;
+  btn.style.opacity = enabled ? '' : '0.5';
+  btn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+}
+function resetDraftRevert() {
+  lastPreUpdateDraftHtml = '';
+  lastPreUpdateVersionCount = 0;
+  setDraftRevertEnabled(false);
+}
+function revertDraftUpdate() {
+  if (!lastPreUpdateDraftHtml) return;
+  var preview = document.getElementById('chat-article-preview');
+  if (!preview) return;
+  preview.innerHTML = normalizeRefineDraftHtml(lastPreUpdateDraftHtml, generatedContent && generatedContent.title);
+  lastPreUpdateDraftHtml = '';
+  window._versionCount = lastPreUpdateVersionCount || window._versionCount || 1;
+  lastPreUpdateVersionCount = 0;
+  if (window._chatHistory && window._chatHistory[0]) {
+    window._chatHistory[0].content = window._chatHistory[0].content.replace(/Current article[\s\S]*$/, 'Current article (Version '+(window._versionCount||1)+'):\n'+preview.innerHTML);
+  }
+  setDraftRevertEnabled(false);
+  updateWordCount();
+  markUnsavedChanges();
+}
+function normalizeHeadingText(text) {
+  return (text || '').toLowerCase().replace(/\s+/g,' ').replace(/[^\w\s]/g,'').trim();
+}
+function normalizeRefineDraftHtml(html, title) {
+  var tmp = document.createElement('div');
+  tmp.innerHTML = html || '';
+  tmp.querySelectorAll('.version-sep').forEach(function(el){ el.remove(); });
+  var blocks = tmp.querySelectorAll('.version-block');
+  if (blocks.length) {
+    var latest = blocks[blocks.length - 1].innerHTML;
+    tmp.innerHTML = latest;
+  }
+  tmp.querySelectorAll('.version-sep').forEach(function(el){ el.remove(); });
+  var titleNorm = normalizeHeadingText(title || (generatedContent && generatedContent.title) || '');
+  var firstHeadingNorm = '';
+  Array.prototype.slice.call(tmp.children).forEach(function(el) {
+    var isHeading = /^(H1|H2|H3)$/.test(el.tagName);
+    if (!isHeading) return;
+    var headingNorm = normalizeHeadingText(el.textContent || '');
+    if (!headingNorm) return;
+    if (!firstHeadingNorm) {
+      firstHeadingNorm = headingNorm;
+      return;
+    }
+    if ((titleNorm && headingNorm === titleNorm) || headingNorm === firstHeadingNorm) el.remove();
+  });
+  return tmp.innerHTML;
+}
+function getCleanRefineEditorHtml() {
+  var preview = document.getElementById('chat-article-preview');
+  if (!preview) return '';
+  return normalizeRefineDraftHtml(preview.innerHTML, generatedContent && generatedContent.title);
+}
+function openUploadedGuestWriterStoryWithoutAI(topic, storyText) {
+  var title = topic || (currentGuestWriterStory && currentGuestWriterStory.title) || 'Untitled story';
+  var wordCount = storyText.trim().split(/\s+/).filter(Boolean).length;
+  var bodyHtml = plainTextToHtml(storyText);
+  guestWriterUploadedBypassAI = true;
+  generatedContent = {
+    title: title,
+    slug: safeFileName(title),
+    shortIntro: '',
+    intro40: '',
+    excerpt: '',
+    introRichText: '',
+    body: bodyHtml,
+    rawStoryText: storyText,
+    readTime: Math.max(1, Math.ceil(wordCount / 220)) + ' min read',
+    writerName: (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || (currentUser && currentUser.displayName) || '',
+    uploadedStory: true,
+    aiRefinedUploadedStory: false
+  };
+  currentGuestWriterStory = Object.assign({}, currentGuestWriterStory || {}, generatedContent);
+  currentCard = {title:title, src:'Uploaded story', cat:'general', heat:8, ago:'now', link:'', _url:'', _scratch:true, _sourceInfo:''};
+  _workflowSource = 'landing';
+  workflowHasBriefStep = false;
+  workflowPreviousLandingScreen = 'landing-scratch';
+  workflowReviewPrepared = false;
+  currentWorkflowStep = '';
+  maxWorkflowStepReached = workflowStepIndex('review');
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('workflow').style.display = 'block';
+  document.getElementById('main').style.display = 'none';
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+  document.getElementById('publish-result').style.display = 'none';
+  document.getElementById('publish-actions').style.display = 'flex';
+  document.getElementById('chat-article-preview').innerHTML = normalizeRefineDraftHtml(bodyHtml, title);
+  document.getElementById('chat-messages').innerHTML = '<div class="hint">This uploaded story is being shown without Wocult AI refinement.</div>';
+  window._versionCount = 1;
+  window._chatHistory = [
+    {role:'user', content:'You are a Wocult senior editor. The contributor uploaded a complete draft and chose not to use Wocult AI during the initial generation step. They are now explicitly asking for help on the Refine screen. Preserve their voice, meaning, specific examples, and personal details while improving only what they request.\n\nRULES:\n- Editorial changes: brief description + <version>full HTML</version>\n- Conversational: reply normally, no tags\n- Sentence case. No italics except quotes. No bold body.\n- Under 1200 words unless user asks otherwise\n\nCurrent article:\n'+document.getElementById('chat-article-preview').innerHTML},
+    {role:'assistant', content:'Ready. What would you like to refine?'}
+  ];
+  showWorkflowStep('refine');
+  setUploadedStoryNoAiControls(false);
+  resetDraftRevert();
+  updateWordCount();
+  markUnsavedChanges();
+  window.scrollTo(0,0);
 }
 function startGenerationDirect(sourceInfo) {
   var steps = ['gs1','gs2','gs3','gs4'];
@@ -4422,6 +4881,8 @@ Preserve:
 - their lived experience
 
 Do not turn it into generic advice or journalism.
+
+If the submission says the uploaded body must be preserved exactly, do not rewrite the body. Prepare the supporting article fields from the draft; the final body will remain the contributor’s uploaded text.
 
 Submission:
 ${sourceInfo}
@@ -4467,9 +4928,11 @@ Return ONLY valid JSON, no markdown:
       var extr = function(k){ var r=new RegExp('"'+k+'"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"'); var m=raw.match(r); return m?m[1].replace(/\\n/g,'\n'):''; };
       generatedContent = {title:extr('title'),slug:extr('slug'),shortIntro:extr('shortIntro'),intro40:extr('intro40'),excerpt:extr('excerpt'),introRichText:extr('introRichText'),body:extr('body'),readTime:extr('readTime')};
     }
+    if (window._preserveUploadedStoryBody) generatedContent.body = plainTextToHtml(window._uploadedStoryBodyToPreserve || '');
     showWorkflowStep('refine');
-    document.getElementById('chat-article-preview').innerHTML = '<div class="version-block" id="version-1">'+renderPreview(generatedContent)+'</div>';
+    document.getElementById('chat-article-preview').innerHTML = normalizeRefineDraftHtml(renderPreview(generatedContent), generatedContent.title);
     window._versionCount = 1;
+    resetDraftRevert();
     updateWordCount();
     window._chatHistory = [
       {role:'user', content:'You are a Wocult senior editor. You have a first-person submission. Keep the contributor\'s voice and specific details. Shape, don\'t rewrite.\n\nRULES:\n- Editorial changes: brief description + <version>full HTML</version>\n- Conversational: reply normally, no tags\n- Sentence case. No italics except quotes. No bold body.\n- Under 1200 words unless user asks otherwise\n\nCurrent article:\n'+document.getElementById('chat-article-preview').innerHTML},
@@ -4562,6 +5025,7 @@ window._editorialTrackerLoading = false;
 window._editorialTrackerLoaded = false;
 window._editorialTrackerSelected = {};
 window._notifications = [];
+window._guestWriterStories = [];
 var interviewQuestionState = {
   title: '',
   guestName: '',
@@ -4926,6 +5390,7 @@ function loadFallback() {
 }
 
 function setWorkflowCard(card) {
+  workflowGeneratedDraftOnly = false;
   currentCard = card;
   workflowHasBriefStep = true;
   workflowPreviousLandingScreen = _workflowSource === 'main' ? 'main' : 'landing-url';
@@ -4972,9 +5437,12 @@ function workflowNavId(stepKey) {
   return {brief:'ws1', generate:'ws2', refine:'ws2b', review:'ws3'}[stepKey] || '';
 }
 function canNavigateWorkflowStep(stepKey) {
+  if (currentAccessMode === 'guest_writer' && currentGuestWriterStory && currentGuestWriterStory.status === 'changes_requested') return stepKey === 'review';
   if (stepKey === currentWorkflowStep) return true;
   if (stepKey === 'brief') return workflowHasBriefStep && maxWorkflowStepReached >= 1;
+  if (stepKey === 'refine' && currentAccessMode === 'guest_writer' && currentGuestWriterStory && workflowReviewPrepared) return false;
   if (stepKey === 'refine') return maxWorkflowStepReached >= 3;
+  if (stepKey === 'review' && currentAccessMode === 'guest_writer' && currentGuestWriterStory && !workflowReviewPrepared) return false;
   if (stepKey === 'review') return maxWorkflowStepReached >= 4;
   return false;
 }
@@ -4982,6 +5450,8 @@ function updateWorkflowStepNav() {
   ['brief','generate','refine','review'].forEach(function(stepKey) {
     var el = document.getElementById(workflowNavId(stepKey));
     if (!el) return;
+    var changesRequestedReviewOnly = currentAccessMode === 'guest_writer' && currentGuestWriterStory && currentGuestWriterStory.status === 'changes_requested';
+    el.style.display = '';
     var idx = workflowStepIndex(stepKey);
     var cls = 'wf-step';
     if (stepKey === currentWorkflowStep) cls += ' active';
@@ -4990,19 +5460,26 @@ function updateWorkflowStepNav() {
     if (canNavigateWorkflowStep(stepKey) && stepKey !== 'generate') cls += ' nav-ok';
     if (stepKey === 'brief' && !workflowHasBriefStep) cls = 'wf-step disabled';
     if (stepKey === 'generate' && stepKey !== currentWorkflowStep) cls = cls.replace(' nav-ok','') + ' disabled';
+    if (stepKey === 'refine' && currentAccessMode === 'guest_writer' && currentGuestWriterStory && workflowReviewPrepared) cls = 'wf-step disabled';
+    if (stepKey === 'review' && currentAccessMode === 'guest_writer' && currentGuestWriterStory && !workflowReviewPrepared && !changesRequestedReviewOnly) cls = 'wf-step disabled';
+    if (changesRequestedReviewOnly && stepKey !== 'review') cls = 'wf-step disabled';
     el.className = cls;
   });
 }
 function showWorkflowStep(stepKey) {
+  if (stepKey === 'review' && currentAccessMode === 'guest_writer' && currentGuestWriterStory && !workflowReviewPrepared && currentGuestWriterStory.status !== 'changes_requested') return;
+  if (stepKey === 'refine' && currentAccessMode === 'guest_writer' && currentGuestWriterStory && workflowReviewPrepared) return;
   ['step1','step2','step2b','step3'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
   var target = document.getElementById(workflowStepId(stepKey));
-  if (target) target.style.display = 'block';
+  if (target) target.style.display = stepKey === 'refine' ? 'flex' : 'block';
   currentWorkflowStep = stepKey;
   maxWorkflowStepReached = Math.max(maxWorkflowStepReached, workflowStepIndex(stepKey));
   updateWorkflowStepNav();
+  var workflow = document.getElementById('workflow');
+  if (workflow) workflow.style.overflowY = stepKey === 'refine' ? 'hidden' : 'auto';
   window.scrollTo(0,0);
 }
 function navigateWorkflowStep(stepKey) {
@@ -5023,6 +5500,7 @@ function showPreviousWorkflowScreen() {
   confirmBeforeLeavingScreen(goToLanding);
 }
 function goWorkflowBack() {
+  if (currentAccessMode === 'guest_writer' && currentGuestWriterStory && currentGuestWriterStory.status === 'changes_requested') { goGuestWriterDashboardWithUnsavedCheck(); return; }
   if (currentWorkflowStep === 'review') { showWorkflowStep('refine'); return; }
   if (currentWorkflowStep === 'refine') {
     if (workflowHasBriefStep) showWorkflowStep('brief');
@@ -5169,7 +5647,7 @@ var hasUrl = !!currentCard._url;
     }
     document.getElementById('r-title').value = generatedContent.title||'';
     document.getElementById('r-slug').value = generatedContent.slug||'';
-    document.getElementById('r-short').value = generatedContent.shortIntro||'';
+    document.getElementById('r-short').value = getBestShortIntro(document.getElementById('r-short').value);
     document.getElementById('r-40').value = generatedContent.intro40||'';
     document.getElementById('r-excerpt').value = generatedContent.excerpt||'';
     document.getElementById('r-intro-rt').value = generatedContent.introRichText||'';
@@ -5179,8 +5657,9 @@ var hasUrl = !!currentCard._url;
     document.getElementById('r-readtime').value = generatedContent.readTime||'5 min read';
     showWorkflowStep('refine');
     // Show article preview
-    document.getElementById('chat-article-preview').innerHTML = '<div class="version-block" id="version-1">'+renderPreview(generatedContent)+'</div>';
+    document.getElementById('chat-article-preview').innerHTML = normalizeRefineDraftHtml(renderPreview(generatedContent), generatedContent.title);
     window._versionCount = 1;
+    resetDraftRevert();
     updateWordCount();
     document.getElementById('chat-messages').innerHTML = '';
     window._versionCount = 1;
@@ -5229,12 +5708,13 @@ function sendChatMessage() {
       window._versionCount = (window._versionCount||1) + 1;
       var vNum = window._versionCount;
       var preview = document.getElementById('chat-article-preview');
-      var sep = '<div class="version-sep" contenteditable="false"><span>Version '+vNum+'</span></div>';
-      var newBlock = '<div class="version-block" id="version-'+vNum+'">'+versionMatch[1]+'</div>';
-      preview.innerHTML += sep + newBlock;
-      setTimeout(function(){ var el=document.getElementById('version-'+vNum); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); updateWordCount(); }, 100);
+      var updatedHtml = normalizeRefineDraftHtml(versionMatch[1], generatedContent && generatedContent.title);
+      preview.innerHTML = updatedHtml;
+      generatedContent.body = updatedHtml;
+      updateWordCount();
+      preview.focus();
       if (ack) box.innerHTML += '<div class="chat-msg-claude">'+ack+'</div>';
-      window._chatHistory[0].content = window._chatHistory[0].content.replace(/Current article[\s\S]*$/, 'Current article (Version '+vNum+'):\n'+versionMatch[1]);
+      window._chatHistory[0].content = window._chatHistory[0].content.replace(/Current article[\s\S]*$/, 'Current article (Version '+vNum+'):\n'+updatedHtml);
       window._chatHistory.push({role:'assistant', content: txt});
     } else {
       box.innerHTML += '<div class="chat-msg-claude">'+txt+'</div>';
@@ -5254,27 +5734,10 @@ function proceedToReview() {
   var existingPanel = document.getElementById('writer-review-panel');
   if (existingPanel) existingPanel.remove();
   disableGuestRevisionLayout();
-  var preview = document.getElementById('chat-article-preview');
-  // Get latest version block if versioning has happened, else use full preview
-  var vNum = window._versionCount || 1;
-  var latestBlock = document.getElementById('version-'+vNum);
-  var content = latestBlock ? latestBlock.innerHTML : preview.innerHTML;
-  // Parse content into fields
-  var tmp = document.createElement('div'); tmp.innerHTML = content;
-  var h2 = tmp.querySelector('h2');
-  var shortIntro = tmp.querySelector('.short-intro');
-  if (h2) generatedContent.title = h2.innerText;
-  if (shortIntro) generatedContent.shortIntro = shortIntro.innerText;
-  generatedContent.body = content;
-  document.getElementById('r-title').value = generatedContent.title||'';
-  document.getElementById('r-slug').value = generatedContent.slug||'';
-  document.getElementById('r-short').value = generatedContent.shortIntro||'';
-  document.getElementById('r-40').value = generatedContent.intro40||'';
-  document.getElementById('r-excerpt').value = generatedContent.excerpt||'';
-  document.getElementById('r-intro-rt').value = generatedContent.introRichText||'';
-  document.getElementById('r-intro-render').innerHTML = generatedContent.introRichText||'';
-  document.getElementById('r-body-render').innerHTML = generatedContent.body||'';
-  document.getElementById('r-readtime').value = generatedContent.readTime||'5 min read';
+  syncRefinePreviewToReviewFields();
+  finishProceedToReview();
+}
+function finishProceedToReview() {
   if (currentAccessMode === 'guest_writer' && document.getElementById('r-writer-name')) {
     document.getElementById('r-writer-name').value = (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || (currentUser && currentUser.displayName) || '';
   }
@@ -5284,10 +5747,13 @@ function proceedToReview() {
   updateReviewWordCount();
   document.getElementById('publish-result').style.display = 'none';
   document.getElementById('publish-actions').style.display = 'flex';
+  workflowReviewPrepared = true;
   showWorkflowStep('review');
   var guestDraftBtn = document.getElementById('guest-writer-save-draft-btn');
   if (guestDraftBtn) guestDraftBtn.style.display = currentAccessMode === 'guest_writer' ? 'inline-flex' : 'none';
   if (document.getElementById('publish-btn')) document.getElementById('publish-btn').textContent = currentAccessMode === 'guest_writer' ? 'Submit for review' : 'Submit';
+  var backToRefineBtn = document.querySelector('#publish-actions button[onclick="showWorkflowStep(\'refine\')"]');
+  if (backToRefineBtn) backToRefineBtn.style.display = 'inline-flex';
   if (currentAccessMode === 'guest_writer') {
     saveGuestWriterDraft('draft', {silent:true});
     return;
@@ -5337,12 +5803,17 @@ function proceedToReview() {
   }
 }
 function updateDraft() {
+  if (!window.confirm('This will sync your manual edits and use Wocult AI to polish the story. Do you want to continue?')) return;
   var preview = document.getElementById('chat-article-preview');
   var btn = document.getElementById('update-draft-btn');
   var box = document.getElementById('chat-messages');
-  var currentHtml = preview.innerHTML;
+  var currentHtml = getCleanRefineEditorHtml();
+  preview.innerHTML = currentHtml;
+  lastPreUpdateDraftHtml = currentHtml;
+  lastPreUpdateVersionCount = window._versionCount || 1;
+  setDraftRevertEnabled(false);
   btn.disabled = true; btn.textContent = 'Updating...';
-  box.innerHTML += '<div class="chat-msg-user">↻ Update draft with my manual edits</div>';
+  box.innerHTML += '<div class="chat-msg-update-action">↻ Update draft with my manual edits</div>';
   // Send current state to Claude — ask it to polish manual edits only
   var updatePrompt = 'The user has made manual edits directly in the preview. Here is the current state of the article after their edits:\n\n'+currentHtml+'\n\nYour task: Review this version. Polish any rough edits, fix grammar or style inconsistencies from the manual changes, improve flow where content was added or deleted. Keep all existing content and structure exactly as is — only smooth out any rough edges from the manual edits. Return the full polished article wrapped in <version> tags.';
   var msgs = window._chatHistory.slice(0,2).concat([{role:'user', content: updatePrompt}]);
@@ -5358,23 +5829,29 @@ function updateDraft() {
   }).then(function(r){return r.json();}).then(function(data) {
     var thinking = document.getElementById('chat-thinking');
     if (thinking) thinking.remove();
-    if (data.error) { box.innerHTML += '<div class="chat-msg-claude">Error: '+data.error.message+'</div>'; btn.disabled=false; btn.textContent='↻ Update'; return; }
+    if (data.error) { lastPreUpdateDraftHtml = ''; lastPreUpdateVersionCount = 0; setDraftRevertEnabled(false); box.innerHTML += '<div class="chat-msg-claude">Error: '+data.error.message+'</div>'; btn.disabled=false; btn.textContent='↻ Update'; return; }
     var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
     var versionMatch = txt.match(/<version>([\s\S]*?)<\/version>/);
     if (versionMatch) {
       window._versionCount = (window._versionCount||1) + 1;
       var vNum = window._versionCount;
-      var sep = '<div class="version-sep" contenteditable="false"><span>Version '+vNum+' (updated)</span></div>';
-      preview.innerHTML += sep + '<div class="version-block" id="version-'+vNum+'">'+versionMatch[1]+'</div>';
-      setTimeout(function(){ var el=document.getElementById('version-'+vNum); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); updateWordCount(); }, 100);
+      var updatedHtml = normalizeRefineDraftHtml(versionMatch[1], generatedContent && generatedContent.title);
+      preview.innerHTML = updatedHtml;
+      generatedContent.body = updatedHtml;
+      updateWordCount();
+      preview.focus();
       box.innerHTML += '<div class="chat-msg-claude">✓ Draft updated and polished.</div>';
-      window._chatHistory[0].content = window._chatHistory[0].content.replace(/Current article[\s\S]*$/, 'Current article (Version '+vNum+'):\n'+versionMatch[1]);
+      if (window._chatHistory[0]) window._chatHistory[0].content = window._chatHistory[0].content.replace(/Current article[\s\S]*$/, 'Current article (Version '+vNum+'):\n'+updatedHtml);
+      setDraftRevertEnabled(true);
     } else {
+      lastPreUpdateDraftHtml = '';
+      lastPreUpdateVersionCount = 0;
+      setDraftRevertEnabled(false);
       box.innerHTML += '<div class="chat-msg-claude">'+txt+'</div>';
     }
     btn.disabled=false; btn.textContent='↻ Update';
     box.scrollTop = box.scrollHeight;
-  }).catch(function(e){ var t=document.getElementById('chat-thinking'); if(t) t.remove(); btn.disabled=false; btn.textContent='↻ Update'; });
+  }).catch(function(e){ var t=document.getElementById('chat-thinking'); if(t) t.remove(); lastPreUpdateDraftHtml = ''; lastPreUpdateVersionCount = 0; setDraftRevertEnabled(false); btn.disabled=false; btn.textContent='↻ Update'; });
 }
 
 function updateWordCount() {
@@ -5444,6 +5921,122 @@ function updateReviewWordCount() {
   wc.textContent = count + ' words';
   wc.style.color = count > 1200 ? '#E24B4A' : count > 1000 ? '#EF9F27' : '';
 }
+function isGuestWriterEditableAutosaveState() {
+  if (currentAccessMode !== 'guest_writer' || !currentUser || !currentGuestWriterArticleId || !currentGuestWriterStory) return false;
+  if (document.getElementById('workflow').style.display === 'none') return false;
+  return currentGuestWriterStory.status === 'draft' || currentGuestWriterStory.status === 'changes_requested';
+}
+function setGuestWriterAutosaveStatus(text, isError) {
+  document.querySelectorAll('.guest-writer-autosave-status').forEach(function(el) {
+    el.textContent = text || '';
+    el.style.color = isError ? 'var(--red)' : 'var(--g3)';
+  });
+}
+function shouldPrepareUploadedStorySupportingFields() {
+  if (currentAccessMode !== 'guest_writer') return false;
+  var uploaded = !!(guestWriterUploadedStoryText || guestWriterUploadedBypassAI || (generatedContent && generatedContent.uploadedStory) || (currentGuestWriterStory && currentGuestWriterStory.uploadedStory));
+  if (!uploaded) return false;
+  if ((generatedContent && generatedContent.aiRefinedUploadedStory === true) || (currentGuestWriterStory && currentGuestWriterStory.aiRefinedUploadedStory === true)) return false;
+  return !(generatedContent && generatedContent.shortIntro) || !(generatedContent && generatedContent.intro40) || !(generatedContent && generatedContent.excerpt) || !(generatedContent && generatedContent.introRichText);
+}
+function prepareUploadedStorySupportingFields() {
+  var bodyHtml = getCleanRefineEditorHtml();
+  var tmp = document.createElement('div');
+  tmp.innerHTML = bodyHtml;
+  var bodyText = tmp.innerText || '';
+  var prompt = 'You are preparing supporting fields for a Wocult guest writer story.\n\n'
+    + 'Do not rewrite the article body.\n'
+    + 'Do not change the main article text.\n'
+    + 'Return only valid JSON with these fields: title, slug, shortIntro, intro40, excerpt, introRichText, readTime.\n'
+    + 'title: clear story headline.\n'
+    + 'slug: URL-safe lowercase slug.\n'
+    + 'shortIntro: 15-20 words.\n'
+    + 'intro40: about 40 words.\n'
+    + 'excerpt: about 100 words.\n'
+    + 'introRichText: one short HTML paragraph that introduces the story.\n'
+    + 'readTime: estimated reading time like "5 min read".\n\n'
+    + 'Current title: '+((generatedContent && generatedContent.title) || (currentGuestWriterStory && currentGuestWriterStory.title) || '')+'\n\n'
+    + 'Article body text:\n'+bodyText;
+  return fetch(WORKER+'/generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      briefType:'refine',
+      model:'claude-sonnet-4-20250514',
+      max_tokens:1200,
+      messages:[{role:'user', content:prompt}]
+    })
+  }).then(function(r){return r.json();}).then(function(data) {
+    if (data.error) throw new Error(data.error.message || 'Wocult AI failed');
+    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('').trim();
+    txt = txt.replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim();
+    var s = txt.indexOf('{');
+    var e = txt.lastIndexOf('}');
+    if (s !== -1 && e !== -1) txt = txt.slice(s,e+1);
+    var fields = JSON.parse(txt);
+    if (fields.storyIntro && !fields.introRichText) fields.introRichText = fields.storyIntro;
+    ['title','slug','shortIntro','intro40','excerpt','introRichText','readTime'].forEach(function(key) {
+      if (fields[key] !== undefined && fields[key] !== null) generatedContent[key] = String(fields[key]);
+    });
+    generatedContent.body = bodyHtml;
+    generatedContent.rawStoryText = bodyText;
+    if (!generatedContent.slug) generatedContent.slug = safeFileName(generatedContent.title || 'Untitled story');
+    if (!generatedContent.readTime) generatedContent.readTime = Math.max(1, Math.ceil(bodyText.trim().split(/\s+/).filter(Boolean).length / 220)) + ' min read';
+    syncRefinePreviewToReviewFields();
+  });
+}
+function syncRefinePreviewToReviewFields() {
+  var preview = document.getElementById('chat-article-preview');
+  if (!preview) return;
+  var content = getCleanRefineEditorHtml();
+  var title = (generatedContent && generatedContent.title) || (currentGuestWriterStory && currentGuestWriterStory.title) || '';
+  if (!title && document.getElementById('sc-topic')) title = document.getElementById('sc-topic').value.trim();
+  title = title || 'Untitled story';
+  content = normalizeRefineDraftHtml(content, title);
+  preview.innerHTML = content;
+  var tmp = document.createElement('div'); tmp.innerHTML = content;
+  var h2 = tmp.querySelector('h2');
+  var shortIntro = tmp.querySelector('.short-intro');
+  if (h2) title = h2.innerText || title;
+  generatedContent.title = title;
+  if (shortIntro) generatedContent.shortIntro = shortIntro.innerText;
+  generatedContent.body = content;
+  generatedContent.rawStoryText = tmp.innerText || generatedContent.rawStoryText || '';
+  generatedContent.slug = generatedContent.slug || (currentGuestWriterStory && currentGuestWriterStory.slug) || safeFileName(title);
+  generatedContent.readTime = generatedContent.readTime || (currentGuestWriterStory && currentGuestWriterStory.readTime) || Math.max(1, Math.ceil((tmp.innerText || '').trim().split(/\s+/).filter(Boolean).length / 220)) + ' min read';
+  generatedContent.writerName = generatedContent.writerName || (currentGuestWriterStory && currentGuestWriterStory.writerName) || (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || (currentUser && currentUser.displayName) || '';
+  if (document.getElementById('r-title')) document.getElementById('r-title').value = generatedContent.title || '';
+  if (document.getElementById('r-slug')) document.getElementById('r-slug').value = generatedContent.slug || '';
+  if (document.getElementById('r-short')) document.getElementById('r-short').value = getBestShortIntro(document.getElementById('r-short').value);
+  if (document.getElementById('r-40')) document.getElementById('r-40').value = generatedContent.intro40 || (currentGuestWriterStory && currentGuestWriterStory.intro40) || '';
+  if (document.getElementById('r-excerpt')) document.getElementById('r-excerpt').value = generatedContent.excerpt || (currentGuestWriterStory && currentGuestWriterStory.excerpt) || '';
+  if (document.getElementById('r-intro-rt')) document.getElementById('r-intro-rt').value = generatedContent.introRichText || (currentGuestWriterStory && currentGuestWriterStory.introRichText) || '';
+  if (document.getElementById('r-intro-render')) document.getElementById('r-intro-render').innerHTML = document.getElementById('r-intro-rt') ? document.getElementById('r-intro-rt').value : '';
+  if (document.getElementById('r-body')) document.getElementById('r-body').value = generatedContent.body || '';
+  if (document.getElementById('r-body-render')) document.getElementById('r-body-render').innerHTML = generatedContent.body||'';
+  if (document.getElementById('r-readtime')) document.getElementById('r-readtime').value = generatedContent.readTime || '5 min read';
+  if (document.getElementById('r-writer-name')) document.getElementById('r-writer-name').value = generatedContent.writerName || '';
+  updateReviewWordCount();
+}
+function scheduleGuestWriterAutosave() {
+  if (!isGuestWriterEditableAutosaveState()) return;
+  if (guestWriterAutosaveTimer) clearTimeout(guestWriterAutosaveTimer);
+  guestWriterAutosaveTimer = setTimeout(performGuestWriterAutosave, 25000);
+}
+function performGuestWriterAutosave() {
+  guestWriterAutosaveTimer = null;
+  if (!isGuestWriterEditableAutosaveState() || guestWriterAutosaveInFlight) return;
+  guestWriterAutosaveInFlight = true;
+  setGuestWriterAutosaveStatus('Saving...');
+  if (currentWorkflowStep === 'refine') syncRefinePreviewToReviewFields();
+  saveGuestWriterDraft('draft', {silent:true, autosave:true}).then(function() {
+    setGuestWriterAutosaveStatus('Saved just now');
+  }).catch(function() {
+    setGuestWriterAutosaveStatus('Could not autosave', true);
+  }).finally(function() {
+    guestWriterAutosaveInFlight = false;
+  });
+}
 
 var _reviewImgFile = null;
 function handleReviewImg(e) {
@@ -5492,9 +6085,15 @@ function saveGuestWriterDraft(status, options) {
     writerName: profile.fullName || currentUser.displayName || '',
     alias: profile.alias || (currentGuestWriterStory && currentGuestWriterStory.alias) || '',
     preferredSection: (currentGuestWriterStory && currentGuestWriterStory.preferredSection) || profile.preferredSection || '',
+    themes: (currentGuestWriterStory && currentGuestWriterStory.themes) || [],
     writingUnlocked: true,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   });
+  if (currentGuestWriterStory && currentGuestWriterStory.uploadedStory) {
+    data.uploadedStory = true;
+    data.aiRefinedUploadedStory = currentGuestWriterStory.aiRefinedUploadedStory === true;
+    data.rawStoryText = currentGuestWriterStory.rawStoryText || '';
+  }
   if (saveStatus === 'under_review') {
     data.submittedAt = firebase.firestore.FieldValue.serverTimestamp();
     if (currentGuestWriterStory && currentGuestWriterStory.status === 'changes_requested') data.resubmittedAt = firebase.firestore.FieldValue.serverTimestamp();
