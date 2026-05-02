@@ -472,12 +472,18 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       <div style="height:1px;background:var(--bdr);width:100%"></div>
       <section>
         <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Website Communications</h2>
-        <div class="landing-cards" style="grid-template-columns:1fr">
+        <div class="landing-cards" style="grid-template-columns:repeat(2,1fr)">
       <div class="lcard" onclick="showUnsentAdmin()">
         <div class="lcard-icon">UN</div>
         <div class="lcard-title">UNSENT</div>
         <div class="lcard-desc">Review, edit, and delete unsent messages.</div>
         <div class="lcard-cta">Open UNSENT</div>
+      </div>
+      <div class="lcard" onclick="showBlogCommentsAdmin()">
+        <div class="lcard-icon">BC</div>
+        <div class="lcard-title">BLOG COMMENTS</div>
+        <div class="lcard-desc">Review, edit, and delete blog comments.</div>
+        <div class="lcard-cta">Open comments</div>
       </div>
         </div>
       </section>
@@ -724,6 +730,27 @@ There are no right or wrong answers here. Please answer openly and in your own v
       </div>
       <div id="unsent-status" class="hint" style="margin-bottom:12px"></div>
       <div id="unsent-list" style="border:1px solid var(--bdr);border-radius:8px;background:#fff;overflow:auto"></div>
+    </div>
+  </div>
+
+  <div id="landing-blog-comments-admin" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:1100px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
+        <button class="btn" onclick="loadBlogComments({force:true})">Refresh</button>
+      </div>
+      <h2>BLOG COMMENTS</h2>
+      <p class="sub">Review, edit, and delete blog comments.</p>
+      <div id="blog-comments-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <input class="wf-input" id="blog-comments-search" placeholder="Search comments..." style="flex:1;min-width:220px" oninput="renderBlogComments()" />
+        <select class="wf-input" id="blog-comments-sort" style="width:180px" onchange="renderBlogComments()">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
+      </div>
+      <div id="blog-comments-status" class="hint" style="margin-bottom:12px"></div>
+      <div id="blog-comments-list" style="border:1px solid var(--bdr);border-radius:8px;background:#fff;overflow:auto"></div>
     </div>
   </div>
 
@@ -1084,6 +1111,10 @@ window._staffGuestWriterStoriesLoading = false;
 window._unsentSubmissions = [];
 window._unsentSubmissionsLoaded = false;
 window._unsentSubmissionsLoading = false;
+window._blogComments = [];
+window._blogCommentsLoaded = false;
+window._blogCommentsLoading = false;
+window._blogCommentsPostFilter = 'all';
 
 function isStaffUser(user) {
   return !!(user && STAFF_EMAILS.indexOf((user.email || '').toLowerCase()) !== -1);
@@ -1101,7 +1132,7 @@ function guardStaffScreen() {
 }
 function enforceStaffScreenAccess() {
   if (isStaffUser(currentUser)) return;
-  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-unsent-admin','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
+  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-unsent-admin','landing-blog-comments-admin','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
     var el = document.getElementById(id);
     return el && el.style.display !== 'none';
   });
@@ -3167,6 +3198,14 @@ function showUnsentAdmin() {
   if (window._unsentSubmissionsLoaded) renderUnsentSubmissions();
   else loadUnsentSubmissions();
 }
+function showBlogCommentsAdmin() {
+  if (!guardStaffScreen()) return;
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-blog-comments-admin').style.display = 'flex';
+  if (window._blogCommentsLoaded) renderBlogComments();
+  else loadBlogComments();
+}
 function unsentDateValue(item) {
   var v = item.createdAt || item.submittedAt || item.timestamp || item.updatedAt;
   if (!v) return 0;
@@ -3255,6 +3294,127 @@ function deleteUnsentSubmission(id) {
     window._unsentSubmissions = (window._unsentSubmissions || []).filter(function(item){return item.id !== id;});
     renderUnsentSubmissions();
   }).catch(function(err){ alert('Could not delete message: '+err.message); });
+}
+function blogCommentDateValue(item) {
+  var v = item.createdAt || item.submittedAt || item.timestamp || item.updatedAt || item.date;
+  if (!v) return 0;
+  if (v.toDate) return v.toDate().getTime();
+  if (v.seconds) return v.seconds * 1000;
+  var d = new Date(v);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+function blogCommentRowKey(post, id) {
+  return safeFileName(encodeURIComponent(post || '') + '-' + encodeURIComponent(id || ''));
+}
+function loadBlogComments(options) {
+  options = options || {};
+  var status = document.getElementById('blog-comments-status');
+  var list = document.getElementById('blog-comments-list');
+  if (!db || window._blogCommentsLoading) return;
+  if (options.force) window._blogCommentsLoaded = false;
+  window._blogCommentsLoading = true;
+  if (status) status.textContent = 'Loading blog comments...';
+  db.collectionGroup('submissions').get().then(function(snap) {
+    window._blogComments = [];
+    snap.forEach(function(doc) {
+      var postDoc = doc.ref.parent && doc.ref.parent.parent;
+      if (!postDoc || !postDoc.id) return;
+      window._blogComments.push(Object.assign({id:doc.id, post:postDoc.id}, doc.data()));
+    });
+    window._blogCommentsLoaded = true;
+    renderBlogComments();
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not load blog comments: '+err.message;
+    if (list) list.innerHTML = '';
+  }).finally(function(){ window._blogCommentsLoading = false; });
+}
+function setBlogCommentsPostFilter(post) {
+  window._blogCommentsPostFilter = post && post !== 'all' ? decodeURIComponent(post) : 'all';
+  renderBlogComments();
+}
+function renderBlogComments() {
+  var list = document.getElementById('blog-comments-list');
+  var status = document.getElementById('blog-comments-status');
+  var tabs = document.getElementById('blog-comments-tabs');
+  if (!list) return;
+  var posts = Array.from(new Set((window._blogComments || []).map(function(item){ return item.post || ''; }).filter(Boolean))).sort();
+  if (tabs) {
+    tabs.innerHTML = '<button class="chip '+(window._blogCommentsPostFilter === 'all' ? 'on' : '')+'" onclick="setBlogCommentsPostFilter(\'all\')">All posts</button>'
+      + posts.map(function(post) {
+        return '<button class="chip '+(window._blogCommentsPostFilter === post ? 'on' : '')+'" onclick="setBlogCommentsPostFilter(\''+escapeHtml(encodeURIComponent(post))+'\')">'+escapeHtml(post)+'</button>';
+      }).join('');
+  }
+  var activePost = window._blogCommentsPostFilter || 'all';
+  var q = (document.getElementById('blog-comments-search') && document.getElementById('blog-comments-search').value || '').toLowerCase().trim();
+  var sort = document.getElementById('blog-comments-sort') ? document.getElementById('blog-comments-sort').value : 'newest';
+  var items = (window._blogComments || []).filter(function(item) {
+    if (activePost !== 'all' && item.post !== activePost) return false;
+    var message = item.message || item.comment || item.text || '';
+    var hay = [item.post, item.name, item.email, message].map(function(v){return String(v||'').toLowerCase();}).join(' ');
+    return !q || hay.indexOf(q) !== -1;
+  }).sort(function(a,b) {
+    return sort === 'oldest' ? blogCommentDateValue(a) - blogCommentDateValue(b) : blogCommentDateValue(b) - blogCommentDateValue(a);
+  });
+  if (status) status.textContent = items.length + ' of ' + (window._blogComments || []).length + ' comment(s).';
+  if (!items.length) {
+    list.innerHTML = '<div style="padding:18px;color:var(--g3);font-size:13px">No blog comments found.</div>';
+    return;
+  }
+  list.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:900px"><thead style="background:var(--gray);text-align:left"><tr>'
+    + '<th style="padding:10px;border-bottom:1px solid var(--bdr)">Post</th>'
+    + '<th style="padding:10px;border-bottom:1px solid var(--bdr)">Name</th>'
+    + '<th style="padding:10px;border-bottom:1px solid var(--bdr)">Comment</th>'
+    + '<th style="padding:10px;border-bottom:1px solid var(--bdr)">Date</th>'
+    + '<th style="padding:10px;border-bottom:1px solid var(--bdr)">Actions</th></tr></thead><tbody>'
+    + items.map(function(item) {
+      var message = item.message || item.comment || item.text || '';
+      var ep = encodeURIComponent(item.post || '');
+      var ei = encodeURIComponent(item.id || '');
+      return '<tr id="blog-comment-row-'+blogCommentRowKey(item.post,item.id)+'">'
+        + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top">'+escapeHtml(item.post || '')+'</td>'
+        + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top">'+escapeHtml(item.name || '')+'</td>'
+        + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top;max-width:420px;white-space:pre-wrap">'+escapeHtml(message)+'</td>'
+        + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top;white-space:nowrap">'+escapeHtml(formatFirestoreDate(item.createdAt || item.submittedAt || item.timestamp || item.updatedAt || item.date))+'</td>'
+        + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top;white-space:nowrap"><button class="btn" onclick="editBlogComment(\''+escapeHtml(ep)+'\',\''+escapeHtml(ei)+'\')">Edit</button> <button class="btn" onclick="deleteBlogComment(\''+escapeHtml(ep)+'\',\''+escapeHtml(ei)+'\')">Delete</button></td>'
+        + '</tr>';
+    }).join('') + '</tbody></table>';
+}
+function editBlogComment(encodedPost, encodedId) {
+  var post = decodeURIComponent(encodedPost);
+  var id = decodeURIComponent(encodedId);
+  var item = (window._blogComments || []).find(function(x){return x.post === post && x.id === id;});
+  var row = document.getElementById('blog-comment-row-'+blogCommentRowKey(post,id));
+  if (!item || !row) return;
+  var message = item.message || item.comment || item.text || '';
+  row.innerHTML = '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top">'+escapeHtml(post)+'</td>'
+    + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top"><input class="wf-input" id="blog-comment-name-'+blogCommentRowKey(post,id)+'" value="'+escapeHtml(item.name || '')+'" /></td>'
+    + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top"><textarea class="wf-textarea" id="blog-comment-message-'+blogCommentRowKey(post,id)+'" style="min-height:90px">'+escapeHtml(message)+'</textarea></td>'
+    + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top;white-space:nowrap">'+escapeHtml(formatFirestoreDate(item.createdAt || item.submittedAt || item.timestamp || item.updatedAt || item.date))+'</td>'
+    + '<td style="padding:10px;border-bottom:1px solid var(--bdr);vertical-align:top;white-space:nowrap"><button class="btn" onclick="saveBlogComment(\''+escapeHtml(encodedPost)+'\',\''+escapeHtml(encodedId)+'\')">Save</button> <button class="btn" onclick="renderBlogComments()">Cancel</button></td>';
+}
+function saveBlogComment(encodedPost, encodedId) {
+  var post = decodeURIComponent(encodedPost);
+  var id = decodeURIComponent(encodedId);
+  var key = blogCommentRowKey(post,id);
+  var data = {
+    name: document.getElementById('blog-comment-name-'+key).value.trim(),
+    message: document.getElementById('blog-comment-message-'+key).value.trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  db.collection('comments').doc(post).collection('submissions').doc(id).update(data).then(function() {
+    var item = (window._blogComments || []).find(function(x){return x.post === post && x.id === id;});
+    if (item) Object.assign(item, data);
+    renderBlogComments();
+  }).catch(function(err){ alert('Could not save comment: '+err.message); });
+}
+function deleteBlogComment(encodedPost, encodedId) {
+  var post = decodeURIComponent(encodedPost);
+  var id = decodeURIComponent(encodedId);
+  if (!window.confirm('Delete this blog comment?')) return;
+  db.collection('comments').doc(post).collection('submissions').doc(id).delete().then(function() {
+    window._blogComments = (window._blogComments || []).filter(function(item){return !(item.post === post && item.id === id);});
+    renderBlogComments();
+  }).catch(function(err){ alert('Could not delete comment: '+err.message); });
 }
 function resetStaffGuestWriterStoryDetail() {
   var detail = document.getElementById('staff-guest-writer-story-detail');
@@ -4255,7 +4415,8 @@ function hideStaffLandingPanels() {
     'landing-guest-writer-applications',
     'landing-guest-writer-stories',
     'landing-editorial-tracker',
-    'landing-unsent-admin'
+    'landing-unsent-admin',
+    'landing-blog-comments-admin'
   ].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
