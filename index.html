@@ -8,6 +8,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 :root{--y:#FAC775;--yd:#BA7517;--ydeep:#412402;--blk:#1a1a1a;--gray:#f0ebe0;--g2:#e0d8c8;--g3:#888;--w:#fff;--red:#E24B4A;--grn:#639922;--blu:#378ADD;--bdr:rgba(0,0,0,0.1)}
 .topbar{background:var(--blk);color:#fff;padding:0 24px;display:flex;align-items:center;gap:16px;height:52px;border-bottom:3px solid var(--y);position:sticky;top:0;z-index:50}
 .landing{min-height:calc(100vh - 52px);background:#f5f0e8;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:48px 24px}
+.login-screen{padding:0!important;min-height:calc(100vh - 52px);background:#fff!important}.login-layout{display:grid;grid-template-columns:1fr 1fr;min-height:calc(100vh - 52px);background:#fff;color:#111;width:100%}.login-left{position:relative;background:#F6F3ED;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:48px}.login-geo-canvas{position:absolute;inset:0;width:100%;height:100%}.login-left-content{position:relative;z-index:2}.login-kicker{font-family:Georgia,serif;font-size:12px;letter-spacing:.25em;color:#9C9A92;text-transform:uppercase;margin-bottom:20px;display:flex;align-items:center;gap:8px}.login-dot{width:6px;height:6px;background:#FFC500;border-radius:50%;flex-shrink:0}.login-headline{font-family:Georgia,serif;font-size:clamp(28px,3.2vw,42px);font-weight:400;font-style:italic;line-height:1.2;color:#111;margin-bottom:16px;max-width:340px}.login-headline em{font-style:normal;color:#2E2E30}.login-tagline{font-family:Georgia,serif;font-size:12px;color:#9C9A92;letter-spacing:.12em;text-transform:uppercase}.login-right{background:#fff;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px 48px}.login-panel{width:100%;max-width:430px}.login-brand-lockup{display:flex;align-items:center;gap:14px;margin-bottom:24px}.login-brand-icon{width:42px;height:42px;background:#FFC500;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}.login-brand-icon span{font-family:Georgia,serif;font-weight:700;font-size:26px;color:#111;line-height:1}.login-brand-name{font-family:Georgia,serif;font-weight:700;font-size:22px;letter-spacing:.18em;color:#111;text-transform:uppercase;line-height:1}.login-title{font-family:Georgia,serif;font-size:clamp(30px,3vw,42px);font-weight:400;color:#111;margin-bottom:6px;line-height:1.05;white-space:nowrap}.login-subtitle{font-family:Georgia,serif;font-style:italic;font-size:13px;color:#9C9A92;margin-bottom:20px}.login-divider{display:flex;align-items:center;gap:12px;margin:16px 0}.login-divider div{flex:1;height:1px;background:#E8E4DC}.login-divider span{font-family:Georgia,serif;font-style:italic;font-size:11px;color:#9C9A92;white-space:nowrap}.login-field-group{margin-bottom:12px}.login-field-group label{display:block;font-family:Georgia,serif;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#9C9A92;margin-bottom:6px}.login-field-group input{width:100%;height:42px;border:1px solid #E8E4DC;border-radius:2px;padding:0 14px;font-family:Georgia,serif;font-size:14px;color:#111;background:#fff;outline:none}.login-field-group input:focus{border-color:#111}.login-google-btn{width:100%;height:44px;border:1px solid #E8E4DC;background:#fff;color:#111;border-radius:2px;font-family:Georgia,serif;font-size:12px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}.login-google-btn:hover{border-color:#111}.login-google-icon{width:18px;height:18px;flex-shrink:0}.login-primary-btn{width:100%;height:46px;background:#111;color:#fff;border:none;border-radius:2px;font-family:Georgia,serif;font-size:12px;letter-spacing:.22em;text-transform:uppercase;cursor:pointer;margin-top:4px;position:relative;overflow:hidden}.login-primary-btn::after{content:'';position:absolute;bottom:0;left:0;width:100%;height:3px;background:#FFC500}.login-primary-btn:disabled,.login-google-btn:disabled{opacity:.55;cursor:not-allowed}.login-secondary-link,.login-forgot-link{color:#111;text-decoration:none;border-bottom:1px solid #E8E4DC;cursor:pointer;background:none;border-top:none;border-left:none;border-right:none;padding:0;font-family:Georgia,serif;font-size:12px}.login-helper-text{margin-top:14px;font-family:Georgia,serif;font-size:12px;color:#9C9A92;font-style:italic;line-height:1.5}.login-helper-text span{margin-right:8px}.login-error{margin-top:10px;font-family:Georgia,serif;font-size:12px;color:#c0392b;line-height:1.4;display:none}.login-mode-note{font-family:Georgia,serif;font-size:12px;color:#9C9A92;margin-bottom:12px;line-height:1.5}@media(max-width:860px){.login-layout{grid-template-columns:1fr}.login-left{min-height:280px;padding:36px}.login-right{padding:48px 32px}.login-title{white-space:normal}}
 .landing-hero{text-align:center;margin-bottom:48px}.landing-hero h1{font-size:26px;font-weight:700;color:var(--blk);margin-bottom:8px;font-family:Georgia,serif}.landing-hero p{font-size:15px;color:var(--g3);max-width:500px;margin:0 auto;line-height:1.6}
 .landing-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:880px;width:100%}
 .lcard{background:#fff;border-radius:12px;padding:28px 22px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;display:flex;flex-direction:column;gap:10px}.lcard:hover{border-color:var(--y);box-shadow:0 4px 20px rgba(0,0,0,0.09);transform:translateY(-2px)}.lcard-icon{font-size:30px}.lcard-title{font-size:16px;font-weight:700;color:var(--blk);font-family:Georgia,serif}.lcard-desc{font-size:13px;color:var(--g3);line-height:1.6}.lcard-cta{font-size:12px;font-weight:600;color:var(--yd);margin-top:8px}
@@ -244,14 +245,57 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 </div>
 
 <!-- ACCESS SCREEN -->
-<div id="access-screen" class="landing">
-  <div class="url-entry">
-    <h2>Wocult Studio</h2>
-    <p>Sign in with Google to continue.</p>
-    <input class="wf-input" id="access-key-input" placeholder="Interview access key" style="display:none;font-size:14px;text-transform:uppercase" onkeydown="if(event.key==='Enter')submitAccessKey()" />
-    <div id="access-error" style="display:none;color:var(--red);font-size:13px;line-height:1.5"></div>
-    <button class="btn-lg btn-y" onclick="signInWithGoogle()" style="align-self:flex-start;padding:12px 28px">Continue with Google</button>
-    <p class="hint">Interview guests can continue directly from their invitation link. No login needed.</p>
+<div id="access-screen" class="landing login-screen">
+  <div class="login-layout">
+    <div class="login-left">
+      <svg class="login-geo-canvas" viewBox="0 0 640 900" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+        <circle cx="590" cy="110" r="240" fill="#FFC500" opacity="0.88"/>
+        <circle cx="590" cy="110" r="155" fill="#F5D76E" opacity="0.5"/>
+        <rect x="-40" y="60" width="210" height="210" fill="#ffffff" opacity="0.6" transform="rotate(-8 65 165)"/>
+        <rect x="-60" y="410" width="760" height="65" fill="#E8E4DC" opacity="0.8" transform="rotate(-6 320 442)"/>
+        <rect x="50" y="365" width="60" height="60" fill="#FFC500" opacity="0.9" transform="rotate(12 80 395)"/>
+        <circle cx="540" cy="820" r="180" fill="none" stroke="#9C9A92" stroke-width="1" opacity="0.3"/>
+        <circle cx="200" cy="510" r="120" fill="none" stroke="#FFC500" stroke-width="1.5" opacity="0.3"/>
+        <rect x="30" y="700" width="90" height="90" fill="none" stroke="#9C9A92" stroke-width="1" opacity="0.35" transform="rotate(-10 75 745)"/>
+        <rect x="360" y="560" width="20" height="20" fill="#FFC500" opacity="0.45" transform="rotate(20 370 570)"/>
+        <line x1="0" y1="862" x2="640" y2="862" stroke="#E8E4DC" stroke-width="1" opacity="0.9"/>
+        <line x1="0" y1="866" x2="180" y2="866" stroke="#FFC500" stroke-width="2" opacity="0.85"/>
+      </svg>
+      <div class="login-left-content">
+        <div class="login-kicker"><span class="login-dot"></span>Wocult Studio</div>
+        <h1 class="login-headline">Everyone has a story.<br><em>Make it worth<br>reading.</em></h1>
+        <p class="login-tagline">Work · Culture · Life</p>
+      </div>
+    </div>
+    <div class="login-right">
+      <div class="login-panel">
+        <div class="login-brand-lockup">
+          <div class="login-brand-icon"><span>W</span></div>
+          <div class="login-brand-name">WOCULT</div>
+        </div>
+        <h2 class="login-title">Sign in to Wocult Studio</h2>
+        <p class="login-subtitle">Interview guests can join from their invitation link.</p>
+        <input class="wf-input" id="access-key-input" placeholder="Interview access key" style="display:none;font-size:14px;text-transform:uppercase" onkeydown="if(event.key==='Enter')submitAccessKey()" />
+        <button class="login-google-btn" id="login-google-btn" onclick="signInWithGoogle()"><svg class="login-google-icon" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.12-.84 2.07-1.8 2.71v2.25h2.91c1.7-1.57 2.69-3.88 2.69-6.6z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.2l-2.91-2.25c-.8.54-1.84.86-3.05.86-2.35 0-4.34-1.59-5.05-3.72H.95v2.33C2.43 15.96 5.47 18 9 18z"/><path fill="#FBBC05" d="M3.95 10.69c-.18-.54-.28-1.11-.28-1.69s.1-1.15.28-1.69V4.98H.95C.34 6.19 0 7.55 0 9s.34 2.81.95 4.02l3-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.42 0 9 0 5.47 0 2.43 2.04.95 4.98l3 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg><span>Continue with Google</span></button>
+        <div class="login-divider"><div></div><span>or with email</span><div></div></div>
+        <div id="login-mode-note" class="login-mode-note">Sign in with your email and password.</div>
+        <div class="login-field-group">
+          <label>Email</label>
+          <input id="login-email" type="email" autocomplete="email" />
+        </div>
+        <div class="login-field-group">
+          <label>Password</label>
+          <input id="login-password" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitEmailAuth()" />
+        </div>
+        <button class="login-primary-btn" id="login-email-submit" onclick="submitEmailAuth()">Sign in</button>
+        <div id="access-error" class="login-error"></div>
+        <div class="login-helper-text">
+          <span id="login-switch-copy">New here?</span>
+          <button class="login-secondary-link" id="login-mode-toggle" onclick="toggleLoginMode()">Create an account</button>
+          <span id="login-forgot-wrap"> · <button class="login-forgot-link" onclick="sendLoginPasswordReset()">Forgot password?</button></span>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -278,7 +322,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <div class="sfield"><label>Phone number</label><input id="gw-phone" /></div>
     <div class="sfield"><label>Location</label><input id="gw-location" /></div>
     <div class="sfield"><label>Date of birth</label><input id="gw-dateOfBirth" type="date" /></div>
-    <div class="sfield"><label>Preferred section</label><select id="gw-preferredSection" onchange="document.getElementById('gw-other-wrap').style.display=this.value==='Other'?'block':'none'" class="wf-input"><option>Health</option><option>Parenting</option><option>Gaming</option><option>Travel</option><option>Food</option><option>Performance dressing</option><option>Look your best</option><option>Power accessories</option><option>Books</option><option>Music</option><option>Films</option><option>Sport</option><option>Clubs</option><option>Other</option></select></div>
+    <div class="sfield"><label>Preferred section</label><select id="gw-preferredSection" onchange="document.getElementById('gw-other-wrap').style.display=this.value==='Other'?'block':'none'" class="wf-input"><option value="" disabled selected>Select category</option><option>Health</option><option>Parenting</option><option>Gaming</option><option>Travel</option><option>Food</option><option>Performance dressing</option><option>Look your best</option><option>Power accessories</option><option>Books</option><option>Music</option><option>Films</option><option>Sport</option><option>Clubs</option><option>Other</option></select></div>
     <div class="sfield" id="gw-other-wrap" style="display:none"><label>Tell us the section you have in mind</label><input id="gw-otherSection" /></div>
     <div class="sfield"><label>Short bio</label><textarea id="gw-shortBio" rows="4"></textarea></div>
     <div class="sfield"><label>What would you like to write about?</label><textarea id="gw-storyPitch" rows="4"></textarea></div>
@@ -1268,18 +1312,97 @@ function hideAllAppScreens() {
 function showAccessScreen() {
   hideAllAppScreens();
   document.getElementById('access-screen').style.display = 'flex';
+  loginMode = 'signin';
+  updateLoginModeUI();
+  setLoginBusy(false);
 }
 function submitAccessKey() {
   handleAccessKey(document.getElementById('access-key-input').value);
 }
+var loginMode = 'signin';
+function setLoginError(message) {
+  var el = document.getElementById('access-error');
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.display = message ? 'block' : 'none';
+}
+function setLoginBusy(busy) {
+  ['login-google-btn','login-email-submit'].forEach(function(id) {
+    var btn = document.getElementById(id);
+    if (btn) btn.disabled = !!busy;
+  });
+}
+function loginAuthMessage(err) {
+  var code = err && err.code ? err.code : '';
+  if (code === 'auth/invalid-email') return 'Please enter a valid email address.';
+  if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') return 'The email or password is incorrect.';
+  if (code === 'auth/weak-password') return 'Please choose a stronger password.';
+  if (code === 'auth/email-already-in-use') return 'An account already exists with this email. Please sign in instead.';
+  if (code === 'auth/missing-password') return 'Please enter your password.';
+  if (code === 'auth/user-not-found') return 'No account was found with this email. You can create one below.';
+  return (err && err.message) || 'Could not complete sign in. Please try again.';
+}
+function updateLoginModeUI() {
+  setLoginError('');
+  var note = document.getElementById('login-mode-note');
+  var submit = document.getElementById('login-email-submit');
+  var copy = document.getElementById('login-switch-copy');
+  var toggle = document.getElementById('login-mode-toggle');
+  var forgot = document.getElementById('login-forgot-wrap');
+  if (note) note.textContent = loginMode === 'signin' ? 'Sign in with your email and password.' : 'Create your Wocult Studio account.';
+  if (submit) submit.textContent = loginMode === 'signin' ? 'Sign in' : 'Create account';
+  if (copy) copy.textContent = loginMode === 'signin' ? 'New here?' : 'Already have an account?';
+  if (toggle) toggle.textContent = loginMode === 'signin' ? 'Create an account' : 'Sign in';
+  if (forgot) forgot.style.display = loginMode === 'signin' ? 'inline' : 'none';
+}
+function toggleLoginMode() {
+  loginMode = loginMode === 'signin' ? 'create' : 'signin';
+  updateLoginModeUI();
+}
+function submitEmailAuth() {
+  if (!auth) { setLoginError('Email login is not available right now.'); return; }
+  var email = document.getElementById('login-email').value.trim();
+  var password = document.getElementById('login-password').value;
+  if (!email) { setLoginError('Please enter your email address.'); return; }
+  if (!password) { setLoginError('Please enter your password.'); return; }
+  setLoginBusy(true);
+  setLoginError('');
+  var action = loginMode === 'signin'
+    ? auth.signInWithEmailAndPassword(email, password)
+    : auth.createUserWithEmailAndPassword(email, password);
+  action.then(function(result) {
+    if (result && result.user) routeSignedInUser(result.user);
+  }).catch(function(err) {
+    setLoginError(loginAuthMessage(err));
+  }).finally(function() {
+    setLoginBusy(false);
+  });
+}
+function sendLoginPasswordReset() {
+  if (!auth) { setLoginError('Password reset is not available right now.'); return; }
+  var email = document.getElementById('login-email').value.trim();
+  if (!email) { setLoginError('Enter your email address first.'); return; }
+  setLoginBusy(true);
+  setLoginError('');
+  auth.sendPasswordResetEmail(email).then(function() {
+    setLoginError('Password reset email sent. Check your inbox.');
+  }).catch(function(err) {
+    setLoginError(loginAuthMessage(err));
+  }).finally(function() {
+    setLoginBusy(false);
+  });
+}
 function signInWithGoogle() {
-  if (!auth) { document.getElementById('access-error').textContent = 'Google login is not available right now.'; document.getElementById('access-error').style.display = 'block'; return; }
+  if (!auth) { setLoginError('Google login is not available right now.'); return; }
   var provider = new firebase.auth.GoogleAuthProvider();
+  setLoginBusy(true);
+  setLoginError('');
   auth.signInWithPopup(provider).then(function(result) {
     if (result && result.user) routeSignedInUser(result.user);
   }).catch(function(err) {
-    document.getElementById('access-error').textContent = err.message || 'Could not sign in with Google.';
-    document.getElementById('access-error').style.display = 'block';
+    setLoginError(err.message || 'Could not sign in with Google.');
+  }).finally(function() {
+    setLoginBusy(false);
   });
 }
 function logout() {
@@ -1418,6 +1541,7 @@ function submitGuestWriterRegistration() {
     alert('Please complete the writer profile fields.');
     return;
   }
+  if (!data.preferredSection) { alert('Please choose a preferred section.'); return; }
   if (data.preferredSection === 'Other' && !data.otherSection) { alert('Please tell us the section you have in mind.'); return; }
   document.getElementById('gw-registration-status').textContent = 'Sending writer profile...';
   db.collection('guest_writers').doc(currentUser.uid).set(data).then(function() {
