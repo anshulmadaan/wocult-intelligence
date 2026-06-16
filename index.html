@@ -6591,7 +6591,10 @@ function submitArticle() {
     return;
   }
   if (currentAccessMode === 'guest_writer') {
-    saveGuestWriterDraft('under_review');
+    saveGuestWriterDraft('under_review').then(function() {
+      alert('Story saved.');
+      navigateHome();
+    });
     return;
   }
   var btn = document.getElementById('publish-btn');
@@ -6629,6 +6632,8 @@ function submitArticle() {
       document.getElementById('publish-result').style.display = 'block';
       document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Submitted!</div><div class="publish-sub">Saved to Firebase · Published to Webflow as draft · CSV downloaded.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
       document.getElementById('publish-actions').style.display = 'none';
+      alert('Story saved.');
+      navigateHome();
     } else { throw new Error((res.data&&res.data.message)||JSON.stringify(res.data).substring(0,200)); }
     btn.disabled=false; btn.textContent='Submit';
   }).catch(function(e){ btn.disabled=false; btn.textContent='Submit'; fbToast('Error: '+e.message.substring(0,60), false); });
