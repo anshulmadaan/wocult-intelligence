@@ -172,6 +172,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
 <script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
 <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 </head>
@@ -1090,6 +1091,7 @@ var cards = [];
 // Firebase init
 var db = null;
 var auth = null;
+var storage = null;
 try {
   firebase.initializeApp({
     apiKey: 'AIzaSyBg_ELUjlWMiFKzrykPm9O002tIA-TB1OY',
@@ -1101,8 +1103,23 @@ try {
   });
   db = firebase.firestore();
   auth = firebase.auth();
+  storage = firebase.storage();
 } catch(e) { console.warn('Firebase init failed:', e.message); }
 var _memoryNotes = [];
+
+function getInterviewRecordingStoragePath(sessionId, uid, questionIndex) {
+  var safeSessionId = String(sessionId || 'unknown-session').replace(/[^A-Za-z0-9_-]/g, '_');
+  var safeUid = String(uid || 'unknown-user').replace(/[^A-Za-z0-9_-]/g, '_');
+  var safeQuestionIndex = Number.isFinite(Number(questionIndex)) ? Number(questionIndex) : 0;
+  return 'interview_recordings/' + safeSessionId + '/' + safeUid + '/question-' + safeQuestionIndex + '.webm';
+}
+
+function uploadInterviewRecordingBlob(sessionId, uid, questionIndex, blob) {
+  if (!storage) return Promise.reject(new Error('Firebase Storage is not initialized.'));
+  if (!blob) return Promise.reject(new Error('Recording blob is required.'));
+  var path = getInterviewRecordingStoragePath(sessionId, uid, questionIndex);
+  return storage.ref(path).put(blob, { contentType: blob.type || 'audio/webm' });
+}
 
 function fbToast(msg, ok) {
   var t = document.getElementById('fb-toast');
@@ -4265,7 +4282,7 @@ Return ONLY valid JSON:
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         briefType:'interviewAnswers',
-        model:'claude-sonnet-4-20250514',
+        model:'claude-sonnet-4-6',
         max_tokens:1200,
         messages:[{role:'user',content:prompt}]
       })
@@ -4404,7 +4421,7 @@ Return ONLY valid JSON:
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
       briefType:'interviewAnswers',
-      model:'claude-sonnet-4-20250514',
+      model:'claude-sonnet-4-6',
       max_tokens:3000,
       messages:[{role:'user',content:prompt}]
     })
@@ -4920,7 +4937,7 @@ Return ONLY valid JSON:
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
       briefType:'interviewQuestions',
-      model:'claude-sonnet-4-20250514',
+      model:'claude-sonnet-4-6',
       max_tokens:2000,
       messages:[{role:'user',content:prompt}]
     })
@@ -5056,7 +5073,7 @@ Return ONLY valid JSON, no markdown:
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
       briefType:'existingDraft',
-      model:'claude-sonnet-4-20250514',
+      model:'claude-sonnet-4-6',
       max_tokens:3000,
       messages:[{role:'user',content:prompt}]
     })
@@ -5328,7 +5345,7 @@ Return ONLY valid JSON, no markdown:
     method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
   briefType:'scratch',
-  model:'claude-sonnet-4-20250514',
+  model:'claude-sonnet-4-6',
   max_tokens:3000,
   tools:[{"type":"web_search_20250305","name":"web_search"}],
   messages:[{role:'user',content:prompt}]
@@ -6012,7 +6029,7 @@ var hasUrl = !!currentCard._url;
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
   briefType:'generation',
-  model:'claude-sonnet-4-20250514',
+  model:'claude-sonnet-4-6',
   max_tokens:3000,
   tools: genTools.length ? genTools : undefined,
   messages:[{role:'user',content:urlInstruction+prompt}]
@@ -6109,7 +6126,7 @@ function sendChatMessage() {
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       briefType:'refine',
-      model:'claude-sonnet-4-20250514',
+      model:'claude-sonnet-4-6',
       max_tokens:3000,
       tools:[{"type":"web_search_20250305","name":"web_search"}],
       messages: window._chatHistory
@@ -6203,7 +6220,7 @@ function finishProceedToReview() {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           briefType:'memory',
-          model:'claude-sonnet-4-20250514',
+          model:'claude-sonnet-4-6',
           max_tokens:500,
           messages:[{role:'user',content:learnPrompt}]
 })
@@ -6240,7 +6257,7 @@ function updateDraft() {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       briefType:'refine',
-      model:'claude-sonnet-4-20250514',
+      model:'claude-sonnet-4-6',
       max_tokens:3000,
       messages: msgs
 })
@@ -6380,7 +6397,7 @@ function prepareUploadedStorySupportingFields() {
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       briefType:'refine',
-      model:'claude-sonnet-4-20250514',
+      model:'claude-sonnet-4-6',
       max_tokens:1200,
       messages:[{role:'user', content:prompt}]
     })
