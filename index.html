@@ -468,6 +468,18 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       </section>
       <div style="height:1px;background:var(--bdr);width:100%"></div>
       <section>
+        <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Draft news briefs</h2>
+        <div class="landing-cards">
+      <div class="lcard" onclick="showNewsBriefUrlEntry()">
+        <div class="lcard-icon">NB</div>
+        <div class="lcard-title">Draft from URLs</div>
+        <div class="lcard-desc">Curate quick briefs from trending news and source reports.</div>
+        <div class="lcard-cta">Draft brief →</div>
+      </div>
+        </div>
+      </section>
+      <div style="height:1px;background:var(--bdr);width:100%"></div>
+      <section>
         <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Curate interviews</h2>
         <div class="landing-cards" style="grid-template-columns:repeat(2,1fr)">
       <div class="lcard" onclick="showPrepareInterview()">
@@ -543,6 +555,28 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       <p>Paste the URL of any article. The AI will read it and draft an original Wocult story based on the content.</p>
       <input class="wf-input" id="landing-url-input" placeholder="https://economictimes.com/..." style="font-size:14px" onkeydown="if(event.key==='Enter')startFromUrl()" />
       <button class="btn-lg btn-y" onclick="startFromUrl()" style="align-self:flex-start;padding:12px 28px">Draft this story →</button>
+    </div>
+  </div>
+
+  <!-- News brief URL entry screen -->
+  <div id="landing-news-brief-url" class="landing" style="display:none">
+    <div class="url-entry">
+      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;align-self:flex-start;padding:0">← Back</button>
+      <h2>Draft news brief</h2>
+      <p>Paste one or more source URLs. Wocult AI will turn them into a concise reported news brief.</p>
+      <div class="sfield">
+        <label>Source URLs <span class="field-badge">One per line</span></label>
+        <textarea class="wf-textarea" id="news-brief-urls" placeholder="https://reuters.com/...&#10;https://cnbc.com/..." style="font-size:14px;min-height:120px"></textarea>
+      </div>
+      <div class="sfield">
+        <label>Optional headline idea</label>
+        <input class="wf-input" id="news-brief-title-hint" placeholder="Optional headline idea..." style="font-size:14px" />
+      </div>
+      <div class="sfield">
+        <label>Editorial angle</label>
+        <textarea class="wf-textarea" id="news-brief-angle" placeholder="What workplace, company, policy or economy thread should the brief emphasise?" style="font-size:14px;min-height:120px"></textarea>
+      </div>
+      <button class="btn-lg btn-y" onclick="startNewsBriefFromUrls()" style="align-self:flex-start;padding:12px 28px">Draft brief →</button>
     </div>
   </div>
 
@@ -1039,6 +1073,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <div class="wf-section">
     <div style="font-size:20px;font-weight:700;margin-bottom:4px">Review & Submit</div>
     <div style="font-size:13px;color:var(--g3);margin-bottom:24px">Edit any field before submitting. Body renders as rich text — edit directly.</div>
+    <div id="longform-review-fields">
     <div class="wf-field"><label class="wf-label">Post Title</label><input class="wf-input" id="r-title" /></div>
     <div class="wf-field"><label class="wf-label">Slug</label><input class="wf-input" id="r-slug" /></div>
     <div class="wf-field"><label class="wf-label">Short Story Intro <span class="field-badge">15-20 words</span></label><input class="wf-input" id="r-short" /></div>
@@ -1070,12 +1105,40 @@ There are no right or wrong answers here. Please answer openly and in your own v
         <div id="r-img-name" style="font-size:12px;color:var(--g3)"></div>
       </div>
     </div>
+    </div>
+    <div id="news-brief-review-fields" style="display:none">
+      <div class="wf-field"><label class="wf-label">Name</label><input class="wf-input" id="n-name" /></div>
+      <div class="wf-field"><label class="wf-label">Slug</label><input class="wf-input" id="n-slug" /></div>
+      <div class="wf-field"><label class="wf-label">Standfirst</label><textarea class="wf-textarea" id="n-standfirst" style="min-height:70px"></textarea></div>
+      <div class="wf-field">
+        <label class="wf-label">Body <span class="field-badge" id="n-body-wc">0 words</span></label>
+        <div id="n-body-render" contenteditable="true" style="border:1px solid var(--bdr);border-radius:8px;padding:16px;min-height:260px;font-size:14px;line-height:1.8;background:#fff;outline:none" oninput="updateNewsBriefReviewWordCount()"></div>
+      </div>
+      <div class="wf-row">
+        <div class="wf-field"><label class="wf-label">Published date</label><input class="wf-input" type="date" id="n-published-date" /></div>
+        <div class="wf-field"><label class="wf-label">Beat</label>
+          <select class="wf-input" id="n-beat">
+            <option>Companies</option>
+            <option>Layoffs</option>
+            <option>Pay and benefits</option>
+            <option>AI at work</option>
+            <option>Policy and economy</option>
+          </select>
+        </div>
+      </div>
+      <div class="wf-row">
+        <div class="wf-field"><label class="wf-label">Source name</label><input class="wf-input" id="n-source-name" /></div>
+        <div class="wf-field"><label class="wf-label">Source URL</label><input class="wf-input" id="n-source-url" /></div>
+      </div>
+      <div class="wf-field"><label class="wf-label">SEO description</label><input class="wf-input" id="n-seo-description" maxlength="250" /></div>
+      <div class="wf-field"><label class="wf-label">News image URL <span class="field-badge">Optional</span></label><input class="wf-input" id="n-news-image-url" placeholder="https://..." /></div>
+    </div>
   </div>
   <div id="publish-result" style="display:none"></div>
   <div class="wf-actions" id="publish-actions">
     <button class="btn-lg" onclick="showWorkflowStep('refine')" style="background:var(--gray);border:none;cursor:pointer">← Back to Refine</button>
     <button class="btn-lg" id="guest-writer-save-draft-btn" onclick="saveGuestWriterDraft('draft')" style="display:none;background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Save draft</button>
-    <button class="btn-lg" onclick="exportCSV()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Export CSV</button>
+    <button class="btn-lg" id="export-csv-btn" onclick="exportCSV()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Export CSV</button>
     <button class="btn-lg btn-y" id="publish-btn" onclick="submitArticle()">Submit</button>
   </div>
   <div class="guest-writer-autosave-status hint" style="margin-top:10px;text-align:right"></div>
@@ -1143,6 +1206,7 @@ var lastPreUpdateDraftHtml = '';
 var lastPreUpdateVersionCount = 0;
 var workflowReviewPrepared = false;
 var workflowPreviousLandingScreen = '';
+var workflowMode = 'story';
 var currentAccessMode = '';
 var currentAccessKey = '';
 var STAFF_EMAILS = [
@@ -4535,6 +4599,7 @@ function goToLanding() {
 }
 function showMain() {
   if (!guardStaffScreen()) return;
+  workflowMode = 'story';
   document.getElementById('landing').style.display = 'none';
   document.getElementById('main').style.display = 'block';
   document.getElementById('stats-bar').style.display = 'grid';
@@ -4548,6 +4613,7 @@ function hideStaffLandingPanels() {
   updateTopUpdatedVisibility(false);
   [
     'landing-url',
+    'landing-news-brief-url',
     'landing-scratch',
     'landing-scratch-choice',
     'landing-existing-draft',
@@ -4571,10 +4637,19 @@ function backToCards() {
 }
 function showUrlEntry() {
   if (!guardStaffScreen()) return;
+  workflowMode = 'story';
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-url').style.display = 'flex';
   setTimeout(function(){ document.getElementById('landing-url-input').focus(); }, 100);
+}
+function showNewsBriefUrlEntry() {
+  if (!guardStaffScreen()) return;
+  workflowMode = 'news_brief';
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-news-brief-url').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('news-brief-urls').focus(); }, 100);
 }
 function showPrepareInterview() {
   if (!guardStaffScreen()) return;
@@ -4642,6 +4717,7 @@ function setInterviewGeneratedButtonState(hasLink, canUpdate) {
 }
 function showScratchChoice() {
   if (currentAccessMode === 'staff' && !guardStaffScreen()) return;
+  workflowMode = 'story';
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-scratch-choice').style.display = 'flex';
@@ -4655,6 +4731,7 @@ function showExistingDraftForm() {
 }
 function showScratchForm() {
   if (currentAccessMode === 'staff' && !guardStaffScreen()) return;
+  workflowMode = 'story';
   workflowGeneratedDraftOnly = false;
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
@@ -4668,12 +4745,41 @@ function showScratchForm() {
 function startFromUrl() {
   var url = document.getElementById('landing-url-input').value.trim();
   if (!url) return;
+  workflowMode = 'story';
   workflowGeneratedDraftOnly = false;
   _workflowSource = 'landing';
   document.getElementById('landing').style.display = 'none';
   var host = 'link';
   try { host = new URL(url).hostname.replace('www.',''); } catch(e) {}
   setWorkflowCard({title:url, src:host, cat:'general', heat:8, ago:'now', link:url, _url:url});
+}
+function startNewsBriefFromUrls() {
+  var urls = (document.getElementById('news-brief-urls').value || '').split(/\r?\n/).map(function(u){ return u.trim(); }).filter(Boolean);
+  var titleHint = document.getElementById('news-brief-title-hint').value.trim();
+  var angle = document.getElementById('news-brief-angle').value.trim();
+  if (!urls.length) { alert('Please add at least one source URL.'); return; }
+  workflowMode = 'news_brief';
+  workflowGeneratedDraftOnly = false;
+  _workflowSource = 'landing';
+  document.getElementById('landing').style.display = 'none';
+  var host = 'links';
+  try { host = new URL(urls[0]).hostname.replace('www.',''); } catch(e) {}
+  setWorkflowCard({
+    title: titleHint || urls[0],
+    src: host,
+    cat: 'news brief',
+    heat: 8,
+    ago: 'now',
+    link: urls[0],
+    _url: urls[0],
+    _urls: urls,
+    _newsBriefTitleHint: titleHint,
+    _newsBriefAngle: angle
+  });
+  workflowPreviousLandingScreen = 'landing-news-brief-url';
+  if (document.getElementById('b-title')) document.getElementById('b-title').value = titleHint;
+  if (document.getElementById('b-angle')) document.getElementById('b-angle').value = angle;
+  startNewsBriefGeneration();
 }
 function selectRadio(el, hiddenId) {
   el.closest('.radio-grid').querySelectorAll('.radio-opt').forEach(function(o){ o.classList.remove('sel'); });
@@ -5003,6 +5109,7 @@ function startFromExistingDraft() {
   var draftText = document.getElementById('existing-draft-text').value.trim();
   if (!draftText) { alert('Please paste your draft before refining.'); return; }
 
+  workflowMode = 'story';
   workflowGeneratedDraftOnly = false;
   currentCard = {title:'Existing draft', src:'Submission', cat:'general', heat:8, ago:'now', link:'', _url:'', _scratch: true, _sourceInfo: draftText};
   _workflowSource = 'landing';
@@ -5130,6 +5237,7 @@ Return ONLY valid JSON, no markdown:
   });
 }
 function startFromScratch() {
+  workflowMode = 'story';
   workflowGeneratedDraftOnly = false;
   guestWriterUploadedBypassAI = false;
   var name = document.getElementById('sc-name').value.trim();
@@ -5828,7 +5936,7 @@ function setWorkflowCard(card) {
   workflowGeneratedDraftOnly = false;
   currentCard = card;
   workflowHasBriefStep = true;
-  workflowPreviousLandingScreen = _workflowSource === 'main' ? 'main' : 'landing-url';
+  workflowPreviousLandingScreen = workflowMode === 'news_brief' ? 'landing-news-brief-url' : (_workflowSource === 'main' ? 'main' : 'landing-url');
   currentWorkflowStep = '';
   maxWorkflowStepReached = 0;
   document.getElementById('main').style.display = 'none';
@@ -5843,10 +5951,11 @@ function setWorkflowCard(card) {
   document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
   showWorkflowStep('brief');
 }
-function openDraft(idx) { _workflowSource = 'main'; setWorkflowCard(cards[idx]); }
+function openDraft(idx) { workflowMode = 'story'; _workflowSource = 'main'; setWorkflowCard(cards[idx]); }
 function openDraftFromUrl() {
   var url = prompt('Paste the article URL:');
   if (!url) return;
+  workflowMode = 'story';
   _workflowSource = 'main';
   var host = 'link';
   try { host = new URL(url).hostname.replace('www.',''); } catch(e) {}
@@ -5929,6 +6038,7 @@ function showPreviousWorkflowScreen() {
   document.getElementById('main').style.display = 'none';
   document.getElementById('landing').style.display = 'block';
   if (workflowPreviousLandingScreen === 'landing-url') { showUrlEntry(); return; }
+  if (workflowPreviousLandingScreen === 'landing-news-brief-url') { showNewsBriefUrlEntry(); return; }
   if (workflowPreviousLandingScreen === 'landing-scratch-choice') { showScratchChoice(); return; }
   if (workflowPreviousLandingScreen === 'landing-scratch') { showScratchForm(); return; }
   if (workflowPreviousLandingScreen === 'landing-existing-draft') { showExistingDraftForm(); return; }
@@ -5956,7 +6066,34 @@ function goWorkflowHome() {
 function goStep(n) {
   showWorkflowStep(n === 1 ? 'brief' : n === 2 ? 'generate' : n === 3 ? 'review' : 'brief');
 }
+function parseModelJson(txt, fallbackKeys) {
+  var s = txt.indexOf('{'); var e = txt.lastIndexOf('}');
+  if (s === -1 || e === -1 || e <= s) throw new Error('No JSON in response');
+  var raw = txt.slice(s, e + 1);
+  var cleaned = raw.replace(/("(?:[^"\\]|\\.)*")|(\n)/g, function(m, str) {
+    return str ? str : '\\n';
+  });
+  try { return JSON.parse(cleaned); } catch(parseErr) {
+    var out = {};
+    (fallbackKeys || []).forEach(function(key) {
+      var idx = raw.indexOf('"'+key+'"');
+      if (idx === -1) { out[key] = ''; return; }
+      var colon = raw.indexOf(':', idx);
+      var start = raw.indexOf('"', colon + 1) + 1;
+      if (!colon || !start) { out[key] = ''; return; }
+      var pos = start, result = '';
+      while (pos < raw.length) {
+        if (raw[pos] === '\\') { result += raw[pos] + (raw[pos+1] || ''); pos += 2; continue; }
+        if (raw[pos] === '"') break;
+        result += raw[pos]; pos++;
+      }
+      out[key] = result.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    });
+    return out;
+  }
+}
 function startGeneration() {
+  if (workflowMode === 'news_brief') { startNewsBriefGeneration(); return; }
   if (!window._memoryNotesLoaded) {
     loadMemoryNotes(function(){ startGeneration(); });
     return;
@@ -6110,6 +6247,120 @@ var hasUrl = !!currentCard._url;
     alert('Generation failed: '+e.message);
   });
 }
+function startNewsBriefGeneration() {
+  if (!window._memoryNotesLoaded) {
+    loadMemoryNotes(function(){ startNewsBriefGeneration(); });
+    return;
+  }
+  workflowMode = 'news_brief';
+  var urls = (currentCard && currentCard._urls) || [];
+  if (!urls.length && currentCard && currentCard._url) urls = [currentCard._url];
+  var titleHint = (currentCard && currentCard._newsBriefTitleHint) || (document.getElementById('b-title') ? document.getElementById('b-title').value.trim() : '');
+  var angle = (currentCard && currentCard._newsBriefAngle) || (document.getElementById('b-angle') ? document.getElementById('b-angle').value.trim() : '');
+  showWorkflowStep('generate');
+  var steps = ['gs1','gs2','gs3','gs4'];
+  var si = 0;
+  var anim = setInterval(function() {
+    if (si>0) { var prev=document.getElementById(steps[si-1]); if (prev) { prev.classList.remove('active'); prev.classList.add('done'); } }
+    if (si<steps.length) { var cur=document.getElementById(steps[si]); if (cur) cur.classList.add('active'); si++; }
+    else clearInterval(anim);
+  }, 900);
+  var sourceInfo = urls.length ? urls.map(function(u, i){ return (i+1)+'. '+u; }).join('\n') : 'No source URL provided.';
+  var prompt = `You are drafting a Wocult News brief from source URLs and source reports.
+
+Source URLs:
+${sourceInfo}
+${titleHint ? 'Editor headline idea: ' + titleHint + '\n' : ''}
+Editorial angle:
+${angle || 'Identify the clearest workplace, company, policy or economy implication.'}
+
+${getMemoryContext()}
+
+Return ONLY valid JSON, no markdown, no commentary:
+{
+  "name": "",
+  "slug": "",
+  "standfirst": "",
+  "body": "",
+  "publishedDate": "",
+  "sourceName": "",
+  "sourceUrl": "",
+  "seoDescription": "",
+  "beat": ""
+}
+
+Rules:
+- Write a Wocult News brief, not a longform article.
+- Body must be valid HTML paragraphs and 200 to 350 words.
+- Opening sentence must state the news flatly: who did what, when, with the key number where available.
+- Attribution must appear in the first or second sentence.
+- Second paragraph gives only essential context.
+- Third paragraph explains the wider workplace, company, policy or economy thread.
+- Optional final sentence gives forward look or stakes.
+- Reported register, no opinion column tone.
+- Sentence case.
+- British English.
+- No em dashes.
+- No exclamation marks.
+- No H1 in body.
+- H2 only if absolutely needed, but prefer clean paragraphs.
+- Use single quotes only.
+- Beat must be one of: Companies, Layoffs, Pay and benefits, AI at work, Policy and economy.
+- Source URL should use the primary source URL if there is one clear source. If multiple URLs are used, use the most important original report.
+- Source name should be short, such as Reuters, CNBC, Economic Times, Mint, South China Morning Post.
+- publishedDate must be ISO-compatible. Use today if the source does not state a publication date.`;
+
+  var genTools = urls.length ? [{"type":"web_search_20250305","name":"web_search"}] : [];
+  var urlInstruction = urls.length ? 'First use web search to fetch and read the source URLs, then write the Wocult News brief based on their content.\n' : '';
+  fetch(WORKER+'/generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      briefType:'generation',
+      model:'claude-sonnet-4-6',
+      max_tokens:2000,
+      tools: genTools.length ? genTools : undefined,
+      messages:[{role:'user',content:urlInstruction+prompt}]
+    })
+  }).then(function(r){return r.json();}).then(function(data) {
+    clearInterval(anim);
+    steps.forEach(function(s){var el=document.getElementById(s); if (el) { el.classList.remove('active'); el.classList.add('done'); }});
+    if (data.error) throw new Error(data.error.message || data.error);
+    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    var fields = parseModelJson(txt, ['name','slug','standfirst','body','publishedDate','sourceName','sourceUrl','seoDescription','beat']);
+    if (!/<[a-z][\s\S]*>/i.test(fields.body || '')) fields.body = plainTextToHtml(fields.body || '');
+    var allowedBeats = ['Companies','Layoffs','Pay and benefits','AI at work','Policy and economy'];
+    if (allowedBeats.indexOf(fields.beat) === -1) fields.beat = 'Companies';
+    fields.name = fields.name || titleHint || 'Wocult news brief';
+    fields.slug = fields.slug || safeFileName(fields.name);
+    fields.publishedDate = fields.publishedDate || new Date().toISOString();
+    fields.sourceUrl = fields.sourceUrl || urls[0] || '';
+    generatedContent = {
+      title: fields.name,
+      slug: fields.slug,
+      shortIntro: fields.standfirst,
+      body: fields.body,
+      newsBriefData: fields
+    };
+    var preview = document.getElementById('chat-article-preview');
+    if (preview) preview.innerHTML = fields.body || '';
+    showWorkflowStep('refine');
+    window._versionCount = 1;
+    resetDraftRevert();
+    updateWordCount();
+    document.getElementById('chat-messages').innerHTML = '';
+    window._chatHistory = [
+      {role:'user', content: 'You are editing a Wocult News brief. Keep it reported, concise, in British English, sentence case, with no em dashes and no exclamation marks. For editorial changes, return a brief note and the FULL revised brief body HTML wrapped in <version> tags. Do not add a headline unless asked.\n\nCurrent brief body (Version 1):\n'+(fields.body || '')},
+      {role:'assistant', content: 'Ready. Tell me what to change in the brief.'}
+    ];
+    markUnsavedChanges();
+    window.scrollTo(0,0);
+  }).catch(function(e) {
+    clearInterval(anim);
+    showWorkflowStep('brief');
+    alert('News brief generation failed: '+e.message);
+  });
+}
 function sendChatMessage() {
   var input = document.getElementById('chat-input');
   var msg = input.value.trim();
@@ -6169,17 +6420,32 @@ function proceedToReview() {
   var existingPanel = document.getElementById('writer-review-panel');
   if (existingPanel) existingPanel.remove();
   disableGuestRevisionLayout();
+  if (workflowMode === 'news_brief') {
+    var body = getCleanRefineEditorHtml();
+    if (!generatedContent.newsBriefData) generatedContent.newsBriefData = {};
+    generatedContent.newsBriefData.body = body;
+    generatedContent.body = body;
+    prepareNewsBriefReviewFields();
+    finishProceedToReview();
+    return;
+  }
   syncRefinePreviewToReviewFields();
   finishProceedToReview();
 }
 function finishProceedToReview() {
+  var isNewsBrief = workflowMode === 'news_brief';
+  var longformFields = document.getElementById('longform-review-fields');
+  var newsFields = document.getElementById('news-brief-review-fields');
+  if (longformFields) longformFields.style.display = isNewsBrief ? 'none' : 'block';
+  if (newsFields) newsFields.style.display = isNewsBrief ? 'block' : 'none';
   if (currentAccessMode === 'guest_writer' && document.getElementById('r-writer-name')) {
     document.getElementById('r-writer-name').value = (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || (currentUser && currentUser.displayName) || '';
   }
   setGuestWriterPublishDateVisibility(currentAccessMode === 'guest_writer');
-  document.getElementById('r-img-name').textContent = '';
+  if (document.getElementById('r-img-name')) document.getElementById('r-img-name').textContent = '';
   if (document.getElementById('r-img-url')) document.getElementById('r-img-url').value = '';
-  updateReviewWordCount();
+  if (isNewsBrief) updateNewsBriefReviewWordCount();
+  else updateReviewWordCount();
   document.getElementById('publish-result').style.display = 'none';
   document.getElementById('publish-actions').style.display = 'flex';
   workflowReviewPrepared = true;
@@ -6187,8 +6453,11 @@ function finishProceedToReview() {
   var guestDraftBtn = document.getElementById('guest-writer-save-draft-btn');
   if (guestDraftBtn) guestDraftBtn.style.display = currentAccessMode === 'guest_writer' ? 'inline-flex' : 'none';
   if (document.getElementById('publish-btn')) document.getElementById('publish-btn').textContent = currentAccessMode === 'guest_writer' ? 'Submit for review' : 'Submit';
+  var exportBtn = document.getElementById('export-csv-btn');
+  if (exportBtn) exportBtn.style.display = isNewsBrief ? 'none' : 'inline-flex';
   var backToRefineBtn = document.querySelector('#publish-actions button[onclick="showWorkflowStep(\'refine\')"]');
   if (backToRefineBtn) backToRefineBtn.style.display = 'inline-flex';
+  if (isNewsBrief) return;
   if (currentAccessMode === 'guest_writer') {
     saveGuestWriterDraft('draft', {silent:true});
     return;
@@ -6236,6 +6505,43 @@ function finishProceedToReview() {
       }).catch(function(){});
     }
   }
+}
+function prepareNewsBriefReviewFields() {
+  var data = Object.assign({}, generatedContent.newsBriefData || {});
+  var body = data.body || generatedContent.body || '';
+  if (!/<[a-z][\s\S]*>/i.test(body)) body = plainTextToHtml(body);
+  data.name = data.name || generatedContent.title || 'Wocult news brief';
+  data.slug = data.slug || generatedContent.slug || safeFileName(data.name);
+  data.standfirst = data.standfirst || generatedContent.shortIntro || '';
+  data.body = body;
+  data.publishedDate = data.publishedDate || new Date().toISOString();
+  data.sourceName = data.sourceName || '';
+  data.sourceUrl = data.sourceUrl || ((currentCard && currentCard._url) || '');
+  data.seoDescription = data.seoDescription || data.standfirst || '';
+  var allowedBeats = ['Companies','Layoffs','Pay and benefits','AI at work','Policy and economy'];
+  if (allowedBeats.indexOf(data.beat) === -1) data.beat = 'Companies';
+  generatedContent.newsBriefData = data;
+  var published = new Date(data.publishedDate);
+  if (isNaN(published.getTime())) published = new Date();
+  document.getElementById('n-name').value = data.name;
+  document.getElementById('n-slug').value = data.slug;
+  document.getElementById('n-standfirst').value = data.standfirst;
+  document.getElementById('n-body-render').innerHTML = data.body;
+  document.getElementById('n-published-date').value = published.toISOString().split('T')[0];
+  document.getElementById('n-source-name').value = data.sourceName;
+  document.getElementById('n-source-url').value = data.sourceUrl;
+  document.getElementById('n-seo-description').value = data.seoDescription;
+  document.getElementById('n-beat').value = data.beat;
+  document.getElementById('n-news-image-url').value = data.newsImageUrl || '';
+  updateNewsBriefReviewWordCount();
+}
+function updateNewsBriefReviewWordCount() {
+  var el = document.getElementById('n-body-render');
+  var wc = document.getElementById('n-body-wc');
+  if (!el || !wc) return;
+  var count = (el.innerText||'').trim().split(/\s+/).filter(function(w){return w.length>0;}).length;
+  wc.textContent = count + ' words';
+  wc.style.color = count < 200 || count > 350 ? '#E24B4A' : '';
 }
 function updateDraft() {
   if (!window.confirm('This will sync your manual edits and use Wocult AI to polish the story. Do you want to continue?')) return;
@@ -6582,7 +6888,70 @@ function saveGuestWriterDraft(status, options) {
   });
 }
 
+function submitNewsBrief() {
+  var btn = document.getElementById('publish-btn');
+  var bodyEl = document.getElementById('n-body-render');
+  var name = document.getElementById('n-name').value.trim();
+  var slug = document.getElementById('n-slug').value.trim();
+  var standfirst = document.getElementById('n-standfirst').value.trim();
+  var body = bodyEl ? bodyEl.innerHTML : '';
+  var publishedDate = document.getElementById('n-published-date').value;
+  var sourceName = document.getElementById('n-source-name').value.trim();
+  var sourceUrl = document.getElementById('n-source-url').value.trim();
+  var seoDescription = document.getElementById('n-seo-description').value.trim();
+  var beat = document.getElementById('n-beat').value;
+  var newsImageUrl = document.getElementById('n-news-image-url').value.trim();
+  if (!name || !slug || !body) { alert('Please add a name, slug and body before submitting.'); return; }
+  var dateObj = publishedDate ? new Date(publishedDate) : new Date();
+  if (isNaN(dateObj.getTime())) dateObj = new Date();
+  var dateIso = dateObj.toISOString();
+  var fieldData = {
+    name: name,
+    slug: slug,
+    standfirst: standfirst,
+    body: body,
+    'published-date': dateIso,
+    'source-name': sourceName,
+    'source-url': sourceUrl,
+    'seo-description': seoDescription,
+    beat: beat
+  };
+  if (newsImageUrl) fieldData['news-image'] = newsImageUrl;
+  generatedContent.newsBriefData = {
+    name: name,
+    slug: slug,
+    standfirst: standfirst,
+    body: body,
+    publishedDate: dateIso,
+    sourceName: sourceName,
+    sourceUrl: sourceUrl,
+    seoDescription: seoDescription,
+    beat: beat,
+    newsImageUrl: newsImageUrl
+  };
+  btn.disabled = true; btn.textContent = 'Submitting...';
+  fetch(WORKER + '/webflow-news', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({fieldData: fieldData, isDraft: true, isArchived: false})
+  }).then(function(r){ return r.json().then(function(d){return {ok:r.ok,data:d};}); }).then(function(res){
+    if (res.ok && (res.data.id || res.data._id || res.data.fieldData)) {
+      document.getElementById('publish-result').style.display = 'block';
+      document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Submitted!</div><div class="publish-sub">News brief published to Webflow as a draft.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
+      document.getElementById('publish-actions').style.display = 'none';
+      clearUnsavedChanges();
+      alert('News brief saved.');
+      navigateHome();
+    } else { throw new Error((res.data&&res.data.message)||JSON.stringify(res.data).substring(0,200)); }
+  }).catch(function(e){
+    fbToast('Error: '+e.message.substring(0,60), false);
+  }).finally(function(){
+    btn.disabled = false; btn.textContent = 'Submit';
+  });
+}
+
 function submitArticle() {
+  if (workflowMode === 'news_brief') { submitNewsBrief(); return; }
   var writerField = document.getElementById('r-writer-name');
   var writerName = writerField ? writerField.value.trim() : '';
   if (!writerName) {
