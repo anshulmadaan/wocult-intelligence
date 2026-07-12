@@ -200,7 +200,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v11</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v12</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -917,7 +917,10 @@ There are no right or wrong answers here. Please answer openly and in your own v
 
 <div id="main" style="display:none">
 <div class="tabs">
-  <div class="tab on" id="tab-cards" onclick="switchTab('cards')">Cards</div>
+  <div class="tab on" id="tab-cards" onclick="switchTab('cards')">RSS</div>
+  <div class="tab" id="tab-radar" onclick="switchTab('radar')">Radar</div>
+  <div class="tab" id="tab-reddit" onclick="switchTab('reddit')">Reddit</div>
+  <div class="tab" id="tab-official" onclick="switchTab('official')">Official</div>
   <div class="tab" id="tab-heatmap" onclick="switchTab('heatmap')">Heatmap</div>
   <div class="tab" id="tab-search" onclick="switchTab('search')">Search</div>
 </div>
@@ -930,12 +933,14 @@ There are no right or wrong answers here. Please answer openly and in your own v
 </div>
 <div id="filters-bar" class="filters">
   <span class="fl">Filter:</span>
-  <div class="chip on" onclick="filt('all',this)">All</div>
-  <div class="chip" onclick="filt('hiring',this)">Hiring</div>
-  <div class="chip" onclick="filt('layoffs',this)">Layoffs</div>
-  <div class="chip" onclick="filt('expansion',this)">Expansion</div>
-  <div class="chip" onclick="filt('investment',this)">Investment</div>
-  <div class="chip" onclick="filt('policy',this)">Policy</div>
+  <span id="filters-primary"></span>
+  <span id="freshness-filters" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
+    <span class="fl" style="margin-left:10px">Freshness:</span>
+    <span id="freshness-chips"></span>
+  </span>
+  <span id="radar-note" style="display:none;font-size:11px;color:var(--g3);margin-left:8px">Global source search. Results may be delayed on the current NewsData plan.</span>
+  <button class="btn" id="radar-refresh" onclick="loadRadar(true)" style="display:none;margin-left:auto">Refresh Radar</button>
+  <button class="btn" id="official-refresh" onclick="loadOfficial(true)" style="display:none;margin-left:auto">Refresh Official</button>
 </div>
 <div class="grid" id="grid"><div class="empty"><div class="spinner"></div><div>Fetching live Indian workforce news...</div></div></div>
 <div class="hmap-wrap" id="hmap-wrap" style="display:none">
@@ -1086,7 +1091,11 @@ There are no right or wrong answers here. Please answer openly and in your own v
 var WF_TOKEN = '9739ddc13b83dbc83edc6bf981bf7804df98e6bee9a29853af92c8b6ec3a89ab';
 var WF_COLLECTION = '695be252bae2cf37c3a4b17b';
 var WORKER = 'https://wocult-news-proxy.anmadaan.workers.dev';
-var cards = [];
+var rssCards = [];
+var radarCards = [];
+var redditCards = [];
+var officialCards = [];
+var cards = rssCards;
 
 // Firebase init
 var db = null;
@@ -4543,6 +4552,7 @@ function showMain() {
   document.getElementById('btn-back-landing').style.display = 'inline-flex';
   document.getElementById('rbtn').style.display = 'inline-flex';
   updateTopUpdatedVisibility(true);
+  switchTab(activeTab || 'cards');
 }
 function hideStaffLandingPanels() {
   updateTopUpdatedVisibility(false);
@@ -5441,6 +5451,13 @@ function saveArticleToFirebase(articleData, status) {
 
 var af = 'all';
 var activeTab = 'cards';
+var radarFreshness = '24h';
+var officialFilter = 'all';
+var officialFreshness = 'today';
+var radarCache = {key:'', at:0, cards:[]};
+var redditLoaded = false;
+var officialLoaded = false;
+var workflowMode = 'long_form';
 var currentCard = null;
 var generatedContent = {};
 window._memoryNotesLoaded = false;
@@ -5541,8 +5558,12 @@ function deleteSaved(idx) {
 
 function draftSaved(idx) {
   var s = saved[idx];
-  _workflowSource = 'main';
-  setWorkflowCard({title:s.title||s.url, src:s.src, cat:'general', heat:8, ago:s.savedAt, link:s.url, _url:s.url});
+  var card = {title:s.title||s.url, src:s.src, cat:'general', heat:8, ago:s.savedAt, link:s.url, _url:s.url};
+  var choice = prompt('Choose draft type:\n1. Long-form story\n2. News brief\n\nType 1 or 2. Leave blank to cancel.');
+  if (!choice) return;
+  choice = choice.trim().toLowerCase();
+  if (choice === '1' || choice.indexOf('long') === 0) { openLongFormDraft(card); return; }
+  if (choice === '2' || choice.indexOf('news') === 0 || choice.indexOf('brief') >= 0) { openNewsBriefDraft(card); return; }
 }
 
 function toggleSaved() {
@@ -5574,24 +5595,88 @@ function renderSaved() {
   }).join('');
 }
 
-function filt(f, el) {
+function setCardsForActiveTab(nextCards) {
+  cards = nextCards || [];
+  render();
+}
+
+function chipHtml(label, active, handler) {
+  return '<span class="chip '+(active?'on':'')+'" onclick="'+handler+'">'+label+'</span>';
+}
+
+function renderSourceFilters() {
+  var primary = document.getElementById('filters-primary');
+  var freshnessWrap = document.getElementById('freshness-filters');
+  var freshnessChips = document.getElementById('freshness-chips');
+  var radarNote = document.getElementById('radar-note');
+  var radarRefresh = document.getElementById('radar-refresh');
+  var officialRefresh = document.getElementById('official-refresh');
+  if (!primary) return;
+  radarNote.style.display = activeTab === 'radar' ? 'inline' : 'none';
+  radarRefresh.style.display = activeTab === 'radar' ? 'inline-flex' : 'none';
+  officialRefresh.style.display = activeTab === 'official' ? 'inline-flex' : 'none';
+
+  if (activeTab === 'official') {
+    primary.innerHTML = [
+      ['all','All'],
+      ['results','Results'],
+      ['labour_pib','Labour/PIB'],
+      ['annual_reports','Annual reports'],
+      ['sec_filings','SEC filings']
+    ].map(function(f){ return chipHtml(f[1], officialFilter===f[0], "setOfficialFilter('"+f[0]+"')"); }).join('');
+    freshnessWrap.style.display = 'inline-flex';
+    freshnessChips.innerHTML = [
+      ['today','Today'],
+      ['7d','7 days']
+    ].map(function(f){ return chipHtml(f[1], officialFreshness===f[0], "setOfficialFreshness('"+f[0]+"')"); }).join('');
+    return;
+  }
+
+  primary.innerHTML = ['all','hiring','layoffs','expansion','investment','policy'].map(function(f) {
+    var label = f === 'all' ? 'All' : f.charAt(0).toUpperCase()+f.slice(1);
+    return chipHtml(label, af===f, "filt('"+f+"')");
+  }).join('');
+
+  if (activeTab === 'radar') {
+    freshnessWrap.style.display = 'inline-flex';
+    freshnessChips.innerHTML = [
+      ['12h','12h'],
+      ['24h','24h']
+    ].map(function(f){ return chipHtml(f[1], radarFreshness===f[0], "setRadarFreshness('"+f[0]+"')"); }).join('');
+  } else {
+    freshnessWrap.style.display = 'none';
+    freshnessChips.innerHTML = '';
+  }
+}
+
+function filt(f) {
   af = f;
-  document.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on');});
-  el.classList.add('on');
+  renderSourceFilters();
   render();
 }
 
 function switchTab(t) {
   activeTab = t;
   document.getElementById('tab-cards').classList.toggle('on', t==='cards');
+  document.getElementById('tab-radar').classList.toggle('on', t==='radar');
+  document.getElementById('tab-reddit').classList.toggle('on', t==='reddit');
+  document.getElementById('tab-official').classList.toggle('on', t==='official');
   document.getElementById('tab-heatmap').classList.toggle('on', t==='heatmap');
   document.getElementById('tab-search').classList.toggle('on', t==='search');
-  document.getElementById('grid').style.display = t==='cards' ? 'grid' : 'none';
+  var sourceTab = t==='cards' || t==='radar' || t==='reddit' || t==='official';
+  document.getElementById('grid').style.display = sourceTab ? 'grid' : 'none';
   document.getElementById('hmap-wrap').style.display = t==='heatmap' ? 'block' : 'none';
-  document.getElementById('filters-bar').style.display = t==='cards' ? 'flex' : 'none';
+  document.getElementById('filters-bar').style.display = sourceTab ? 'flex' : 'none';
   document.getElementById('search-bar').style.display = t==='search' ? 'flex' : 'none';
+  var topRefresh = document.getElementById('rbtn');
+  if (topRefresh) topRefresh.style.display = t==='cards' ? 'inline-flex' : 'none';
+  renderSourceFilters();
+  if (t==='cards') { setCardsForActiveTab(rssCards); return; }
+  if (t==='radar') { if (!radarCards.length) loadRadar(); else setCardsForActiveTab(radarCards); return; }
+  if (t==='reddit') { if (!redditLoaded) loadReddit(); else setCardsForActiveTab(redditCards); return; }
+  if (t==='official') { loadOfficial(); return; }
   if (t==='search') { document.getElementById('grid').style.display = 'grid'; document.getElementById('search-input').focus(); updateCreditsDisplay(); }
-  if (t==='heatmap') renderHeatmap();
+  if (t==='heatmap') { cards = rssCards; renderHeatmap(); }
 }
 
 function runSearch() {
@@ -5620,13 +5705,23 @@ function runSearch() {
 
 function render() {
   var grid = document.getElementById('grid');
-  var data = af==='all' ? cards : cards.filter(function(c){return c.cat===af;});
-  if (!data.length) { grid.innerHTML = '<div class="empty">No stories in this category.</div>'; return; }
+  var data = cards;
+  if (activeTab !== 'official') data = af==='all' ? cards : cards.filter(function(c){return c.cat===af;});
+  if (activeTab === 'official' && officialFilter !== 'all') data = cards.filter(function(c){return c.officialType===officialFilter;});
+  if (!data.length) {
+    grid.innerHTML = '<div class="empty">'+(activeTab === 'official' ? 'No official signals found yet. Try refreshing later.' : activeTab === 'reddit' ? 'No Reddit signals found yet. Try refreshing later.' : 'No stories in this category.')+'</div>';
+    updateStats();
+    return;
+  }
   grid.innerHTML = data.map(function(c) {
     var i = cards.indexOf(c);
     var bc = c.cat==='hiring'?'bh':c.cat==='layoffs'?'bl':c.cat==='expansion'?'be':c.cat==='investment'?'bi':c.cat==='policy'?'bp':'bg';
     return '<div class="card '+c.cat+'"><div class="ctop"><span class="badge '+bc+'">'+c.cat+'</span><div class="heat"><span class="hl2">Heat</span><div class="hbars">'+hbars(c.heat)+'</div><span class="hl2">'+c.heat+'/10</span></div></div><div class="ctitle">'+c.title+'</div><div class="csrc">'+c.src+' &middot; '+c.ago+'</div><div class="cbot"><span class="sent s'+c.sent[0]+'">'+c.sent+'</span><div style="display:flex;gap:6px"><a href="'+c.link+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--yd);font-weight:500;text-decoration:none">Read</a><button class="card-btn" style="background:var(--g2);color:var(--blk)" onclick="saveCard('+i+')">Save</button><button class="card-btn" style="background:var(--blk);color:var(--y)" onclick="openDraft('+i+')">Draft</button></div></div></div>';
   }).join('');
+  updateStats();
+}
+
+function updateStats() {
   document.getElementById('s0').textContent = cards.length;
   var freq = cards.reduce(function(a,b){a[b.cat]=(a[b.cat]||0)+1;return a;},{});
   var hot = Object.entries(freq).sort(function(a,b){return b[1]-a[1];})[0];
@@ -5694,6 +5789,145 @@ function fetchNews(q) {
         resolve(items);
       }).catch(function(){clearTimeout(t);resolve([]);});
   });
+}
+
+function normalizeWorkerCards(items, defaultSrc) {
+  var seen = {};
+  return (items||[]).map(function(i) {
+    var title = strip(i.title || i.name || i.headline || '');
+    var cat = i.cat || i.category || catFromTitle(title);
+    var pub = i.pub || i.pubDate || i.publishedAt || i.date || i.parsedDate || i.created_utc || '';
+    var link = i.link || i.url || i.article_url || i.sourceUrl || '#';
+    var src = i.domainurl || i.domainUrl || i.source_domain || i.source_name || i.source || i.src || defaultSrc || 'Source';
+    return {
+      title:title,
+      src:strip(src),
+      cat:cat,
+      pub:pub,
+      link:link,
+      sent:i.sent || sentiment(title),
+      heat:Number(i.heat || heatScore(pub, cat)),
+      ago:i.ago || ago(pub),
+      officialType:i.officialType || classifyOfficialType(i, title, src)
+    };
+  }).filter(function(i) {
+    if (!i.title || i.title.length <= 10) return false;
+    var key = (i.link && i.link !== '#') ? i.link : i.title.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  }).sort(function(a,b){return b.heat-a.heat;});
+}
+
+function workerResults(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  return data.results || data.items || data.articles || [];
+}
+
+function setRadarFreshness(f) {
+  radarFreshness = f;
+  renderSourceFilters();
+  loadRadar(true);
+}
+
+function loadRadar(force) {
+  if (activeTab !== 'radar') return;
+  var key = radarFreshness;
+  var now = Date.now();
+  if (!force && radarCache.key === key && radarCache.cards.length && now - radarCache.at < 5*60*1000) {
+    radarCards = radarCache.cards.slice();
+    setCardsForActiveTab(radarCards);
+    return;
+  }
+  var grid = document.getElementById('grid');
+  var btn = document.getElementById('radar-refresh');
+  if (btn) btn.disabled = true;
+  grid.innerHTML = '<div class="empty"><div class="spinner"></div><div>Searching global sources...</div></div>';
+  fetch(WORKER + '?scope=global&freshness=' + encodeURIComponent(radarFreshness))
+    .then(function(r){return r.json();})
+    .then(function(data) {
+      radarCards = normalizeWorkerCards(workerResults(data), 'Radar').slice(0,40);
+      radarCache = {key:key, at:Date.now(), cards:radarCards.slice()};
+      setCardsForActiveTab(radarCards);
+    }).catch(function() {
+      radarCards = [];
+      cards = radarCards;
+      grid.innerHTML = '<div class="empty">Radar search failed. Try refreshing later.</div>';
+      updateStats();
+    }).finally(function() {
+      if (btn) btn.disabled = false;
+    });
+}
+
+function loadReddit(force) {
+  if (activeTab !== 'reddit') return;
+  if (redditLoaded && !force) { setCardsForActiveTab(redditCards); return; }
+  var grid = document.getElementById('grid');
+  grid.innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching Reddit signals...</div></div>';
+  fetch(WORKER + '/reddit')
+    .then(function(r){return r.json();})
+    .then(function(data) {
+      redditLoaded = true;
+      redditCards = normalizeWorkerCards(workerResults(data), 'Reddit').slice(0,40);
+      setCardsForActiveTab(redditCards);
+    }).catch(function() {
+      redditLoaded = true;
+      redditCards = [];
+      cards = redditCards;
+      grid.innerHTML = '<div class="empty">No Reddit signals found yet. Try refreshing later.</div>';
+      updateStats();
+    });
+}
+
+function classifyOfficialType(item, title, src) {
+  var explicit = (item && (item.type || item.kind || item.sourceType || item.officialType) || '').toString().toLowerCase();
+  var text = (explicit + ' ' + title + ' ' + src).toLowerCase();
+  if (/annual|10-k|10k|annual report/.test(text)) return 'annual_reports';
+  if (/sec|8-k|6-k|10-q|edgar|filing/.test(text)) return 'sec_filings';
+  if (/labour|labor|pib|press information bureau|ministry/.test(text)) return 'labour_pib';
+  if (/result|quarter|earnings|financial results/.test(text)) return 'results';
+  return 'results';
+}
+
+function setOfficialFilter(f) {
+  officialFilter = f;
+  renderSourceFilters();
+  render();
+}
+
+function setOfficialFreshness(f) {
+  officialFreshness = f;
+  officialLoaded = false;
+  renderSourceFilters();
+  loadOfficial(true);
+}
+
+function loadOfficial(force) {
+  if (activeTab !== 'official') return;
+  if (officialLoaded && !force) { setCardsForActiveTab(officialCards); return; }
+  var grid = document.getElementById('grid');
+  var btn = document.getElementById('official-refresh');
+  if (btn) btn.disabled = true;
+  officialCards = [];
+  cards = officialCards;
+  grid.innerHTML = '<div class="empty"><div class="spinner"></div><div>Fetching official signals...</div></div>';
+  fetch(WORKER + '/official?freshness=' + encodeURIComponent(officialFreshness))
+    .then(function(r){return r.json();})
+    .then(function(data) {
+      officialLoaded = true;
+      officialCards = normalizeWorkerCards(workerResults(data), 'Official').slice(0,40);
+      cards = officialCards;
+      render();
+    }).catch(function() {
+      officialLoaded = true;
+      officialCards = [];
+      cards = officialCards;
+      grid.innerHTML = '<div class="empty">No official signals found yet. Try refreshing later.</div>';
+      updateStats();
+    }).finally(function() {
+      if (btn) btn.disabled = false;
+    });
 }
 
 // NewsData credits tracker (200/day free tier)
@@ -5795,7 +6029,7 @@ function loadAll() {
     WORKFORCE_KW.test(i.title) || trustedWorkSource
   );
 }).sort(function(a,b){return b.heat-a.heat;}).slice(0,40);
-    if (fresh.length) { cards = fresh; render(); document.getElementById('ts').textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
+    if (fresh.length) { rssCards = fresh; if (activeTab === 'cards') setCardsForActiveTab(rssCards); document.getElementById('ts').textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
     else loadFallback();
   }).catch(function(){loadFallback();}).then(function(){
     dot.classList.remove('spin'); btn.disabled = false;
@@ -5803,7 +6037,7 @@ function loadAll() {
 }
 
 function loadFallback() {
-  cards = [
+  rssCards = [
     {title:"TCS to hire 40,000 freshers in FY2026 amid demand recovery",src:'Economic Times',cat:'hiring',heat:9,sent:'positive',ago:'1h ago',link:'https://economictimes.indiatimes.com'},
     {title:"Byju's insolvency deepens as unpaid salaries cross Rs 1,400 crore",src:'Mint',cat:'layoffs',heat:10,sent:'negative',ago:'2h ago',link:'https://livemint.com'},
     {title:'Tata Motors to invest Rs 16,000 crore in new EV manufacturing lines',src:'Business Standard',cat:'investment',heat:9,sent:'positive',ago:'3h ago',link:'https://business-standard.com'},
@@ -5817,7 +6051,7 @@ function loadFallback() {
     {title:'Ola Electric lays off 600 engineers as EV sales miss projections',src:'Reuters',cat:'layoffs',heat:8,sent:'negative',ago:'1d ago',link:'https://reuters.com'},
     {title:'Mahindra announces Rs 12,000 crore capex for Chakan auto facility',src:'Economic Times',cat:'investment',heat:8,sent:'positive',ago:'1d ago',link:'https://economictimes.indiatimes.com'}
   ];
-  render();
+  if (activeTab === 'cards') setCardsForActiveTab(rssCards);
   var err = document.getElementById('err');
   document.getElementById('ts').textContent = 'Sample data';
   err.textContent = 'Could not fetch live news — showing sample data. Try refreshing.';
@@ -5825,6 +6059,7 @@ function loadFallback() {
 }
 
 function setWorkflowCard(card) {
+  workflowMode = 'long_form';
   workflowGeneratedDraftOnly = false;
   currentCard = card;
   workflowHasBriefStep = true;
@@ -5843,7 +6078,118 @@ function setWorkflowCard(card) {
   document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
   showWorkflowStep('brief');
 }
-function openDraft(idx) { _workflowSource = 'main'; setWorkflowCard(cards[idx]); }
+function generateNewsBrief(card) {
+  var steps = ['gs1','gs2','gs3','gs4'];
+  steps.forEach(function(s){ var el=document.getElementById(s); if(el){el.classList.remove('active');el.classList.remove('done');} });
+  var si = 0;
+  var anim = setInterval(function() {
+    if (si>0) { var prev=document.getElementById(steps[si-1]); if(prev){prev.classList.remove('active');prev.classList.add('done');} }
+    if (si<steps.length) { var el=document.getElementById(steps[si]); if(el) el.classList.add('active'); si++; }
+    else clearInterval(anim);
+  }, 900);
+  var prompt = `Write a reported Wocult news brief of 200-350 words.
+
+Source URL:
+${card.link || ''}
+
+Context:
+Headline: ${card.title || ''}
+Source: ${card.src || ''}
+
+Requirements:
+- Use the source URL as the factual basis.
+- Do not invent numbers, quotes, claims, company details, or context.
+- Keep it reported and concise, not opinionated.
+- Explain why this matters to working professionals.
+- Use plain English.
+- Body must be valid HTML paragraphs only.
+- Return ONLY valid JSON:
+{
+  "title":"clear news headline",
+  "slug":"url-safe-slug",
+  "shortIntro":"15-20 word summary",
+  "intro40":"about 40 words",
+  "excerpt":"about 60-90 words",
+  "introRichText":"<p>one short intro paragraph</p>",
+  "body":"<p>200-350 word news brief in HTML</p>",
+  "readTime":"2 min read"
+}`;
+  fetch(WORKER+'/generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      briefType:'news_brief',
+      model:'claude-sonnet-4-6',
+      max_tokens:1400,
+      tools:[{"type":"web_search_20250305","name":"web_search"}],
+      messages:[{role:'user',content:prompt}]
+    })
+  }).then(function(r){return r.json();}).then(function(data) {
+    clearInterval(anim);
+    steps.forEach(function(s){var el=document.getElementById(s); if(el){el.classList.remove('active');el.classList.add('done');}});
+    if (data.error) throw new Error(data.error.message || 'News brief generation failed');
+    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('').trim();
+    txt = txt.replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim();
+    var s = txt.indexOf('{');
+    var e = txt.lastIndexOf('}');
+    if (s !== -1 && e !== -1) txt = txt.slice(s,e+1);
+    generatedContent = JSON.parse(txt);
+    generatedContent.sourceUrl = card.link || '';
+    generatedContent.sourceTitle = card.title || '';
+    generatedContent.sourceName = card.src || '';
+    generatedContent.slug = generatedContent.slug || safeFileName(generatedContent.title || card.title || 'news-brief');
+    generatedContent.readTime = generatedContent.readTime || '2 min read';
+    populateNewsBriefReviewFields();
+    finishProceedToReview();
+  }).catch(function(e) {
+    clearInterval(anim);
+    alert('News brief failed: '+e.message);
+    showPreviousWorkflowScreen();
+  });
+}
+function populateNewsBriefReviewFields() {
+  document.getElementById('r-title').value = generatedContent.title || '';
+  document.getElementById('r-slug').value = generatedContent.slug || '';
+  document.getElementById('r-short').value = generatedContent.shortIntro || '';
+  document.getElementById('r-40').value = generatedContent.intro40 || '';
+  document.getElementById('r-excerpt').value = generatedContent.excerpt || '';
+  document.getElementById('r-intro-rt').value = generatedContent.introRichText || '';
+  document.getElementById('r-intro-render').innerHTML = generatedContent.introRichText || '';
+  document.getElementById('r-body').value = generatedContent.body || '';
+  document.getElementById('r-body-render').innerHTML = generatedContent.body || '';
+  document.getElementById('r-readtime').value = generatedContent.readTime || '2 min read';
+  document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
+  if (document.getElementById('r-writer-name')) document.getElementById('r-writer-name').value = (currentUser && currentUser.displayName) || 'Wocult Team';
+  updateReviewWordCount();
+}
+function openDraft(idx) {
+  var card = cards[idx];
+  if (!card) return;
+  var choice = prompt('Choose draft type:\n1. Long-form story\n2. News brief\n\nType 1 or 2. Leave blank to cancel.');
+  if (!choice) return;
+  choice = choice.trim().toLowerCase();
+  if (choice === '1' || choice.indexOf('long') === 0) { openLongFormDraft(card); return; }
+  if (choice === '2' || choice.indexOf('news') === 0 || choice.indexOf('brief') >= 0) { openNewsBriefDraft(card); return; }
+}
+function openLongFormDraft(card) { _workflowSource = 'main'; setWorkflowCard(card); }
+function openNewsBriefDraft(card) {
+  workflowMode = 'news_brief';
+  _workflowSource = 'main';
+  currentCard = Object.assign({}, card, {_url:card.link});
+  workflowHasBriefStep = false;
+  workflowPreviousLandingScreen = 'main';
+  workflowReviewPrepared = false;
+  currentWorkflowStep = '';
+  maxWorkflowStepReached = 1;
+  generatedContent = {};
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('workflow').style.display = 'block';
+  updateTopUpdatedVisibility(false);
+  document.documentElement.style.overflow = 'auto';
+  document.body.style.overflow = 'auto';
+  showWorkflowStep('generate');
+  generateNewsBrief(card);
+}
 function openDraftFromUrl() {
   var url = prompt('Paste the article URL:');
   if (!url) return;
@@ -6189,6 +6535,11 @@ function finishProceedToReview() {
   if (document.getElementById('publish-btn')) document.getElementById('publish-btn').textContent = currentAccessMode === 'guest_writer' ? 'Submit for review' : 'Submit';
   var backToRefineBtn = document.querySelector('#publish-actions button[onclick="showWorkflowStep(\'refine\')"]');
   if (backToRefineBtn) backToRefineBtn.style.display = 'inline-flex';
+  if (workflowMode === 'news_brief') {
+    if (backToRefineBtn) backToRefineBtn.style.display = 'none';
+    if (document.getElementById('publish-btn')) document.getElementById('publish-btn').textContent = 'Submit news brief';
+    return;
+  }
   if (currentAccessMode === 'guest_writer') {
     saveGuestWriterDraft('draft', {silent:true});
     return;
@@ -6597,6 +6948,10 @@ function submitArticle() {
     });
     return;
   }
+  if (workflowMode === 'news_brief') {
+    submitNewsBriefArticle(writerName);
+    return;
+  }
   var btn = document.getElementById('publish-btn');
   btn.disabled = true; btn.textContent = 'Submitting...';
   var bodyHtml = document.getElementById('r-body-render').innerHTML;
@@ -6639,6 +6994,74 @@ function submitArticle() {
   }).catch(function(e){ btn.disabled=false; btn.textContent='Submit'; fbToast('Error: '+e.message.substring(0,60), false); });
 }
 
+function collectNewsBriefData(writerName) {
+  var bodyHtml = document.getElementById('r-body-render').innerHTML;
+  var introHtml = document.getElementById('r-intro-render').innerHTML;
+  document.getElementById('r-body').value = bodyHtml;
+  document.getElementById('r-intro-rt').value = introHtml;
+  return {
+    title: document.getElementById('r-title').value,
+    slug: document.getElementById('r-slug').value,
+    shortIntro: document.getElementById('r-short').value,
+    intro40: document.getElementById('r-40').value,
+    excerpt: document.getElementById('r-excerpt').value,
+    introRichText: introHtml,
+    body: bodyHtml,
+    readTime: document.getElementById('r-readtime').value || '2 min read',
+    publishDate: document.getElementById('r-date').value,
+    writerName: writerName || 'Wocult Team',
+    sourceUrl: (generatedContent && generatedContent.sourceUrl) || (currentCard && currentCard.link) || '',
+    sourceTitle: (generatedContent && generatedContent.sourceTitle) || (currentCard && currentCard.title) || '',
+    sourceName: (generatedContent && generatedContent.sourceName) || (currentCard && currentCard.src) || '',
+    imageUrl: document.getElementById('r-img-url') ? document.getElementById('r-img-url').value : '',
+    status: 'submitted'
+  };
+}
+
+function buildNewsBriefFieldData(d) {
+  return {
+    name: d.title,
+    slug: d.slug,
+    excerpt: d.excerpt,
+    'story-intro-para': d.shortIntro,
+    'short-story-intro': d.shortIntro,
+    '40-word-intro': d.intro40,
+    'intro-rich-text': d.introRichText,
+    body: d.body,
+    'read-time': d.readTime,
+    'publish-date': d.publishDate ? new Date(d.publishDate).toISOString() : new Date().toISOString(),
+    'source-url': d.sourceUrl,
+    'source-title': d.sourceTitle,
+    'source-name': d.sourceName,
+    writer: d.writerName,
+    image: d.imageUrl
+  };
+}
+
+function submitNewsBriefArticle(writerName) {
+  var btn = document.getElementById('publish-btn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+  var newsData = collectNewsBriefData(writerName);
+  saveArticleToFirebase(Object.assign({}, newsData, {sourceType:'news_brief'}), 'submitted').then(function(docId) {
+    return fetch(WORKER + '/webflow-news', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({docId:docId, fieldData:buildNewsBriefFieldData(newsData), isDraft:true, isArchived:false})
+    });
+  }).then(function(r){ return r.json().then(function(d){return {ok:r.ok,data:d};}); }).then(function(res) {
+    if (!res.ok) throw new Error((res.data&&res.data.message)||JSON.stringify(res.data).substring(0,200));
+    document.getElementById('publish-result').style.display = 'block';
+    document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief submitted</div><div class="publish-sub">Saved to Firebase and published to Webflow News as draft.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
+    document.getElementById('publish-actions').style.display = 'none';
+  }).catch(function(e) {
+    fbToast('Error: '+e.message.substring(0,60), false);
+  }).finally(function() {
+    btn.disabled = false;
+    btn.textContent = 'Submit news brief';
+  });
+}
+
 function buildFieldData(d) {
   return {
     // TODO: Map writerName to Webflow once the CMS field slug is confirmed.
@@ -6676,6 +7099,7 @@ function autoDownloadCSV(data) {
 setupUnsavedChangeTracking();
 setupBrowserBackGuard();
 renderSaved();
+renderSourceFilters();
 loadAll();
 var accessKeyFromUrl = new URLSearchParams(window.location.search).get('key');
 var staffViewFromUrl = getStaffViewParams();
