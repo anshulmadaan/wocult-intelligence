@@ -88,6 +88,15 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .empty{text-align:center;padding:60px 20px;color:var(--g3);grid-column:1/-1}
 .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--g2);border-top-color:var(--y);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:760px){
+  .landing{padding:28px 14px}
+  .landing-cards{grid-template-columns:1fr!important}
+  .scratch-screen{max-width:100%!important}
+  #landing-editorial-calendar-editor .scratch-screen>div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}
+  #editorial-calendar-grid{min-width:860px!important}
+  .topbar{padding:0 12px;gap:8px}
+  .tbar-r{gap:6px}
+}
 #workflow{display:none;height:100vh;overflow-y:auto;background:#f5f0e8;padding-bottom:96px}
 .wf-header{background:var(--blk);padding:0 24px;height:52px;display:flex;align-items:center;gap:16px;border-bottom:3px solid var(--y);position:sticky;top:0;z-index:150}
 .wf-back{background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px}
@@ -522,12 +531,18 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       <div style="height:1px;background:var(--bdr);width:100%"></div>
       <section>
         <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Editorial tracker</h2>
-        <div class="landing-cards" style="grid-template-columns:1fr">
+        <div class="landing-cards" style="grid-template-columns:repeat(2,1fr)">
       <div class="lcard" onclick="showEditorialTracker()">
         <div class="lcard-icon">ET</div>
         <div class="lcard-title">Editorial tracker</div>
         <div class="lcard-desc">Track interviews, guest stories, and Wocult stories in one place.</div>
         <div class="lcard-cta">Open tracker</div>
+      </div>
+      <div class="lcard" onclick="showEditorialCalendar()">
+        <div class="lcard-icon">EC</div>
+        <div class="lcard-title">Editorial Calendar</div>
+        <div class="lcard-desc">Plan, schedule and manage Wocult content across channels.</div>
+        <div class="lcard-cta">Open calendar →</div>
       </div>
         </div>
       </section>
@@ -734,7 +749,10 @@ There are no right or wrong answers here. Please answer openly and in your own v
     <div class="scratch-screen" style="max-width:1120px">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
         <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">&larr; Back to staff dashboard</button>
-        <button class="btn" onclick="loadEditorialTracker({force:true})">Refresh</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="showEditorialCalendar()">Open Editorial Calendar</button>
+          <button class="btn" onclick="loadEditorialTracker({force:true})">Refresh</button>
+        </div>
       </div>
       <h2>Editorial tracker</h2>
       <p class="sub">Track interviews, guest stories, and Wocult stories in one place.</p>
@@ -806,6 +824,107 @@ There are no right or wrong answers here. Please answer openly and in your own v
           </div>
           <div id="editorial-tracker-overlay-body" style="padding:18px;color:var(--blk);font-size:14px;line-height:1.6"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Editorial calendar screen -->
+  <div id="landing-editorial-calendar" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:1180px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap">
+        <button onclick="editorialCalendarBackToDashboard()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">&larr; Back to staff dashboard</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="showEditorialTracker()">Open Editorial Tracker</button>
+          <button class="btn" onclick="editorialCalendarRefresh()">Refresh</button>
+          <button class="btn" onclick="editorialCalendarExportCsv()">Export visible month CSV</button>
+          <button class="btn btn-y" onclick="editorialCalendarOpenEditor(null)">Add entry</button>
+        </div>
+      </div>
+      <h2>Editorial Calendar</h2>
+      <p class="sub">Plan, schedule and manage Wocult content across channels.</p>
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn" onclick="editorialCalendarMoveMonth(-1)">Previous month</button>
+          <button class="btn" onclick="editorialCalendarToday()">Today</button>
+          <button class="btn" onclick="editorialCalendarMoveMonth(1)">Next month</button>
+          <strong id="editorial-calendar-month-label" style="font-family:Georgia,serif;font-size:18px;color:var(--blk)"></strong>
+          <button class="btn" id="editorial-calendar-return-current" onclick="editorialCalendarToday()" style="display:none">Return to current month</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:2fr repeat(4,minmax(140px,1fr)) auto;gap:10px;margin-bottom:12px;align-items:center">
+        <input id="editorial-calendar-search" class="saved-input" placeholder="Search calendar entries" oninput="editorialCalendarRender()" />
+        <select id="editorial-calendar-channel-filter" onchange="editorialCalendarRender()" style="padding:9px 10px;border:1px solid var(--g2);border-radius:7px;font-family:inherit;font-size:13px;background:#fff">
+          <option value="">All platforms</option><option>Wocult</option><option>LinkedIn</option><option>Instagram</option><option>Facebook</option>
+        </select>
+        <select id="editorial-calendar-type-filter" onchange="editorialCalendarRender()" style="padding:9px 10px;border:1px solid var(--g2);border-radius:7px;font-family:inherit;font-size:13px;background:#fff"></select>
+        <select id="editorial-calendar-owner-filter" onchange="editorialCalendarRender()" style="padding:9px 10px;border:1px solid var(--g2);border-radius:7px;font-family:inherit;font-size:13px;background:#fff"></select>
+        <select id="editorial-calendar-status-filter" onchange="editorialCalendarRender()" style="padding:9px 10px;border:1px solid var(--g2);border-radius:7px;font-family:inherit;font-size:13px;background:#fff">
+          <option value="">All statuses</option><option>Draft</option><option>Working</option><option>Ready</option><option>Scheduled</option><option>Published</option><option>Cancelled</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--g3)"><input type="checkbox" id="editorial-calendar-archived-filter" onchange="editorialCalendarRender()" /> Show archived</label>
+      </div>
+      <div id="editorial-calendar-status" class="hint" style="margin-bottom:10px">Loading calendar...</div>
+      <div style="overflow-x:auto;border:1px solid var(--bdr);border-radius:8px;background:#fff">
+        <div id="editorial-calendar-grid" style="min-width:980px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Editorial calendar entry editor -->
+  <div id="landing-editorial-calendar-editor" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:980px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap">
+        <button onclick="editorialCalendarLeaveEditor()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">&larr; Back to calendar</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="editorial-calendar-restore-btn" onclick="editorialCalendarRestoreArchivedEntry()" style="display:none">Restore</button>
+          <button class="btn" id="editorial-calendar-archive-btn" onclick="editorialCalendarArchiveEntry()">Archive</button>
+          <button class="btn" id="editorial-calendar-delete-btn" onclick="editorialCalendarDeleteEntry()" style="display:none;color:var(--red)">Delete permanently</button>
+        </div>
+      </div>
+      <h2 id="editorial-calendar-editor-title">Calendar entry</h2>
+      <div id="editorial-calendar-editor-status" class="hint" style="margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="sfield" style="grid-column:1/-1"><label>Title *</label><input id="ec-title" oninput="editorialCalendarEditorChanged()" /></div>
+        <div class="sfield"><label>Content type *</label><select id="ec-content-type" class="wf-input" onchange="editorialCalendarToggleOtherType();editorialCalendarEditorChanged()"></select></div>
+        <div class="sfield" id="ec-content-type-other-wrap" style="display:none"><label>Other content type</label><input id="ec-content-type-other" oninput="editorialCalendarEditorChanged()" /></div>
+        <div class="sfield"><label>Platform</label><div id="ec-channel-options" style="display:flex;gap:8px;flex-wrap:wrap"></div></div>
+        <div class="sfield"><label>Owner</label><input id="ec-owner" oninput="editorialCalendarEditorChanged()" /></div>
+        <div class="sfield"><label>Publish date *</label><input id="ec-publish-date" type="date" onchange="editorialCalendarEditorChanged()" /></div>
+        <div class="sfield"><label>Publish time</label><input id="ec-publish-time" type="time" onchange="editorialCalendarEditorChanged()" /></div>
+        <div class="sfield"><label>Status</label><select id="ec-status" class="wf-input" onchange="editorialCalendarEditorChanged()"><option>Draft</option><option>Working</option><option>Ready</option><option>Scheduled</option><option>Published</option><option>Cancelled</option></select></div>
+        <div class="sfield" style="grid-column:1/-1"><label>Notes / description <span id="ec-summary-count" style="font-weight:400;color:var(--g3)">0 / 500 words</span></label><textarea id="ec-summary" rows="6" oninput="editorialCalendarUpdateSummaryCount();editorialCalendarEditorChanged()"></textarea></div>
+        <div class="sfield" style="grid-column:1/-1">
+          <label>Image</label>
+          <input id="ec-image-url" placeholder="Paste image URL" oninput="editorialCalendarUpdateImagePreview();editorialCalendarEditorChanged()" />
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
+            <input id="ec-image-file" type="file" accept="image/*" onchange="editorialCalendarUploadImage(this.files && this.files[0]);this.value='';" />
+            <div id="ec-image-preview" class="hint">No image selected.</div>
+          </div>
+        </div>
+        <div class="sfield" style="grid-column:1/-1">
+          <label>Body</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;border:1px solid var(--bdr);border-bottom:none;border-radius:8px 8px 0 0;background:var(--gray);padding:7px">
+            <button type="button" class="btn" style="padding:4px 8px;font-size:12px" onclick="editorialCalendarExec('bold')">B</button>
+            <button type="button" class="btn" style="padding:4px 8px;font-size:12px;font-style:italic" onclick="editorialCalendarExec('italic')">I</button>
+            <button type="button" class="btn" style="padding:4px 8px;font-size:12px;text-decoration:underline" onclick="editorialCalendarExec('underline')">U</button>
+            <button type="button" class="btn" style="padding:4px 8px;font-size:12px" onclick="editorialCalendarExec('formatBlock','H2')">H2</button>
+            <button type="button" class="btn" style="padding:4px 8px;font-size:12px" onclick="editorialCalendarExec('insertUnorderedList')">List</button>
+            <button type="button" class="btn" style="padding:4px 8px;font-size:12px" onclick="editorialCalendarExec('insertOrderedList')">1.</button>
+            <button type="button" class="btn" style="padding:4px 8px;font-size:12px" onclick="editorialCalendarCreateLink()">Link</button>
+            <button type="button" class="btn" style="padding:4px 8px;font-size:12px" onclick="editorialCalendarExec('formatBlock','BLOCKQUOTE')">Quote</button>
+            <button type="button" class="btn" style="padding:4px 8px;font-size:12px" onclick="editorialCalendarExec('undo')">Undo</button>
+            <button type="button" class="btn" style="padding:4px 8px;font-size:12px" onclick="editorialCalendarExec('redo')">Redo</button>
+          </div>
+          <div id="ec-content-copy" contenteditable="true" oninput="editorialCalendarEditorChanged()" onpaste="editorialCalendarHandlePaste(event)" style="min-height:220px;border:1px solid var(--bdr);border-radius:0 0 8px 8px;background:#fff;padding:12px;font-size:14px;line-height:1.65;outline:none;overflow:auto"></div>
+        </div>
+      </div>
+      <div style="margin-top:18px;border-top:1px solid var(--bdr);padding-top:14px">
+        <h3 style="font-size:15px;margin-bottom:8px">Activity history</h3>
+        <div id="ec-activity-history" style="display:flex;flex-direction:column;gap:8px;color:var(--g3);font-size:13px"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+        <button class="btn-lg" onclick="editorialCalendarSaveEntry(false)" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Save</button>
+        <button class="btn-lg btn-y" onclick="editorialCalendarSaveEntry(true)" style="flex:1">Submit</button>
       </div>
     </div>
   </div>
@@ -1245,6 +1364,18 @@ window._blogComments = [];
 window._blogCommentsLoaded = false;
 window._blogCommentsLoading = false;
 window._blogCommentsPostFilter = 'all';
+var editorialCalendarState = {
+  month: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  entries: [],
+  linkedSourceKeys: {},
+  unsubscribe: null,
+  editorEntryId: '',
+  editorLoadedVersion: null,
+  editorOriginal: null,
+  editorDirty: false,
+  editorRecoveryKey: '',
+  searchOutsideMonth: false
+};
 
 function isStaffUser(user) {
   return !!(user && STAFF_EMAILS.indexOf((user.email || '').toLowerCase()) !== -1);
@@ -1262,7 +1393,7 @@ function guardStaffScreen() {
 }
 function enforceStaffScreenAccess() {
   if (isStaffUser(currentUser)) return;
-  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-unsent-admin','landing-blog-comments-admin','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
+  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-editorial-calendar','landing-editorial-calendar-editor','landing-unsent-admin','landing-blog-comments-admin','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
     var el = document.getElementById(id);
     return el && el.style.display !== 'none';
   });
@@ -1307,6 +1438,7 @@ function isDirtyTrackedTarget(target) {
     '#landing-scratch',
     '#landing-existing-draft',
     '#landing-prepare-interview',
+    '#landing-editorial-calendar-editor',
     '#guest-placeholder',
     '#guest-writer-registration',
     '#guest-writer-idea',
@@ -2545,6 +2677,787 @@ function showEditorialTracker() {
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-editorial-tracker').style.display = 'flex';
   loadEditorialTracker();
+}
+
+var EDITORIAL_CALENDAR_TYPES = ['Social post','News piece','Long view','Podcast','Radio','Interview','Profile piece','Opinion piece','Explainer','Newsletter','Video/Reel','Other'];
+var EDITORIAL_CALENDAR_CHANNELS = ['Wocult','LinkedIn','Instagram','Facebook'];
+var EDITORIAL_CALENDAR_STATUSES = ['Draft','Working','Ready','Scheduled','Published','Cancelled'];
+var EDITORIAL_CALENDAR_WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function showEditorialCalendar() {
+  if (!guardStaffScreen()) return;
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-editorial-calendar').style.display = 'flex';
+  editorialCalendarInitControls();
+  editorialCalendarStartLive();
+}
+function editorialCalendarBackToDashboard() {
+  editorialCalendarStopLive();
+  backToCards();
+}
+function editorialCalendarInitControls() {
+  var typeFilter = document.getElementById('editorial-calendar-type-filter');
+  if (typeFilter && !typeFilter.innerHTML) typeFilter.innerHTML = '<option value="">All content types</option>' + EDITORIAL_CALENDAR_TYPES.map(function(t){return '<option>'+escapeHtml(t)+'</option>';}).join('');
+  var typeSelect = document.getElementById('ec-content-type');
+  if (typeSelect && !typeSelect.innerHTML) typeSelect.innerHTML = EDITORIAL_CALENDAR_TYPES.map(function(t){return '<option>'+escapeHtml(t)+'</option>';}).join('');
+  var statusFilter = document.getElementById('editorial-calendar-status-filter');
+  if (statusFilter) statusFilter.innerHTML = '<option value="">All statuses</option>' + EDITORIAL_CALENDAR_STATUSES.map(function(s){return '<option>'+escapeHtml(s)+'</option>';}).join('');
+  var statusSelect = document.getElementById('ec-status');
+  if (statusSelect) statusSelect.innerHTML = EDITORIAL_CALENDAR_STATUSES.map(function(s){return '<option>'+escapeHtml(s)+'</option>';}).join('');
+  var channelWrap = document.getElementById('ec-channel-options');
+  if (channelWrap && !channelWrap.innerHTML) channelWrap.innerHTML = EDITORIAL_CALENDAR_CHANNELS.map(function(c) {
+    return '<label style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--g2);border-radius:999px;padding:6px 10px;background:#fff;font-size:12px"><input type="checkbox" value="'+escapeHtml(c)+'" onchange="editorialCalendarEditorChanged()" /> '+escapeHtml(c)+'</label>';
+  }).join('');
+}
+function editorialCalendarStopLive() {
+  if (editorialCalendarState.unsubscribe) {
+    editorialCalendarState.unsubscribe();
+    editorialCalendarState.unsubscribe = null;
+  }
+}
+function editorialCalendarStartLive() {
+  if (!guardStaffScreen() || !db) return;
+  if (editorialCalendarState.unsubscribe) {
+    editorialCalendarRender();
+    return;
+  }
+  var status = document.getElementById('editorial-calendar-status');
+  if (status) status.textContent = 'Loading calendar...';
+  editorialCalendarState.unsubscribe = db.collection('editorial_calendar').onSnapshot(function(snap) {
+    var entries = [];
+    editorialCalendarState.linkedSourceKeys = {};
+    snap.forEach(function(doc) {
+      var item = Object.assign({id:doc.id}, doc.data());
+      item._source = 'calendar';
+      if (item.originalCollection && item.originalRecordId) {
+        editorialCalendarState.linkedSourceKeys[item.originalCollection + ':' + item.originalRecordId] = item.id;
+      }
+      entries.push(item);
+    });
+    editorialCalendarState.entries = entries;
+    editorialCalendarLoadExistingRecords().then(function() {
+      editorialCalendarRefreshOwnerFilter();
+      editorialCalendarRender();
+    });
+  }, function(err) {
+    if (status) status.textContent = 'Could not load calendar: '+err.message;
+  });
+}
+function editorialCalendarRefresh() {
+  editorialCalendarStopLive();
+  editorialCalendarState.entries = [];
+  editorialCalendarStartLive();
+}
+function editorialCalendarToday() {
+  var now = new Date();
+  editorialCalendarState.month = new Date(now.getFullYear(), now.getMonth(), 1);
+  editorialCalendarState.searchOutsideMonth = false;
+  editorialCalendarRender();
+}
+function editorialCalendarMoveMonth(delta) {
+  var m = editorialCalendarState.month;
+  editorialCalendarState.month = new Date(m.getFullYear(), m.getMonth()+delta, 1);
+  editorialCalendarState.searchOutsideMonth = false;
+  editorialCalendarRender();
+}
+function editorialCalendarDateKey(date) {
+  if (!date) return '';
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  var d = date.toDate ? date.toDate() : (date.seconds ? new Date(date.seconds*1000) : new Date(date));
+  if (!d || isNaN(d.getTime())) return '';
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function editorialCalendarTimeLabel(time) {
+  if (!time) return '';
+  var parts = String(time).split(':');
+  var h = parseInt(parts[0] || '0', 10);
+  var m = parseInt(parts[1] || '0', 10);
+  if (isNaN(h)) return '';
+  var suffix = h >= 12 ? 'PM' : 'AM';
+  var hour = h % 12 || 12;
+  return hour + ':' + String(m || 0).padStart(2,'0') + ' ' + suffix;
+}
+function editorialCalendarTimestampMillis(value) {
+  if (!value) return 0;
+  if (value.toDate) return value.toDate().getTime();
+  if (value.seconds) return value.seconds * 1000;
+  var t = new Date(value).getTime();
+  return isNaN(t) ? 0 : t;
+}
+function editorialCalendarMonthBounds(month) {
+  var start = new Date(month.getFullYear(), month.getMonth(), 1);
+  var end = new Date(month.getFullYear(), month.getMonth()+1, 0);
+  return {start:editorialCalendarDateKey(start), end:editorialCalendarDateKey(end)};
+}
+function editorialCalendarSelectedValues(id) {
+  var el = document.getElementById(id);
+  if (!el) return [];
+  return Array.prototype.slice.call(el.selectedOptions || []).map(function(o){return o.value;}).filter(Boolean);
+}
+function editorialCalendarEntrySearchText(entry) {
+  return [
+    entry.title, entry.summary, stripHtml(entry.contentCopy || ''), entry.creatorName, entry.creatorEmail, entry.owner,
+    (entry.channels || []).join(' '), entry.contentType, entry.status, entry.sourceUrl, entry.publishedUrl, entry.contentGroup
+  ].join(' ').toLowerCase();
+}
+function editorialCalendarBaseEntries() {
+  return editorialCalendarExpandRecurring(editorialCalendarState.entries || []);
+}
+function editorialCalendarFilteredEntries() {
+  var query = (document.getElementById('editorial-calendar-search') ? document.getElementById('editorial-calendar-search').value.trim().toLowerCase() : '');
+  if (!query) editorialCalendarState.searchOutsideMonth = false;
+  var channels = editorialCalendarSelectedValues('editorial-calendar-channel-filter');
+  var types = editorialCalendarSelectedValues('editorial-calendar-type-filter');
+  var owners = editorialCalendarSelectedValues('editorial-calendar-owner-filter');
+  var statuses = editorialCalendarSelectedValues('editorial-calendar-status-filter');
+  var showArchived = document.getElementById('editorial-calendar-archived-filter') && document.getElementById('editorial-calendar-archived-filter').checked;
+  var entries = editorialCalendarBaseEntries().filter(function(entry) {
+    if (!showArchived && entry.archived) return false;
+    if (showArchived && !entry.archived) return false;
+    if (query && editorialCalendarEntrySearchText(entry).indexOf(query) === -1) return false;
+    if (channels.length && !(entry.channels || []).some(function(c){return channels.indexOf(c) !== -1;})) return false;
+    if (types.length && types.indexOf(entry.contentType || '') === -1) return false;
+    if (owners.length && owners.indexOf(entry.owner || '') === -1) return false;
+    if (statuses.length && statuses.indexOf(entry.status || 'Draft') === -1) return false;
+    return true;
+  });
+  if (query) {
+    var bounds = editorialCalendarMonthBounds(editorialCalendarState.month);
+    var hasVisibleMonth = entries.some(function(e){ var d = editorialCalendarDateKey(e.publishDate); return d >= bounds.start && d <= bounds.end; });
+    if (!hasVisibleMonth && entries.length) {
+      var firstDate = editorialCalendarDateKey(entries[0].publishDate);
+      if (firstDate) {
+        var parts = firstDate.split('-');
+        editorialCalendarState.month = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, 1);
+        editorialCalendarState.searchOutsideMonth = true;
+      }
+    }
+  }
+  return entries;
+}
+function editorialCalendarRefreshOwnerFilter() {
+  var select = document.getElementById('editorial-calendar-owner-filter');
+  if (!select) return;
+  var selected = select.value || '';
+  var owners = {};
+  (editorialCalendarState.entries || []).forEach(function(e){ if (e.owner) owners[e.owner] = true; });
+  select.innerHTML = '<option value="">All owners</option>' + Object.keys(owners).sort().map(function(owner) {
+    return '<option '+(selected === owner ? 'selected' : '')+'>'+escapeHtml(owner)+'</option>';
+  }).join('');
+}
+function editorialCalendarRender() {
+  var grid = document.getElementById('editorial-calendar-grid');
+  var label = document.getElementById('editorial-calendar-month-label');
+  var status = document.getElementById('editorial-calendar-status');
+  var returnBtn = document.getElementById('editorial-calendar-return-current');
+  if (!grid) return;
+  var month = editorialCalendarState.month;
+  if (label) label.textContent = month.toLocaleDateString('en-IN', {month:'long', year:'numeric', timeZone:'Asia/Kolkata'});
+  if (returnBtn) returnBtn.style.display = editorialCalendarState.searchOutsideMonth ? 'inline-flex' : 'none';
+  var filtered = editorialCalendarFilteredEntries();
+  var bounds = editorialCalendarMonthBounds(month);
+  var monthEntries = filtered.filter(function(e) {
+    var key = editorialCalendarDateKey(e.publishDate);
+    return key >= bounds.start && key <= bounds.end;
+  });
+  if (status) status.textContent = monthEntries.length + ' item(s) shown for this month.';
+  var first = new Date(month.getFullYear(), month.getMonth(), 1);
+  var start = new Date(first);
+  start.setDate(first.getDate() - first.getDay());
+  var html = '<div style="display:grid;grid-template-columns:repeat(7,minmax(140px,1fr));border-bottom:1px solid var(--bdr);background:var(--gray);font-size:12px;font-weight:700;color:var(--g3)">';
+  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function(day){ html += '<div style="padding:9px;border-right:1px solid var(--bdr)">'+day+'</div>'; });
+  html += '</div><div style="display:grid;grid-template-columns:repeat(7,minmax(140px,1fr));grid-auto-rows:minmax(136px,auto)">';
+  for (var i=0;i<42;i++) {
+    var d = new Date(start);
+    d.setDate(start.getDate()+i);
+    var key = editorialCalendarDateKey(d);
+    var inMonth = d.getMonth() === month.getMonth();
+    var dayEntries = monthEntries.filter(function(e){ return editorialCalendarDateKey(e.publishDate) === key; }).sort(editorialCalendarEntrySort);
+    html += '<div style="padding:8px;border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);background:'+(inMonth?'#fff':'#fafafa')+';min-height:136px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:12px;font-weight:700;color:'+(inMonth?'var(--blk)':'var(--g3)')+'">'+d.getDate()+'</span><button class="btn" style="font-size:11px;padding:3px 7px" onclick="editorialCalendarOpenEditor(null,\''+key+'\')">+</button></div>';
+    dayEntries.slice(0,3).forEach(function(entry) { html += editorialCalendarEntryChipHtml(entry); });
+    if (dayEntries.length > 3) html += '<button class="btn" style="font-size:11px;padding:4px 7px;margin-top:4px" onclick="editorialCalendarShowDayMore(\''+key+'\')">+'+(dayEntries.length-3)+' more</button>';
+    html += '</div>';
+  }
+  html += '</div>';
+  grid.innerHTML = html;
+}
+function editorialCalendarEntrySort(a,b) {
+  var at = a.publishTime || '';
+  var bt = b.publishTime || '';
+  if (at && !bt) return -1;
+  if (!at && bt) return 1;
+  if (at && bt) return at.localeCompare(bt);
+  return (a.title || '').localeCompare(b.title || '');
+}
+function editorialCalendarStatusColor(status) {
+  if (status === 'Published') return '#16a34a';
+  if (status === 'Scheduled') return '#2563eb';
+  if (status === 'Ready') return '#7c3aed';
+  if (status === 'Working') return '#f59e0b';
+  if (status === 'Cancelled') return '#9ca3af';
+  return '#f59e0b';
+}
+function editorialCalendarStatusFromExisting(status) {
+  var s = String(status || '').toLowerCase();
+  if (s.indexOf('publish') !== -1 || s === 'final' || s === 'finalsubmitted') return 'Published';
+  if (s.indexOf('sched') !== -1) return 'Scheduled';
+  if (s.indexOf('ready') !== -1 || s === 'approved') return 'Ready';
+  if (s.indexOf('work') !== -1 || s.indexOf('progress') !== -1 || s.indexOf('review') !== -1) return 'Working';
+  if (s.indexOf('cancel') !== -1) return 'Cancelled';
+  return 'Draft';
+}
+function editorialCalendarEntryChipHtml(entry) {
+  var color = editorialCalendarStatusColor(entry.status || 'Draft');
+  var time = editorialCalendarTimeLabel(entry.publishTime);
+  var channels = (entry.channels || []).map(function(c){return '<span style="font-size:9px;border:1px solid var(--g2);border-radius:999px;padding:1px 5px;background:#fff">'+escapeHtml(c)+'</span>';}).join(' ');
+  return '<div onclick="editorialCalendarOpenEditor(\''+escapeHtml(entry.id)+'\',null,\''+escapeHtml(entry.occurrenceDate || '')+'\')" style="cursor:pointer;border-left:4px solid '+color+';background:#fffdf7;border-top:1px solid var(--bdr);border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);border-radius:6px;padding:6px;margin-bottom:5px">'
+    + '<div style="font-size:11px;font-weight:700;color:var(--blk);line-height:1.3">'+(time ? '<span style="color:var(--g3);font-weight:600">'+time+'</span> ' : '')+escapeHtml(entry.title || 'Untitled')+'</div>'
+    + '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"><span style="font-size:9px;border-radius:999px;padding:1px 5px;background:var(--gray);border:1px solid var(--g2)">'+escapeHtml(entry.contentType || 'Other')+'</span>'+channels+'</div>'
+    + '</div>';
+}
+function editorialCalendarShowDayMore(dateKey) {
+  var entries = editorialCalendarFilteredEntries().filter(function(e){return editorialCalendarDateKey(e.publishDate) === dateKey;}).sort(editorialCalendarEntrySort);
+  alert(entries.map(function(e){return (editorialCalendarTimeLabel(e.publishTime) ? editorialCalendarTimeLabel(e.publishTime)+' · ' : '') + (e.title || 'Untitled');}).join('\n'));
+}
+function editorialCalendarDefaultEntry(dateKey) {
+  var user = currentUser || {};
+  return {
+    title:'',
+    contentType:'Social post',
+    channels:[],
+    summary:'',
+    contentCopy:'',
+    imageUrl:'',
+    creatorUid:user.uid || '',
+    creatorEmail:user.email || '',
+    creatorName:user.displayName || user.email || 'Wocult editor',
+    owner:user.displayName || user.email || 'Wocult editor',
+    publishDate:dateKey || editorialCalendarDateKey(new Date()),
+    publishTime:'',
+    status:'Draft',
+    sourceUrl:'',
+    publishedUrl:'',
+    contentGroup:'',
+    recurrence:{frequency:'None', weekdays:[], endDate:'', count:''},
+    archived:false
+  };
+}
+function editorialCalendarOpenEditor(entryId, dateKey, occurrenceDate) {
+  if (!guardStaffScreen()) return;
+  editorialCalendarInitControls();
+  var entry = null;
+  if (entryId) entry = editorialCalendarBaseEntries().find(function(e){return e.id === entryId && (!occurrenceDate || e.occurrenceDate === occurrenceDate);});
+  if (entry && entry._recurrenceVirtual) {
+    var choice = prompt('Recurring entry. Type 1 for this occurrence, 2 for this and future occurrences, or 3 for entire series.', '1');
+    if (choice === '1') {
+      entry = Object.assign({}, entry, {id:'', recurrenceMasterId:entry.recurrenceMasterId || entry.masterId, occurrenceDate:entry.occurrenceDate, isOccurrenceOverride:true, recurrence:{frequency:'None', weekdays:[], endDate:'', count:''}});
+    } else if (choice === '2') {
+      entry = Object.assign({}, entry, {publishDate:entry.occurrenceDate, recurrenceStartDate:entry.occurrenceDate});
+    } else if (choice !== '3') {
+      return;
+    } else {
+      entry = (editorialCalendarState.entries || []).find(function(e){return e.id === (entry.masterId || entry.recurrenceMasterId);}) || entry;
+    }
+  }
+  if (entry && entry._virtualLinked) {
+    var key = entry.originalCollection + ':' + entry.originalRecordId;
+    var existingId = editorialCalendarState.linkedSourceKeys[key];
+    if (existingId) {
+      var dup = prompt('This original record already has a calendar entry. Type 1 to open existing calendar entry, 2 to create another channel version, or 3 to cancel.', '1');
+      if (dup === '1') return editorialCalendarOpenEditor(existingId);
+      if (dup === '3') return;
+    }
+  }
+  entry = entry ? Object.assign({}, entry) : editorialCalendarDefaultEntry(dateKey);
+  editorialCalendarState.editorEntryId = entry.id && !entry._virtualLinked ? entry.id : '';
+  editorialCalendarState.editorOriginal = entry;
+  editorialCalendarState.editorLoadedVersion = editorialCalendarTimestampMillis(entry.updatedAt);
+  editorialCalendarState.editorDirty = false;
+  editorialCalendarState.editorRecoveryKey = 'wocult_ec_recovery_' + (editorialCalendarState.editorEntryId || 'new');
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-editorial-calendar-editor').style.display = 'flex';
+  editorialCalendarPopulateEditor(entry);
+  editorialCalendarLoadActivity(entry.id);
+  editorialCalendarCheckRecovery();
+}
+function editorialCalendarPopulateEditor(entry) {
+  document.getElementById('editorial-calendar-editor-title').textContent = entry.id ? 'Edit calendar entry' : 'Add calendar entry';
+  document.getElementById('ec-title').value = entry.title || '';
+  document.getElementById('ec-content-type').value = EDITORIAL_CALENDAR_TYPES.indexOf(entry.contentType) !== -1 ? entry.contentType : 'Other';
+  document.getElementById('ec-content-type-other').value = EDITORIAL_CALENDAR_TYPES.indexOf(entry.contentType) !== -1 ? '' : (entry.contentType || '');
+  editorialCalendarToggleOtherType();
+  Array.prototype.slice.call(document.querySelectorAll('#ec-channel-options input')).forEach(function(cb){ cb.checked = (entry.channels || []).indexOf(cb.value) !== -1; });
+  document.getElementById('ec-summary').value = entry.summary || '';
+  document.getElementById('ec-owner').value = entry.owner || entry.creatorName || '';
+  document.getElementById('ec-publish-date').value = editorialCalendarDateKey(entry.publishDate);
+  document.getElementById('ec-publish-time').value = entry.publishTime || '';
+  document.getElementById('ec-status').value = EDITORIAL_CALENDAR_STATUSES.indexOf(entry.status) !== -1 ? entry.status : 'Draft';
+  var imageInput = document.getElementById('ec-image-url');
+  if (imageInput) imageInput.value = entry.imageUrl || entry.image || entry.coverImage || entry.thumbnail || '';
+  editorialCalendarUpdateImagePreview();
+  var bodyEditor = document.getElementById('ec-content-copy');
+  if (bodyEditor) bodyEditor.innerHTML = editorialCalendarSanitizeHtml(entry.contentCopy || entry.body || entry.description || entry.richTextBody || entry.content || '');
+  editorialCalendarUpdateSummaryCount();
+  document.getElementById('editorial-calendar-archive-btn').style.display = entry.id && !entry.archived ? 'inline-flex' : 'none';
+  document.getElementById('editorial-calendar-restore-btn').style.display = entry.id && entry.archived ? 'inline-flex' : 'none';
+  document.getElementById('editorial-calendar-delete-btn').style.display = entry.id && entry.archived ? 'inline-flex' : 'none';
+  var status = document.getElementById('editorial-calendar-editor-status');
+  if (status) status.textContent = '';
+}
+function editorialCalendarToggleOtherType() {
+  var wrap = document.getElementById('ec-content-type-other-wrap');
+  var sel = document.getElementById('ec-content-type');
+  if (wrap && sel) wrap.style.display = sel.value === 'Other' ? 'block' : 'none';
+}
+function editorialCalendarToggleRecurrence() {
+  var freqEl = document.getElementById('ec-recurrence-frequency');
+  var wrap = document.getElementById('ec-recurrence-weekdays-wrap');
+  if (!freqEl || !wrap) return;
+  wrap.style.display = freqEl.value === 'Custom weekday selection' ? 'block' : 'none';
+}
+function editorialCalendarUpdateSummaryCount() {
+  var text = document.getElementById('ec-summary').value || '';
+  var count = text.trim() ? text.trim().split(/\s+/).length : 0;
+  document.getElementById('ec-summary-count').textContent = count + ' / 500 words';
+  document.getElementById('ec-summary-count').style.color = count > 500 ? 'var(--red)' : 'var(--g3)';
+}
+function editorialCalendarEditorChanged() {
+  editorialCalendarState.editorDirty = true;
+  markUnsavedChanges();
+  clearTimeout(editorialCalendarState.recoveryTimer);
+  editorialCalendarState.recoveryTimer = setTimeout(editorialCalendarSaveRecovery, 700);
+}
+function editorialCalendarSaveRecovery() {
+  if (!editorialCalendarState.editorRecoveryKey) return;
+  try { localStorage.setItem(editorialCalendarState.editorRecoveryKey, JSON.stringify(editorialCalendarCollectEditorData(false))); } catch(e) {}
+}
+function editorialCalendarCheckRecovery() {
+  var key = editorialCalendarState.editorRecoveryKey;
+  if (!key) return;
+  var raw = null;
+  try { raw = localStorage.getItem(key); } catch(e) {}
+  if (!raw) return;
+  if (confirm('A local recovery copy is available. Restore it?')) {
+    try { editorialCalendarPopulateEditor(Object.assign({}, editorialCalendarState.editorOriginal || {}, JSON.parse(raw))); editorialCalendarState.editorDirty = true; } catch(e) {}
+  }
+}
+function editorialCalendarClearRecovery() {
+  try { if (editorialCalendarState.editorRecoveryKey) localStorage.removeItem(editorialCalendarState.editorRecoveryKey); } catch(e) {}
+}
+function editorialCalendarCollectEditorData(validate) {
+  var title = document.getElementById('ec-title').value.trim();
+  var type = document.getElementById('ec-content-type').value;
+  if (type === 'Other') type = document.getElementById('ec-content-type-other').value.trim() || 'Other';
+  var channels = Array.prototype.slice.call(document.querySelectorAll('#ec-channel-options input:checked')).map(function(cb){return cb.value;});
+  var summary = document.getElementById('ec-summary').value.trim();
+  var user = currentUser || {};
+  var original = editorialCalendarState.editorOriginal || {};
+  var bodyEditor = document.getElementById('ec-content-copy');
+  var contentCopy = bodyEditor ? editorialCalendarSanitizeHtml(bodyEditor.innerHTML).trim() : (original.contentCopy || '');
+  var imageInput = document.getElementById('ec-image-url');
+  var imageUrl = imageInput ? imageInput.value.trim() : (original.imageUrl || '');
+  var summaryWords = summary ? summary.split(/\s+/).length : 0;
+  var publishDate = document.getElementById('ec-publish-date').value;
+  if (validate) {
+    if (!title) throw new Error('Title is required.');
+    if (!type) throw new Error('Content type is required.');
+    if (!publishDate) throw new Error('Publish date is required.');
+    if (summaryWords > 500) throw new Error('Brief summary must be 500 words or fewer.');
+  }
+  return {
+    title:title,
+    contentType:type,
+    channels:channels,
+    summary:summary,
+    contentCopy:contentCopy,
+    imageUrl:imageUrl,
+    creatorUid:original.creatorUid || user.uid || '',
+    creatorEmail:original.creatorEmail || user.email || '',
+    creatorName:original.creatorName || user.displayName || user.email || 'Wocult editor',
+    owner:document.getElementById('ec-owner').value.trim() || user.displayName || user.email || 'Wocult editor',
+    publishDate:publishDate,
+    publishTime:document.getElementById('ec-publish-time').value,
+    status:EDITORIAL_CALENDAR_STATUSES.indexOf(document.getElementById('ec-status').value) !== -1 ? document.getElementById('ec-status').value : 'Draft',
+    sourceUrl:original.sourceUrl || '',
+    publishedUrl:original.publishedUrl || '',
+    contentGroup:original.contentGroup || '',
+    originalCollection:original.originalCollection || '',
+    originalRecordId:original.originalRecordId || '',
+    originalRecordLink:original.originalRecordLink || '',
+    recurrenceStartDate:original.recurrenceStartDate || '',
+    recurrence:original.recurrence || {frequency:'None', weekdays:[], endDate:'', count:''},
+    recurrenceMasterId:original.recurrenceMasterId || '',
+    occurrenceDate:original.occurrenceDate || '',
+    isOccurrenceOverride:original.isOccurrenceOverride || false,
+    archived:!!original.archived
+  };
+}
+function editorialCalendarSanitizeHtml(html) {
+  var div = document.createElement('div');
+  div.innerHTML = String(html || '');
+  div.querySelectorAll('script,style,iframe,object,embed,meta,link').forEach(function(el){ el.remove(); });
+  div.querySelectorAll('*').forEach(function(el) {
+    Array.prototype.slice.call(el.attributes).forEach(function(attr) {
+      var name = attr.name.toLowerCase();
+      if (name.indexOf('on') === 0 || name === 'style' || name === 'class') el.removeAttribute(attr.name);
+      if ((name === 'href' || name === 'src') && /^javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
+    });
+  });
+  return div.innerHTML;
+}
+function editorialCalendarHandlePaste(event) {
+  setTimeout(function(){
+    var editor = document.getElementById('ec-content-copy');
+    if (!editor) return;
+    editor.innerHTML = editorialCalendarSanitizeHtml(editor.innerHTML);
+    editorialCalendarEditorChanged();
+  }, 0);
+}
+function editorialCalendarExec(cmd, value) {
+  document.execCommand(cmd, false, value || null);
+  editorialCalendarEditorChanged();
+}
+function editorialCalendarCreateLink() {
+  var url = prompt('Paste URL:');
+  if (!url) return;
+  editorialCalendarExec('createLink', url);
+}
+function editorialCalendarSaveEntry(submitAndReturn) {
+  if (!guardStaffScreen() || !db) return;
+  var statusEl = document.getElementById('editorial-calendar-editor-status');
+  var data;
+  try { data = editorialCalendarCollectEditorData(true); } catch(err) { alert(err.message); return; }
+  var id = editorialCalendarState.editorEntryId;
+  var ref = id ? db.collection('editorial_calendar').doc(id) : db.collection('editorial_calendar').doc();
+  var original = editorialCalendarState.editorOriginal || {};
+  var writeData = Object.assign({}, data, {
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy:currentUser && currentUser.email || '',
+    updatedByUid:currentUser && currentUser.uid || ''
+  });
+  if (!id) {
+    writeData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    writeData.createdBy = currentUser && currentUser.email || '';
+    writeData.createdByUid = currentUser && currentUser.uid || '';
+  }
+  ['sourceUrl','publishedUrl','contentGroup','recurrence','recurrenceStartDate','recurrenceMasterId','occurrenceDate','isOccurrenceOverride'].forEach(function(key) {
+    delete writeData[key];
+  });
+  function doWrite(overwrite) {
+    return ref.set(writeData, {merge:true}).then(function() {
+      editorialCalendarState.editorEntryId = ref.id;
+      editorialCalendarState.editorDirty = false;
+      clearUnsavedChanges();
+      editorialCalendarClearRecovery();
+      return editorialCalendarLogActivity(ref.id, id ? 'Updated entry' : 'Created entry', editorialCalendarActivityDetails(original, data));
+    }).then(function() {
+      if (data.originalCollection && data.originalRecordId && original.publishDate && data.publishDate !== editorialCalendarDateKey(original.publishDate)) {
+        if (confirm('Publish date changed. Update the linked original record too?')) return editorialCalendarUpdateOriginalPublishDate(data);
+      }
+    }).then(function() {
+      if (statusEl) statusEl.textContent = 'Saved.';
+      fbToast('Saved');
+      if (submitAndReturn) showEditorialCalendar();
+      else {
+        editorialCalendarState.editorOriginal = Object.assign({id:ref.id}, data);
+        editorialCalendarState.editorLoadedVersion = Date.now();
+        editorialCalendarState.editorRecoveryKey = 'wocult_ec_recovery_' + ref.id;
+        document.getElementById('editorial-calendar-archive-btn').style.display = 'inline-flex';
+        editorialCalendarLoadActivity(ref.id);
+      }
+    });
+  }
+  var conflictCheck = id ? ref.get().then(function(doc) {
+    var latest = doc.exists ? editorialCalendarTimestampMillis(doc.data().updatedAt) : 0;
+    if (latest && editorialCalendarState.editorLoadedVersion && latest > editorialCalendarState.editorLoadedVersion) {
+      var choice = prompt('Another user changed this entry. Type 1 to reload latest version or 2 to overwrite anyway.', '1');
+      if (choice === '1') { editorialCalendarOpenEditor(id); throw new Error('Reloaded latest version.'); }
+      if (choice !== '2') throw new Error('Save cancelled.');
+    }
+  }) : Promise.resolve();
+  conflictCheck.then(function(){ return doWrite(); }).catch(function(err) {
+    if (err.message === 'Reloaded latest version.' || err.message === 'Save cancelled.') return;
+    if (statusEl) statusEl.textContent = 'Could not save: '+err.message;
+    alert('Could not save calendar entry: '+err.message);
+  });
+}
+function editorialCalendarSyncOccurrences(entryId, data) {
+  if (!entryId || !db || !data.recurrence || data.recurrence.frequency === 'None') return Promise.resolve();
+  var rec = data.recurrence;
+  var startKey = editorialCalendarDateKey(data.publishDate);
+  if (!startKey) return Promise.resolve();
+  var start = new Date(startKey + 'T00:00:00');
+  var end = rec.endDate ? new Date(rec.endDate + 'T00:00:00') : new Date(start);
+  if (!rec.endDate) end.setMonth(end.getMonth()+3);
+  var limit = Math.min(parseInt(rec.count || '0', 10) || 30, 60);
+  var batch = db.batch();
+  var cursor = new Date(start);
+  var count = 0;
+  var writes = 0;
+  while (cursor <= end && count < limit) {
+    var key = editorialCalendarDateKey(cursor);
+    if (key !== startKey && (rec.frequency !== 'Custom weekday selection' || (rec.weekdays || []).indexOf(cursor.getDay()) !== -1)) {
+      var ref = db.collection('editorial_calendar').doc(entryId).collection('occurrences').doc(key);
+      batch.set(ref, {
+        masterId:entryId,
+        occurrenceDate:key,
+        publishDate:key,
+        publishTime:data.publishTime || '',
+        status:data.status || 'Draft',
+        lightweight:true,
+        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+      }, {merge:true});
+      writes++;
+    }
+    count++;
+    if (rec.frequency === 'Daily' || rec.frequency === 'Custom weekday selection') cursor.setDate(cursor.getDate()+1);
+    else if (rec.frequency === 'Weekly') cursor.setDate(cursor.getDate()+7);
+    else if (rec.frequency === 'Every two weeks') cursor.setDate(cursor.getDate()+14);
+    else if (rec.frequency === 'Monthly') cursor.setMonth(cursor.getMonth()+1);
+    else break;
+  }
+  if (!writes) return Promise.resolve();
+  return batch.commit().then(function(){ return editorialCalendarLogActivity(entryId, 'Recurrence changes', 'Synced lightweight occurrence records'); });
+}
+function editorialCalendarActivityDetails(before, after) {
+  var parts = [];
+  if (!before || !before.id) parts.push('Created by '+((currentUser && currentUser.email) || 'staff'));
+  if (before && before.status && before.status !== after.status) parts.push('Status: '+before.status+' → '+after.status);
+  if (before && before.publishDate && editorialCalendarDateKey(before.publishDate) !== after.publishDate) parts.push('Publish date: '+editorialCalendarDateKey(before.publishDate)+' → '+after.publishDate);
+  if (before && before.recurrence && JSON.stringify(before.recurrence) !== JSON.stringify(after.recurrence)) parts.push('Recurrence changed');
+  return parts.join('; ');
+}
+function editorialCalendarLogActivity(entryId, action, details) {
+  if (!entryId || !db) return Promise.resolve();
+  return db.collection('editorial_calendar').doc(entryId).collection('activity').add({
+    action:action,
+    details:details || '',
+    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy:currentUser && currentUser.email || '',
+    createdByUid:currentUser && currentUser.uid || ''
+  });
+}
+function editorialCalendarLoadActivity(entryId) {
+  var box = document.getElementById('ec-activity-history');
+  if (!box) return;
+  if (!entryId || !db) { box.innerHTML = '<div>No activity yet.</div>'; return; }
+  box.innerHTML = '<div>Loading activity...</div>';
+  db.collection('editorial_calendar').doc(entryId).collection('activity').orderBy('createdAt','desc').limit(50).get().then(function(snap) {
+    var rows = [];
+    snap.forEach(function(doc) {
+      var a = doc.data();
+      rows.push('<div style="padding:8px;border:1px solid var(--bdr);border-radius:7px;background:#fff"><strong style="color:var(--blk)">'+escapeHtml(a.action || '')+'</strong><div>'+escapeHtml(a.details || '')+'</div><div style="font-size:11px">'+escapeHtml(formatFirestoreDate(a.createdAt))+' · '+escapeHtml(a.createdBy || '')+'</div></div>');
+    });
+    box.innerHTML = rows.join('') || '<div>No activity yet.</div>';
+  }).catch(function(err){ box.innerHTML = '<div>Could not load activity: '+escapeHtml(err.message)+'</div>'; });
+}
+function editorialCalendarLeaveEditor() {
+  if (editorialCalendarState.editorDirty && !confirm('You have unsaved changes. Leave without saving?')) return;
+  editorialCalendarState.editorDirty = false;
+  showEditorialCalendar();
+}
+function editorialCalendarOpenOriginalRecord() {
+  var entry = editorialCalendarState.editorOriginal || {};
+  if (!entry.originalCollection || !entry.originalRecordId) return;
+  var type = entry.originalCollection === 'interview_sessions' ? 'interview' : (entry.sourceType === 'guest_writer' ? 'guest_story' : 'wocult_story');
+  showStaffViewDetail(type, entry.originalRecordId);
+}
+function editorialCalendarUpdateOriginalPublishDate(data) {
+  if (!data.originalCollection || !data.originalRecordId) return Promise.resolve();
+  var patch = {publishDate:data.publishDate, updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+  if (data.originalCollection === 'interview_sessions') patch.scheduledPublishDate = data.publishDate;
+  return db.collection(data.originalCollection).doc(data.originalRecordId).update(patch);
+}
+function editorialCalendarArchiveEntry() {
+  var id = editorialCalendarState.editorEntryId;
+  if (!id || !confirm('Archive this calendar entry?')) return;
+  db.collection('editorial_calendar').doc(id).update({
+    archived:true,
+    archivedAt:firebase.firestore.FieldValue.serverTimestamp(),
+    archivedBy:currentUser && currentUser.email || '',
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){ return editorialCalendarLogActivity(id, 'Archive action', 'Archived entry'); }).then(function() {
+    fbToast('Archived');
+    showEditorialCalendar();
+  });
+}
+function editorialCalendarRestoreArchivedEntry() {
+  var id = editorialCalendarState.editorEntryId;
+  if (!id) return;
+  db.collection('editorial_calendar').doc(id).update({
+    archived:false,
+    restoredAt:firebase.firestore.FieldValue.serverTimestamp(),
+    restoredBy:currentUser && currentUser.email || '',
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){ return editorialCalendarLogActivity(id, 'Restore action', 'Restored entry'); }).then(function() {
+    fbToast('Restored');
+    editorialCalendarOpenEditor(id);
+  });
+}
+function editorialCalendarDeleteEntry() {
+  var id = editorialCalendarState.editorEntryId;
+  if (!id) return;
+  if (!confirm('Permanently delete this archived entry?')) return;
+  if (!confirm('This cannot be undone. Delete permanently?')) return;
+  db.collection('editorial_calendar').doc(id).delete().then(function() {
+    fbToast('Deleted');
+    showEditorialCalendar();
+  });
+}
+function editorialCalendarUpdateImagePreview() {
+  var input = document.getElementById('ec-image-url');
+  var box = document.getElementById('ec-image-preview');
+  if (!input || !box) return;
+  var url = input.value.trim();
+  box.innerHTML = url ? '<img src="'+escapeHtml(url)+'" alt="" style="max-width:220px;max-height:150px;border-radius:8px;border:1px solid var(--bdr)" />' : 'No image selected.';
+}
+function editorialCalendarUploadImage(file) {
+  if (!file || !storage) return;
+  var input = document.getElementById('ec-image-url');
+  if (!input) return;
+  var status = document.getElementById('editorial-calendar-editor-status');
+  if (status) status.textContent = 'Uploading image...';
+  var safe = file.name.replace(/[^A-Za-z0-9_.-]/g, '_');
+  var path = 'editorial_calendar_images/' + Date.now() + '-' + safe;
+  storage.ref(path).put(file, {contentType:file.type || 'image/jpeg'}).then(function(snap) {
+    return snap.ref.getDownloadURL();
+  }).then(function(url) {
+    input.value = url;
+    editorialCalendarUpdateImagePreview();
+    editorialCalendarEditorChanged();
+    if (status) status.textContent = 'Image uploaded.';
+  }).catch(function(err) {
+    if (status) status.textContent = 'Image upload failed: '+err.message;
+  });
+}
+function editorialCalendarLoadExistingRecords() {
+  if (!db) return Promise.resolve();
+  return Promise.all([
+    db.collection('articles').orderBy('updatedAt','desc').limit(100).get().catch(function(){return null;}),
+    db.collection('interview_sessions').orderBy('updatedAt','desc').limit(100).get().catch(function(){return null;})
+  ]).then(function(results) {
+    var existing = [];
+    if (results[0]) results[0].forEach(function(doc) {
+      var a = Object.assign({id:doc.id}, doc.data());
+      if (a.archived) return;
+      var pd = a.publishDate || a.publishedDate || a.scheduledPublishDate;
+      if (!pd) return;
+      var key = 'articles:'+doc.id;
+      if (editorialCalendarState.linkedSourceKeys[key]) return;
+      existing.push(editorialCalendarLinkedEntry({
+        id:'linked-articles-'+doc.id,
+        title:a.title || 'Untitled story',
+        contentType:a.sourceType === 'guest_writer' ? 'Long view' : (a.sourceType === 'news_brief' || a.sourceType === 'manual_news_brief' ? 'News piece' : 'Long view'),
+        status:editorialCalendarStatusFromExisting(a.status || 'draft'),
+        originalStatus:a.status || '',
+        owner:a.writerName || a.authorName || a.createdBy || 'Wocult',
+        creatorName:a.createdBy || a.writerName || 'Wocult',
+        publishDate:pd,
+        publishTime:a.publishTime || '',
+        summary:a.shortIntro || a.excerpt || '',
+        contentCopy:a.body || '',
+        originalCollection:'articles',
+        originalRecordId:doc.id,
+        sourceType:a.sourceType || '',
+        updatedAt:a.updatedAt || a.savedAt || a.createdAt
+      }));
+    });
+    if (results[1]) results[1].forEach(function(doc) {
+      var s = Object.assign({id:doc.id}, doc.data());
+      if (s.archived) return;
+      var pd = s.publishDate || s.scheduledPublishDate || s.publishedAt;
+      if (!pd) return;
+      var key = 'interview_sessions:'+doc.id;
+      if (editorialCalendarState.linkedSourceKeys[key]) return;
+      existing.push(editorialCalendarLinkedEntry({
+        id:'linked-interviews-'+doc.id,
+        title:s.interviewTitle || 'Untitled interview',
+        contentType:'Interview',
+        status:editorialCalendarStatusFromExisting(normalizedInterviewStatus(s) || s.status || 'Draft'),
+        originalStatus:s.status || '',
+        owner:s.guestName || 'Wocult',
+        creatorName:'Wocult',
+        publishDate:pd,
+        publishTime:s.publishTime || '',
+        summary:s.brief || '',
+        contentCopy:'',
+        originalCollection:'interview_sessions',
+        originalRecordId:doc.id,
+        updatedAt:s.updatedAt || s.createdAt
+      }));
+    });
+    editorialCalendarState.entries = (editorialCalendarState.entries || []).filter(function(e){return !e._virtualLinked;}).concat(existing);
+  });
+}
+function editorialCalendarLinkedEntry(data) {
+  return Object.assign({
+    channels:['Wocult'],
+    contentGroup:data.title,
+    sourceUrl:'',
+    publishedUrl:'',
+    recurrence:{frequency:'None', weekdays:[], endDate:'', count:''},
+    archived:false,
+    _virtualLinked:true,
+    _source:'linked'
+  }, data);
+}
+function editorialCalendarExpandRecurring(entries) {
+  var expanded = [];
+  var bounds = editorialCalendarMonthBounds(editorialCalendarState.month);
+  entries.forEach(function(entry) {
+    expanded.push(entry);
+    var rec = entry.recurrence || {};
+    if (!entry.id || entry.archived || !rec.frequency || rec.frequency === 'None' || entry.isOccurrenceOverride || entry._virtualLinked) return;
+    var startKey = editorialCalendarDateKey(entry.recurrenceStartDate || entry.publishDate);
+    if (!startKey) return;
+    var start = new Date(startKey + 'T00:00:00');
+    var end = rec.endDate ? new Date(rec.endDate + 'T00:00:00') : new Date(editorialCalendarState.month.getFullYear(), editorialCalendarState.month.getMonth()+2, 0);
+    var countLimit = parseInt(rec.count || '0', 10);
+    var count = 0;
+    var cursor = new Date(start);
+    while (cursor <= end && count < 370) {
+      var key = editorialCalendarDateKey(cursor);
+      var include = key !== startKey && key >= bounds.start && key <= bounds.end;
+      if (rec.frequency === 'Custom weekday selection') include = include && (rec.weekdays || []).indexOf(cursor.getDay()) !== -1;
+      if (include) expanded.push(Object.assign({}, entry, {
+        id:entry.id,
+        masterId:entry.id,
+        recurrenceMasterId:entry.id,
+        occurrenceDate:key,
+        publishDate:key,
+        _recurrenceVirtual:true
+      }));
+      count++;
+      if (countLimit && count >= countLimit) break;
+      if (rec.frequency === 'Daily' || rec.frequency === 'Custom weekday selection') cursor.setDate(cursor.getDate()+1);
+      else if (rec.frequency === 'Weekly') cursor.setDate(cursor.getDate()+7);
+      else if (rec.frequency === 'Every two weeks') cursor.setDate(cursor.getDate()+14);
+      else if (rec.frequency === 'Monthly') cursor.setMonth(cursor.getMonth()+1);
+      else break;
+    }
+  });
+  return expanded;
+}
+function editorialCalendarExportCsv() {
+  var bounds = editorialCalendarMonthBounds(editorialCalendarState.month);
+  var rows = editorialCalendarFilteredEntries().filter(function(e) {
+    var key = editorialCalendarDateKey(e.publishDate);
+    return key >= bounds.start && key <= bounds.end;
+  }).sort(function(a,b){ return editorialCalendarDateKey(a.publishDate).localeCompare(editorialCalendarDateKey(b.publishDate)) || editorialCalendarEntrySort(a,b); });
+  var header = ['Title','Content type','Channels','Status','Owner','Creator','Publish date','Publish time','Brief summary','Source URL','Published URL','Content Group','Created at','Updated at','Original collection','Original record ID','Content copy'];
+  var csv = [header].concat(rows.map(function(e) {
+    return [
+      e.title || '', e.contentType || '', (e.channels || []).join('; '), e.status || 'Draft', e.owner || '', e.creatorName || e.creatorEmail || '',
+      editorialCalendarDateKey(e.publishDate), editorialCalendarTimeLabel(e.publishTime), e.summary || '', e.sourceUrl || '', e.publishedUrl || '', e.contentGroup || '',
+      formatFirestoreDate(e.createdAt), formatFirestoreDate(e.updatedAt), e.originalCollection || '', e.originalRecordId || '', stripHtml(e.contentCopy || '')
+    ];
+  })).map(function(row) {
+    return row.map(function(cell){ return '"' + String(cell || '').replace(/"/g,'""') + '"'; }).join(',');
+  }).join('\n');
+  downloadBlob(new Blob([csv], {type:'text/csv;charset=utf-8'}), 'editorial-calendar-'+bounds.start+'.csv');
 }
 function getStaffViewParams() {
   var params = new URLSearchParams(window.location.search);
@@ -4632,6 +5545,8 @@ function hideStaffLandingPanels() {
     'landing-guest-writer-applications',
     'landing-guest-writer-stories',
     'landing-editorial-tracker',
+    'landing-editorial-calendar',
+    'landing-editorial-calendar-editor',
     'landing-unsent-admin',
     'landing-blog-comments-admin'
   ].forEach(function(id) {
