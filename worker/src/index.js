@@ -39,7 +39,10 @@ export default {
       if (raw.includes('hir') || raw.includes('job')) return NEWS_BEAT_OPTIONS['new jobs'];
       if (raw.includes('pay') || raw.includes('salary') || raw.includes('benefit')) return NEWS_BEAT_OPTIONS['pay and benefits'];
       if (raw.includes('ai')) return NEWS_BEAT_OPTIONS['ai at work'];
-      if (raw.includes('policy') || raw.includes('econom')) return NEWS_BEAT_OPTIONS['policy and economy'];
+      if (raw.includes('policy') || raw.includes('econom') || raw.includes('labour') || raw.includes('labor')) return NEWS_BEAT_OPTIONS['policy and economy'];
+      if (raw.includes('wellbeing') || raw.includes('well-being') || raw.includes('safety')) return NEWS_BEAT_OPTIONS['workplace culture'];
+      if (raw.includes('women') || raw.includes('gender') || raw.includes('diversity') || raw.includes('inclusion')) return NEWS_BEAT_OPTIONS['diversity & inclusion'];
+      if (raw.includes('general workplace') || raw.includes('work culture') || raw.includes('workplace')) return NEWS_BEAT_OPTIONS['workplace culture'];
       if (raw.includes('leader')) return NEWS_BEAT_OPTIONS.leadership;
       if (raw.includes('compan')) return NEWS_BEAT_OPTIONS.companies;
       return NEWS_BEAT_OPTIONS['future of work'];

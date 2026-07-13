@@ -475,6 +475,12 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         <div class="lcard-desc">Share your own story, experience, or perspective. We'll help you shape it into a Wocult piece.</div>
         <div class="lcard-cta">Start writing →</div>
       </div>
+      <div class="lcard" onclick="showManualNewsBrief()">
+        <div class="lcard-icon">NB</div>
+        <div class="lcard-title">Manual news brief</div>
+        <div class="lcard-desc">Already have the story? Paste the headline and body. Wocult will prepare the CMS fields and let you submit directly.</div>
+        <div class="lcard-cta">Prepare CMS fields</div>
+      </div>
         </div>
       </section>
       <div style="height:1px;background:var(--bdr);width:100%"></div>
@@ -554,6 +560,41 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       <p>Paste the URL of any article. The AI will read it and draft an original Wocult story based on the content.</p>
       <input class="wf-input" id="landing-url-input" placeholder="https://economictimes.com/..." style="font-size:14px" onkeydown="if(event.key==='Enter')startFromUrl()" />
       <button class="btn-lg btn-y" onclick="startFromUrl()" style="align-self:flex-start;padding:12px 28px">Draft this story →</button>
+    </div>
+  </div>
+
+  <!-- Manual news brief CMS builder -->
+  <div id="landing-manual-news-brief" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen">
+      <h2>Manual news brief</h2>
+      <div class="sfield"><label>Headline</label><input id="manual-news-headline" /></div>
+      <div class="sfield"><label>Body</label><textarea id="manual-news-body" rows="12"></textarea></div>
+      <div id="manual-news-status" class="hint"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-lg" onclick="backToCards()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Cancel</button>
+        <button class="btn-lg btn-y" id="manual-news-prepare-btn" onclick="prepareManualNewsBriefCmsFields()" style="flex:1">Prepare CMS fields</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="landing-manual-news-review" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:900px">
+      <h2>Review CMS fields</h2>
+      <div class="sfield"><label>Title</label><input id="manual-review-title" /></div>
+      <div class="sfield"><label>Slug</label><input id="manual-review-slug" /></div>
+      <div class="sfield"><label>Standfirst</label><textarea id="manual-review-standfirst" rows="3"></textarea></div>
+      <div class="sfield"><label>Body</label><textarea id="manual-review-body" rows="14"></textarea></div>
+      <div class="sfield"><label>SEO description</label><textarea id="manual-review-seo" rows="3"></textarea></div>
+      <div class="sfield"><label>Beat</label><input id="manual-review-beat" /></div>
+      <div class="sfield"><label>Published date</label><input id="manual-review-published" /></div>
+      <div class="sfield"><label>Source name</label><input id="manual-review-source-name" /></div>
+      <div class="sfield"><label>Source URL</label><input id="manual-review-source-url" /></div>
+      <div class="sfield"><label>News image</label><input id="manual-review-news-image" /></div>
+      <div id="manual-review-status" class="hint"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-lg" onclick="showManualNewsBrief()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Back</button>
+        <button class="btn-lg btn-y" id="manual-news-submit-btn" onclick="submitManualNewsBriefToCms()" style="flex:1">Submit to Firebase + CMS</button>
+      </div>
     </div>
   </div>
 
@@ -4581,6 +4622,8 @@ function hideStaffLandingPanels() {
   updateTopUpdatedVisibility(false);
   [
     'landing-url',
+    'landing-manual-news-brief',
+    'landing-manual-news-review',
     'landing-scratch',
     'landing-scratch-choice',
     'landing-existing-draft',
@@ -4608,6 +4651,16 @@ function showUrlEntry() {
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-url').style.display = 'flex';
   setTimeout(function(){ document.getElementById('landing-url-input').focus(); }, 100);
+}
+function showManualNewsBrief() {
+  if (!guardStaffScreen()) return;
+  console.log('Manual news brief opened');
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-manual-news-brief').style.display = 'flex';
+  var status = document.getElementById('manual-news-status');
+  if (status) status.textContent = '';
+  setTimeout(function(){ document.getElementById('manual-news-headline').focus(); }, 100);
 }
 function showPrepareInterview() {
   if (!guardStaffScreen()) return;
@@ -5484,6 +5537,7 @@ var workflowMode = 'long_form';
 var pendingDraftIndex = null;
 var pendingDraftCard = null;
 var pendingNewsBriefCard = null;
+var manualNewsBriefCmsData = null;
 var currentCard = null;
 var generatedContent = {};
 window._memoryNotesLoaded = false;
@@ -6493,6 +6547,35 @@ function limitSeoDescription(text) {
   if (lastSpace > 160) cut = cut.slice(0, lastSpace);
   return cut.replace(/[.,;:!?-]+$/,'') + '...';
 }
+function makeSlug(text) {
+  return safeFileName(text || 'news-brief');
+}
+function inferNewsBeat(text) {
+  var s = String(text || '').toLowerCase();
+  if (/layoff|layoffs|hiring|hire|recruit|job cut|retrench|redundan|headcount/.test(s)) return 'Layoffs / Hiring';
+  if (/\bai\b|artificial intelligence|automation|algorithm|machine learning/.test(s)) return 'AI at Work';
+  if (/labour law|labor law|labour code|labor code|court|tribunal|compliance|regulation/.test(s)) return 'Labour Law';
+  if (/policy|benefit|benefits|salary|pay|insurance|pf|epf|epfo|esic|leave|pension/.test(s)) return 'Policy / Benefits';
+  if (/wellbeing|well-being|mental health|burnout|stress|health/.test(s)) return 'Wellbeing';
+  if (/safety|harassment|posh|accident|injury|workplace safety/.test(s)) return 'Workplace Safety';
+  if (/women|gender|maternity|female|diversity|inclusion/.test(s)) return 'Women at Work';
+  if (/culture|manager|leadership|office|workplace|return to office|hybrid|remote/.test(s)) return 'Work Culture';
+  return 'General Workplace';
+}
+function formatManualNewsBody(body) {
+  var raw = String(body || '').trim();
+  if (!raw) return '';
+  if (/<p[\s>]/i.test(raw)) return raw;
+  return plainTextToHtml(raw);
+}
+function firstUrlFromText(text) {
+  var m = String(text || '').match(/https?:\/\/[^\s<>"')]+/i);
+  return m ? m[0] : '';
+}
+function sourceNameFromUrl(url) {
+  if (!url) return '';
+  try { return new URL(url).hostname.replace(/^www\./,''); } catch(e) { return ''; }
+}
 function cleanNewsBriefBody(title, standfirst, body) {
   var cleaned = String(body || '').trim();
   var t = String(title || '').trim();
@@ -7493,6 +7576,165 @@ function buildNewsBriefFieldData(d) {
     'seo-description': seoDescription,
     'news-image': d.imageUrl
   };
+}
+
+function buildManualNewsBriefFallback(headline, body) {
+  var title = toSentenceCaseHeadline(headline);
+  var bodyHtml = cleanNewsBriefBody(title, '', formatManualNewsBody(body));
+  var bodyText = stripHtml(bodyHtml);
+  var sentences = bodyText.match(/[^.!?]+[.!?]+/g) || [bodyText];
+  var standfirst = sentences.slice(0, 2).join(' ').trim();
+  var words = standfirst.split(/\s+/).filter(Boolean);
+  if (words.length > 35) standfirst = words.slice(0, 35).join(' ') + '...';
+  if (words.length < 20) standfirst = limitSeoDescription(bodyText).replace(/\.\.\.$/,'');
+  var sourceUrl = firstUrlFromText(body);
+  return {
+    title: title,
+    slug: makeSlug(title),
+    standfirst: standfirst,
+    body: cleanNewsBriefBody(title, standfirst, bodyHtml),
+    seoDescription: limitSeoDescription(standfirst || bodyText),
+    beat: inferNewsBeat(headline + ' ' + bodyText),
+    publishedDate: toWebflowDateTime(new Date()),
+    sourceName: sourceNameFromUrl(sourceUrl),
+    sourceUrl: sourceUrl,
+    newsImage: ''
+  };
+}
+
+function generateManualNewsBriefFields(headline, body) {
+  var fallback = buildManualNewsBriefFallback(headline, body);
+  var prompt = 'Prepare Webflow News CMS fields from this completed manual news brief. Do not rewrite the article body. Return JSON only with title, slug, standfirst, body, seoDescription, beat, publishedDate, sourceName, sourceUrl, newsImage. Rules: title must be sentence case and based on the supplied headline; slug from title; standfirst one sentence, 20-35 words; body must be the supplied body cleaned into HTML paragraphs and must not include the title or standfirst at the top; seoDescription under 250 characters; publishedDate must be new Date().toISOString() equivalent; beat must be one of Work Culture, AI at Work, Layoffs / Hiring, Labour Law, Policy / Benefits, Wellbeing, Workplace Safety, Women at Work, General Workplace; sourceName and sourceUrl blank unless clearly inferable; newsImage blank.\n\nHeadline:\n' + headline + '\n\nBody:\n' + body;
+  return fetch(WORKER+'/generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      briefType:'news_brief',
+      model:'claude-sonnet-4-6',
+      max_tokens:900,
+      messages:[{role:'user',content:prompt}]
+    })
+  }).then(function(r){ return r.json(); }).then(function(data) {
+    if (data.error) throw new Error(data.error.message || 'Manual CMS field generation failed');
+    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('').trim();
+    txt = txt.replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim();
+    var s = txt.indexOf('{');
+    var e = txt.lastIndexOf('}');
+    if (s !== -1 && e !== -1) txt = txt.slice(s,e+1);
+    var generated = JSON.parse(txt);
+    var title = toSentenceCaseHeadline(generated.title || fallback.title);
+    var standfirst = generated.standfirst || fallback.standfirst;
+    var bodyHtml = cleanNewsBriefBody(title, standfirst, formatManualNewsBody(body));
+    return {
+      title: title,
+      slug: makeSlug(generated.slug || title),
+      standfirst: standfirst,
+      body: bodyHtml,
+      seoDescription: limitSeoDescription(generated.seoDescription || standfirst || stripHtml(bodyHtml)),
+      beat: inferNewsBeat(generated.beat || headline + ' ' + body),
+      publishedDate: toWebflowDateTime(generated.publishedDate || new Date()),
+      sourceName: generated.sourceName || fallback.sourceName || '',
+      sourceUrl: generated.sourceUrl || fallback.sourceUrl || '',
+      newsImage: generated.newsImage || ''
+    };
+  }).catch(function(err) {
+    console.warn('Manual news brief CMS generation fell back locally:', err);
+    return fallback;
+  });
+}
+
+function prepareManualNewsBriefCmsFields() {
+  var headlineEl = document.getElementById('manual-news-headline');
+  var bodyEl = document.getElementById('manual-news-body');
+  var status = document.getElementById('manual-news-status');
+  var btn = document.getElementById('manual-news-prepare-btn');
+  var headline = (headlineEl && headlineEl.value || '').trim();
+  var body = (bodyEl && bodyEl.value || '').trim();
+  if (!headline) { alert('Headline is required.'); if (headlineEl) headlineEl.focus(); return; }
+  if (!body) { alert('Body is required.'); if (bodyEl) bodyEl.focus(); return; }
+  if (body.length < 50) { alert('Body should be at least 50 characters.'); if (bodyEl) bodyEl.focus(); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing...'; }
+  if (status) status.textContent = 'Preparing CMS fields...';
+  generateManualNewsBriefFields(headline, body).then(function(fields) {
+    manualNewsBriefCmsData = fields;
+    populateManualNewsBriefReview(fields);
+    console.log('Manual news brief CMS fields generated');
+    hideStaffLandingPanels();
+    document.getElementById('landing-cards').style.display = 'none';
+    document.getElementById('landing-manual-news-review').style.display = 'flex';
+  }).catch(function(err) {
+    console.error('Manual news brief CMS field generation failed', err);
+    alert('Could not prepare CMS fields. Please try again.');
+  }).finally(function() {
+    if (btn) { btn.disabled = false; btn.textContent = 'Prepare CMS fields'; }
+    if (status) status.textContent = '';
+  });
+}
+
+function populateManualNewsBriefReview(fields) {
+  document.getElementById('manual-review-title').value = fields.title || '';
+  document.getElementById('manual-review-slug').value = fields.slug || '';
+  document.getElementById('manual-review-standfirst').value = fields.standfirst || '';
+  document.getElementById('manual-review-body').value = fields.body || '';
+  document.getElementById('manual-review-seo').value = fields.seoDescription || '';
+  document.getElementById('manual-review-beat').value = fields.beat || 'General Workplace';
+  document.getElementById('manual-review-published').value = fields.publishedDate || toWebflowDateTime(new Date());
+  document.getElementById('manual-review-source-name').value = fields.sourceName || '';
+  document.getElementById('manual-review-source-url').value = fields.sourceUrl || '';
+  document.getElementById('manual-review-news-image').value = fields.newsImage || '';
+  var status = document.getElementById('manual-review-status');
+  if (status) status.textContent = '';
+}
+
+function collectManualNewsBriefReviewData() {
+  var title = toSentenceCaseHeadline(document.getElementById('manual-review-title').value);
+  var standfirst = document.getElementById('manual-review-standfirst').value.trim();
+  var body = cleanNewsBriefBody(title, standfirst, formatManualNewsBody(document.getElementById('manual-review-body').value));
+  return {
+    title: title,
+    slug: makeSlug(document.getElementById('manual-review-slug').value || title),
+    standfirst: standfirst,
+    shortIntro: standfirst,
+    body: body,
+    seoDescription: limitSeoDescription(document.getElementById('manual-review-seo').value || standfirst || stripHtml(body)),
+    beat: inferNewsBeat(document.getElementById('manual-review-beat').value || title + ' ' + stripHtml(body)),
+    publishedDate: toWebflowDateTime(document.getElementById('manual-review-published').value || new Date()),
+    publishDate: toWebflowDateTime(document.getElementById('manual-review-published').value || new Date()),
+    sourceName: document.getElementById('manual-review-source-name').value.trim(),
+    sourceUrl: document.getElementById('manual-review-source-url').value.trim(),
+    imageUrl: document.getElementById('manual-review-news-image').value.trim(),
+    newsImage: document.getElementById('manual-review-news-image').value.trim(),
+    status: 'submitted'
+  };
+}
+
+function submitManualNewsBriefToCms() {
+  var btn = document.getElementById('manual-news-submit-btn');
+  var status = document.getElementById('manual-review-status');
+  var data = collectManualNewsBriefReviewData();
+  if (!data.title) { alert('Title is required.'); return; }
+  if (!stripHtml(data.body) || stripHtml(data.body).length < 50) { alert('Body should be at least 50 characters.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+  if (status) status.textContent = 'Submitting to Firebase and CMS...';
+  saveArticleToFirebase(Object.assign({}, data, {sourceType:'manual_news_brief'}), 'submitted').then(function(docId) {
+    return fetch(WORKER + '/webflow-news', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({docId:docId, fieldData:buildNewsBriefFieldData(data), isDraft:true, isArchived:false})
+    });
+  }).then(function(r){ return r.json().then(function(d){return {ok:r.ok,data:d};}); }).then(function(res) {
+    if (!res.ok) throw new Error((res.data&&res.data.message)||JSON.stringify(res.data).substring(0,300));
+    console.log('Manual news brief submitted');
+    alert('News brief saved and submitted to CMS.');
+    manualNewsBriefCmsData = null;
+    goToLanding();
+  }).catch(function(err) {
+    console.error('Manual news brief submit failed', err);
+    if (status) status.textContent = 'Could not submit: '+err.message;
+    alert('Could not submit manual news brief. Please try again.');
+  }).finally(function() {
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit to Firebase + CMS'; }
+  });
 }
 
 function submitNewsBriefArticle(writerName) {
