@@ -15,6 +15,91 @@ export default {
       });
     };
 
+    const NEWS_COLLECTION_ID = '6a4d6ad32871d46ed1edc6a4';
+    const NEWS_BEAT_OPTIONS = {
+      companies: '26b338ed973fe5a8e9723ee27c3cab91',
+      'new jobs': '8a9188ad0192ce310bd9257582c1023b',
+      layoffs: '86e2769a55224948009e72cd807be288',
+      'pay and benefits': 'd7848449825b79b04c003d8099ec052c',
+      'ai at work': '3710b9c1e048787e8cbd898a0a33e53f',
+      'policy and economy': '517b81d814d4420e12e5f16b1778758f',
+      leadership: 'c2d8a432de6795e2b54a38f6cf528470',
+      entrepreneurship: '227d8b629942ea8e036037b07637ee05',
+      'workplac culture': '169e2cfd9c6726e4f3c9a9acdad2e19e',
+      'workplace culture': '169e2cfd9c6726e4f3c9a9acdad2e19e',
+      'diversity & inclusion': 'b64ca2853885e52d1fa5552e4bf2e274',
+      'power & politics': '8bf0805fc2a0b74eae53e20f1c3450df',
+      diaspora: '3db495c7e94bf389598c836d62788aea',
+      'future of work': '5cc8138d132a38d9b3f56a158cf63694',
+    };
+    const normalizeNewsBeat = (value) => {
+      const raw = String(value || '').trim().toLowerCase();
+      if (NEWS_BEAT_OPTIONS[raw]) return NEWS_BEAT_OPTIONS[raw];
+      if (raw.includes('layoff') || raw.includes('redundan') || raw.includes('job cut')) return NEWS_BEAT_OPTIONS.layoffs;
+      if (raw.includes('hir') || raw.includes('job')) return NEWS_BEAT_OPTIONS['new jobs'];
+      if (raw.includes('pay') || raw.includes('salary') || raw.includes('benefit')) return NEWS_BEAT_OPTIONS['pay and benefits'];
+      if (raw.includes('ai')) return NEWS_BEAT_OPTIONS['ai at work'];
+      if (raw.includes('policy') || raw.includes('econom')) return NEWS_BEAT_OPTIONS['policy and economy'];
+      if (raw.includes('leader')) return NEWS_BEAT_OPTIONS.leadership;
+      if (raw.includes('compan')) return NEWS_BEAT_OPTIONS.companies;
+      return NEWS_BEAT_OPTIONS['future of work'];
+    };
+    const escapeRegExp = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const toSentenceCaseHeadline = (text) => {
+      let s = String(text || '').trim().replace(/\s+/g, ' ');
+      if (!s) return '';
+      s = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+      const preserve = ['AI','HR','CEO','CFO','CHRO','CTO','COO','CIO','IT','PF','EPF','EPFO','ESIC','POSH','TCS','HUL','RBI','SEBI','IPO','MSME','U.S.','US','UK','H-1B'];
+      preserve.forEach((term) => {
+        const re = new RegExp('\\b' + escapeRegExp(term) + '\\b', 'gi');
+        s = s.replace(re, term);
+      });
+
+      return s;
+    };
+    function toWebflowDateTime(value) {
+      const d = value ? new Date(value) : new Date();
+      if (!d || Number.isNaN(d.getTime())) return new Date().toISOString();
+      return d.toISOString();
+    }
+    const limitSeoDescription = (text) => {
+      const s = String(text || '').replace(/\s+/g, ' ').trim();
+      if (!s) return '';
+      if (s.length <= 249) return s;
+      let cut = s.slice(0, 246);
+      const lastSpace = cut.lastIndexOf(' ');
+      if (lastSpace > 160) cut = cut.slice(0, lastSpace);
+      return cut.replace(/[.,;:!?-]+$/,'') + '...';
+    };
+    const stripEmptyOptionalFields = (fieldData) => {
+      const cleaned = {};
+      for (const [key, value] of Object.entries(fieldData)) {
+        if (value === undefined || value === null) continue;
+        if (typeof value === 'string' && !value.trim() && key !== 'name' && key !== 'slug') continue;
+        cleaned[key] = value;
+      }
+      return cleaned;
+    };
+    const buildNewsFieldData = (payload) => {
+      const data = payload.fieldData || payload;
+      const title = toSentenceCaseHeadline(data.title || data.name);
+      const publishedDate = toWebflowDateTime(data.publishedDate || data.publishDate || data.date || data['published-date'] || data['publish-date'] || new Date());
+      const seoDescription = limitSeoDescription(data.seoDescription || data['seo-description'] || data.standfirst || data.excerpt || data.shortIntro || data['short-story-intro'] || '');
+      return stripEmptyOptionalFields({
+        name: title,
+        slug: data.slug,
+        standfirst: data.standfirst || data.shortIntro || data['short-story-intro'] || data['story-intro-para'] || data.excerpt || '',
+        body: data.body || '',
+        beat: normalizeNewsBeat(data.beat || data.category || data.cat || 'Future of Work'),
+        'published-date': publishedDate,
+        'source-name': data.sourceName || data['source-name'] || data.sourceTitle || data['source-title'] || data.source || '',
+        'source-url': data.sourceUrl || data.sourceURL || data['source-url'] || data.url || '',
+        'seo-description': seoDescription,
+        'news-image': data.image || data.imageUrl || data.coverImageUrl || data['news-image'] || '',
+      });
+    };
+
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: cors });
     }
@@ -147,9 +232,10 @@ export default {
     if (url.pathname === '/webflow-news') {
       try {
         const body = await request.json();
+        const newsFieldData = buildNewsFieldData(body);
 
-        const res = await fetch(
-          'https://api.webflow.com/v2/collections/6a4d6ad32871d46ed1edc6a4/items',
+        const webflowRes = await fetch(
+          `https://api.webflow.com/v2/collections/${NEWS_COLLECTION_ID}/items`,
           {
             method: 'POST',
             headers: {
@@ -157,12 +243,42 @@ export default {
               'Authorization': 'Bearer ' + env.WEBFLOW_TOKEN,
               'accept': 'application/json',
             },
-            body: JSON.stringify(body),
+            body: JSON.stringify({
+              fieldData: newsFieldData,
+              isDraft: body.isDraft !== false,
+              isArchived: body.isArchived === true,
+            }),
           }
         );
 
-        const data = await res.json();
-        return jsonResponse(data, res.status);
+        const webflowText = await webflowRes.text();
+        let webflowData = null;
+
+        try {
+          webflowData = webflowText ? JSON.parse(webflowText) : null;
+        } catch (e) {
+          webflowData = { raw: webflowText };
+        }
+
+        if (!webflowRes.ok) {
+          console.error('Webflow CMS error', {
+            status: webflowRes.status,
+            statusText: webflowRes.statusText,
+            body: webflowText,
+          });
+
+          return jsonResponse(
+            {
+              ok: false,
+              error: 'Webflow CMS validation failed',
+              status: webflowRes.status,
+              details: webflowData || webflowText,
+            },
+            400
+          );
+        }
+
+        return jsonResponse(webflowData, webflowRes.status);
       } catch (e) {
         return jsonResponse({ error: e.message }, 500);
       }
@@ -170,6 +286,34 @@ export default {
 
     // /proxy — RSS proxy
     // /reddit - public Reddit JSON scan for workplace signals
+    // /webflow-schema - debug Webflow collection field slugs
+    if (url.pathname === '/webflow-schema') {
+      try {
+        const collectionId = url.searchParams.get('collectionId') || NEWS_COLLECTION_ID;
+        const schemaRes = await fetch(
+          `https://api.webflow.com/v2/collections/${collectionId}`,
+          {
+            headers: {
+              'Authorization': 'Bearer ' + env.WEBFLOW_TOKEN,
+              'accept': 'application/json',
+            },
+          }
+        );
+        const schemaText = await schemaRes.text();
+        let schemaData = null;
+
+        try {
+          schemaData = schemaText ? JSON.parse(schemaText) : null;
+        } catch (e) {
+          schemaData = { raw: schemaText };
+        }
+
+        return jsonResponse(schemaData, schemaRes.status);
+      } catch (e) {
+        return jsonResponse({ error: e.message }, 500);
+      }
+    }
+
     if (url.pathname === '/reddit') {
       const subreddits = [
         'jobs',

@@ -211,7 +211,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">v13</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">13.1</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -6295,7 +6295,7 @@ function generateNewsBrief(card, instructions) {
     if (si<steps.length) { var el=document.getElementById(steps[si]); if(el) el.classList.add('active'); si++; }
     else clearInterval(anim);
   }, 900);
-  var prompt = `Write a reported Wocult news brief of 200-350 words.
+  var prompt = `Write a reported Wocult news brief.
 
 Source URL:
 ${card.link || ''}
@@ -6318,18 +6318,39 @@ Requirements:
 - Keep it reported and concise, not opinionated.
 - Explain why this matters to working professionals.
 - Use plain English.
+- Write the title in sentence case.
+- Do not use title case.
+- Preserve acronyms such as AI, HR, CEO, EPFO, POSH, TCS and HUL.
+- Return publishedDate as a full ISO date-time string, for example 2026-07-13T12:30:00.000Z.
+- SEO description must be under 250 characters.
+- News brief structure:
+- Title should be a headline only.
+- Standfirst should be one short summary sentence, 20-35 words.
+- Body should be 200-350 words.
+- Body must NOT repeat the title.
+- Body must NOT repeat the standfirst.
+- Body must NOT start by restating the headline in different words.
+- Body should begin with a fresh reported lead that advances the story.
+- Do not include the title inside the body.
+- Do not include the standfirst inside the body.
+- Use short paragraphs.
+- No bullet points unless specifically requested.
+- No invented facts, quotes, dates, numbers, or context.
 - Body must be valid HTML paragraphs only.
-- Return ONLY valid JSON:
+- Return JSON only:
 {
-  "title":"clear news headline",
-  "slug":"url-safe-slug",
-  "shortIntro":"15-20 word summary",
-  "intro40":"about 40 words",
-  "excerpt":"about 60-90 words",
-  "introRichText":"<p>one short intro paragraph</p>",
-  "body":"<p>200-350 word news brief in HTML</p>",
-  "readTime":"2 min read"
-}`;
+  "title": "",
+  "slug": "",
+  "standfirst": "",
+  "body": "",
+  "seoDescription": "",
+  "sourceName": "",
+  "sourceUrl": "",
+  "beat": "",
+  "publishedDate": ""
+}
+
+Important: The body field must contain only the article body. It must not include the title or standfirst.`;
   fetch(WORKER+'/generate', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -6350,11 +6371,30 @@ Requirements:
     var e = txt.lastIndexOf('}');
     if (s !== -1 && e !== -1) txt = txt.slice(s,e+1);
     generatedContent = JSON.parse(txt);
-    generatedContent.sourceUrl = card.link || '';
+    generatedContent.title = toSentenceCaseHeadline(generatedContent.title);
+    generatedContent.standfirst = generatedContent.standfirst || generatedContent.shortIntro || generatedContent.excerpt || '';
+    generatedContent.shortIntro = generatedContent.standfirst;
+    generatedContent.seoDescription = limitSeoDescription(
+      generatedContent.seoDescription ||
+      generatedContent.standfirst ||
+      generatedContent.excerpt ||
+      generatedContent.body
+    );
+    generatedContent.excerpt = generatedContent.seoDescription || generatedContent.standfirst || generatedContent.excerpt || '';
+    generatedContent.intro40 = generatedContent.standfirst || generatedContent.intro40 || '';
+    generatedContent.introRichText = '';
+    generatedContent.sourceUrl = generatedContent.sourceUrl || card.link || '';
     generatedContent.sourceTitle = card.title || '';
-    generatedContent.sourceName = card.src || '';
+    generatedContent.sourceName = generatedContent.sourceName || card.src || '';
+    generatedContent.publishedDate = toWebflowDateTime(generatedContent.publishedDate || generatedContent.publishDate || new Date());
+    generatedContent.publishDate = generatedContent.publishedDate;
     generatedContent.slug = generatedContent.slug || safeFileName(generatedContent.title || card.title || 'news-brief');
     generatedContent.readTime = generatedContent.readTime || '2 min read';
+    generatedContent.body = cleanNewsBriefBody(
+      generatedContent.title,
+      generatedContent.standfirst || generatedContent.shortIntro || generatedContent.excerpt,
+      generatedContent.body
+    );
     maxWorkflowStepReached = workflowStepIndex('refine');
     showWorkflowStep('refine');
     document.getElementById('chat-article-preview').innerHTML = normalizeRefineDraftHtml(renderPreview(generatedContent), generatedContent.title);
@@ -6381,10 +6421,69 @@ Requirements:
     showPreviousWorkflowScreen();
   });
 }
+function escapeRegExp(str) {
+  return String(str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+function toSentenceCaseHeadline(text) {
+  var s = String(text || '').trim().replace(/\s+/g, ' ');
+  if (!s) return '';
+  s = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+  // Preserve common uppercase terms.
+  var preserve = ['AI','HR','CEO','CFO','CHRO','CTO','COO','CIO','IT','PF','EPF','EPFO','ESIC','POSH','TCS','HUL','RBI','SEBI','IPO','MSME','U.S.','US','UK','H-1B'];
+  preserve.forEach(function(term) {
+    var re = new RegExp('\\b' + escapeRegExp(term) + '\\b', 'gi');
+    s = s.replace(re, term);
+  });
+
+  return s;
+}
+function toWebflowDateTime(value) {
+  var d = value ? new Date(value) : new Date();
+  if (!d || isNaN(d.getTime())) d = new Date();
+  return d.toISOString();
+}
+function limitSeoDescription(text) {
+  var s = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  if (s.length <= 249) return s;
+  var cut = s.slice(0, 246);
+  var lastSpace = cut.lastIndexOf(' ');
+  if (lastSpace > 160) cut = cut.slice(0, lastSpace);
+  return cut.replace(/[.,;:!?-]+$/,'') + '...';
+}
+function cleanNewsBriefBody(title, standfirst, body) {
+  var cleaned = String(body || '').trim();
+  var t = String(title || '').trim();
+  var s = String(standfirst || '').trim();
+
+  function normalise(x) {
+    return String(x || '')
+      .toLowerCase()
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function removeLeadingText(text, leading) {
+    if (!text || !leading) return text;
+    var plain = text.replace(/^\s*<p>/i, '').replace(/<\/p>\s*/i, '').trim();
+    if (normalise(plain).indexOf(normalise(leading)) === 0) {
+      return text.replace(new RegExp('^\\s*<p>\\s*' + escapeRegExp(leading) + '\\s*</p>\\s*', 'i'), '').trim();
+    }
+    return text;
+  }
+
+  cleaned = removeLeadingText(cleaned, t);
+  cleaned = removeLeadingText(cleaned, s);
+
+  return cleaned;
+}
 function populateNewsBriefReviewFields() {
   document.getElementById('r-title').value = generatedContent.title || '';
   document.getElementById('r-slug').value = generatedContent.slug || '';
-  document.getElementById('r-short').value = generatedContent.shortIntro || '';
+  document.getElementById('r-short').value = generatedContent.standfirst || generatedContent.shortIntro || '';
   document.getElementById('r-40').value = generatedContent.intro40 || '';
   document.getElementById('r-excerpt').value = generatedContent.excerpt || '';
   document.getElementById('r-intro-rt').value = generatedContent.introRichText || '';
@@ -7086,15 +7185,28 @@ function syncRefinePreviewToReviewFields() {
   var shortIntro = tmp.querySelector('.short-intro');
   if (h2) title = h2.innerText || title;
   generatedContent.title = title;
-  if (shortIntro) generatedContent.shortIntro = shortIntro.innerText;
-  generatedContent.body = content;
+  if (shortIntro) {
+    generatedContent.shortIntro = shortIntro.innerText;
+    if (workflowMode === 'news_brief') generatedContent.standfirst = shortIntro.innerText;
+  }
+  if (workflowMode === 'news_brief') {
+    if (h2) h2.remove();
+    if (shortIntro) shortIntro.remove();
+    generatedContent.body = cleanNewsBriefBody(
+      generatedContent.title,
+      generatedContent.standfirst || generatedContent.shortIntro || generatedContent.excerpt,
+      tmp.innerHTML
+    );
+  } else {
+    generatedContent.body = content;
+  }
   generatedContent.rawStoryText = tmp.innerText || generatedContent.rawStoryText || '';
   generatedContent.slug = generatedContent.slug || (currentGuestWriterStory && currentGuestWriterStory.slug) || safeFileName(title);
   generatedContent.readTime = generatedContent.readTime || (currentGuestWriterStory && currentGuestWriterStory.readTime) || Math.max(1, Math.ceil((tmp.innerText || '').trim().split(/\s+/).filter(Boolean).length / 220)) + ' min read';
   generatedContent.writerName = generatedContent.writerName || (currentGuestWriterStory && currentGuestWriterStory.writerName) || (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || (currentUser && currentUser.displayName) || '';
   if (document.getElementById('r-title')) document.getElementById('r-title').value = generatedContent.title || '';
   if (document.getElementById('r-slug')) document.getElementById('r-slug').value = generatedContent.slug || '';
-  if (document.getElementById('r-short')) document.getElementById('r-short').value = getBestShortIntro(document.getElementById('r-short').value);
+  if (document.getElementById('r-short')) document.getElementById('r-short').value = workflowMode === 'news_brief' ? (generatedContent.standfirst || generatedContent.shortIntro || '') : getBestShortIntro(document.getElementById('r-short').value);
   if (document.getElementById('r-40')) document.getElementById('r-40').value = generatedContent.intro40 || (currentGuestWriterStory && currentGuestWriterStory.intro40) || '';
   if (document.getElementById('r-excerpt')) document.getElementById('r-excerpt').value = generatedContent.excerpt || (currentGuestWriterStory && currentGuestWriterStory.excerpt) || '';
   if (document.getElementById('r-intro-rt')) document.getElementById('r-intro-rt').value = generatedContent.introRichText || (currentGuestWriterStory && currentGuestWriterStory.introRichText) || '';
@@ -7303,11 +7415,15 @@ function collectNewsBriefData(writerName) {
   return {
     title: document.getElementById('r-title').value,
     slug: document.getElementById('r-slug').value,
+    standfirst: document.getElementById('r-short').value,
     shortIntro: document.getElementById('r-short').value,
     intro40: document.getElementById('r-40').value,
     excerpt: document.getElementById('r-excerpt').value,
     introRichText: introHtml,
     body: bodyHtml,
+    seoDescription: (generatedContent && generatedContent.seoDescription) || document.getElementById('r-excerpt').value || document.getElementById('r-short').value,
+    beat: (generatedContent && generatedContent.beat) || '',
+    publishedDate: (generatedContent && (generatedContent.publishedDate || generatedContent.publishDate)) || document.getElementById('r-date').value,
     readTime: document.getElementById('r-readtime').value || '2 min read',
     publishDate: document.getElementById('r-date').value,
     writerName: writerName || 'Wocult Team',
@@ -7320,22 +7436,21 @@ function collectNewsBriefData(writerName) {
 }
 
 function buildNewsBriefFieldData(d) {
+  var title = toSentenceCaseHeadline(d.title || d.name);
+  var publishedDate = toWebflowDateTime(d.publishedDate || d.publishDate || new Date());
+  var seoDescription = limitSeoDescription(d.seoDescription || d.excerpt || d.standfirst || d.shortIntro || '');
   return {
-    name: d.title,
+    title: title,
+    name: title,
     slug: d.slug,
-    excerpt: d.excerpt,
-    'story-intro-para': d.shortIntro,
-    'short-story-intro': d.shortIntro,
-    '40-word-intro': d.intro40,
-    'intro-rich-text': d.introRichText,
-    body: d.body,
-    'read-time': d.readTime,
-    'publish-date': d.publishDate ? new Date(d.publishDate).toISOString() : new Date().toISOString(),
-    'source-url': d.sourceUrl,
-    'source-title': d.sourceTitle,
+    standfirst: d.standfirst || d.shortIntro || d.excerpt || '',
+    body: cleanNewsBriefBody(title, d.standfirst || d.shortIntro || d.excerpt, d.body),
+    beat: d.beat || d.category || 'Future of Work',
+    publishedDate: publishedDate,
     'source-name': d.sourceName,
-    writer: d.writerName,
-    image: d.imageUrl
+    'source-url': d.sourceUrl,
+    'seo-description': seoDescription,
+    'news-image': d.imageUrl
   };
 }
 
