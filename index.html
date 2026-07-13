@@ -951,6 +951,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
     <span id="freshness-chips"></span>
   </span>
   <span id="radar-note" style="display:none;font-size:11px;color:var(--g3);margin-left:8px">Global source search. Results may be delayed on the current NewsData plan.</span>
+  <button class="btn" id="news-tracker-refresh-btn" onclick="refreshNewsTracker()" style="display:none;margin-left:auto">Refresh tracker</button>
   <button class="btn" id="radar-refresh" onclick="loadRadar(true)" style="display:none;margin-left:auto">Refresh Radar</button>
   <button class="btn" id="official-refresh" onclick="loadOfficial(true)" style="display:none;margin-left:auto">Refresh Official</button>
 </div>
@@ -5641,10 +5642,12 @@ function renderSourceFilters() {
   var freshnessWrap = document.getElementById('freshness-filters');
   var freshnessChips = document.getElementById('freshness-chips');
   var radarNote = document.getElementById('radar-note');
+  var newsTrackerRefresh = document.getElementById('news-tracker-refresh-btn');
   var radarRefresh = document.getElementById('radar-refresh');
   var officialRefresh = document.getElementById('official-refresh');
   if (!primary) return;
   radarNote.style.display = activeTab === 'radar' ? 'inline' : 'none';
+  newsTrackerRefresh.style.display = activeTab === 'newsTracker' ? 'inline-flex' : 'none';
   radarRefresh.style.display = activeTab === 'radar' ? 'inline-flex' : 'none';
   officialRefresh.style.display = activeTab === 'official' ? 'inline-flex' : 'none';
 
@@ -5723,7 +5726,7 @@ function switchTab(t) {
   var topRefresh = document.getElementById('rbtn');
   if (topRefresh) topRefresh.style.display = t==='cards' ? 'inline-flex' : 'none';
   renderSourceFilters();
-  if (t==='newsTracker') { if (!newsTrackerCards.length) loadNewsTracker(); else setCardsForActiveTab(newsTrackerCards); return; }
+  if (t==='newsTracker') { if (!newsTrackerCards.length) loadNewsTracker().catch(function(){}); else setCardsForActiveTab(newsTrackerCards); return; }
   if (t==='cards') { setCardsForActiveTab(rssCards); return; }
   if (t==='radar') { if (!radarCards.length) loadRadar(); else setCardsForActiveTab(radarCards); return; }
   if (t==='reddit') { if (!redditLoaded) loadReddit(); else setCardsForActiveTab(redditCards); return; }
@@ -5763,20 +5766,23 @@ function setNewsTrackerFilter(f) {
   setCardsForActiveTab(newsTrackerCards);
 }
 
-function loadNewsTracker(force) {
-  if (activeTab !== 'newsTracker') return;
-  if (newsTrackerLoaded && !force) { setCardsForActiveTab(newsTrackerCards); return; }
+function loadNewsTracker(forceRefresh) {
+  if (activeTab !== 'newsTracker') return Promise.resolve();
+  if (newsTrackerLoaded && !forceRefresh) { setCardsForActiveTab(newsTrackerCards); return Promise.resolve(newsTrackerCards); }
   var grid = document.getElementById('grid');
   grid.innerHTML = '<div class="empty"><div class="spinner"></div><div>Loading News Tracker...</div></div>';
-  fetch(NEWS_TRACKER_API)
+  var url = NEWS_TRACKER_API;
+  url += (url.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
+  return fetch(url)
     .then(function(r){ if (!r.ok) throw new Error('Tracker API returned '+r.status); return r.json(); })
     .then(function(data) {
       if (!data || data.ok === false) throw new Error((data && data.error) || 'Tracker API failed');
       newsTrackerCards = (data.items || []).map(normalizeNewsTrackerCard).sort(function(a,b) {
-        return newsTrackerDateValue(b.pub) - newsTrackerDateValue(a.pub);
+        return newsTrackerDateValue(b.dateFound || b.pub) - newsTrackerDateValue(a.dateFound || a.pub);
       });
       newsTrackerLoaded = true;
       setCardsForActiveTab(newsTrackerCards);
+      return newsTrackerCards;
     }).catch(function(err) {
       newsTrackerCards = [];
       newsTrackerLoaded = false;
@@ -5784,6 +5790,39 @@ function loadNewsTracker(force) {
       cards = [];
       updateStats();
       console.warn('News Tracker failed:', err);
+      throw err;
+    });
+}
+
+function refreshNewsTracker() {
+  if (window._newsTrackerLoading) return;
+
+  window._newsTrackerLoading = true;
+
+  var btn = document.getElementById('news-tracker-refresh-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Refreshing...';
+  }
+
+  return loadNewsTracker(true)
+    .then(function() {
+      if (activeTab === 'newsTracker') {
+        cards = newsTrackerCards || [];
+        render();
+      }
+    })
+    .catch(function(err) {
+      console.error('News Tracker refresh failed', err);
+      alert('Could not refresh News Tracker. Please try again.');
+    })
+    .finally(function() {
+      window._newsTrackerLoading = false;
+
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Refresh tracker';
+      }
     });
 }
 
@@ -5835,14 +5874,16 @@ function newsTrackerHeat(item) {
 }
 
 function normalizeNewsTrackerCard(item) {
+  var foundDate = item.dateFound || item.pub || item.publishedDate || item.date || '';
   return {
     title: strip(item.headline || ''),
     src: strip(item.source || 'News Tracker'),
     cat: mapNewsTrackerThemeToCardCat(item.theme),
     heat: newsTrackerHeat(item),
     sent: 'neutral',
-    ago: ago(item.dateFound),
-    pub: item.dateFound || '',
+    ago: ago(foundDate),
+    pub: foundDate,
+    dateFound: foundDate,
     link: item.link || '#',
     whyItMatters: strip(item.whyItMatters || ''),
     suggestedFormat: strip(item.suggestedFormat || ''),
