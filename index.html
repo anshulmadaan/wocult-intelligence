@@ -88,12 +88,17 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .empty{text-align:center;padding:60px 20px;color:var(--g3);grid-column:1/-1}
 .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--g2);border-top-color:var(--y);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
+.news-social-option{border:1px solid var(--bdr);border-radius:8px;background:#fff;padding:12px;cursor:pointer}
+.news-social-option.selected{border-color:var(--y);box-shadow:0 0 0 2px rgba(250,199,117,0.28)}
+.news-social-option textarea{width:100%;border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;font-size:14px;font-family:system-ui,sans-serif;line-height:1.55;resize:vertical;min-height:160px;outline:none;background:#fff}
+.news-social-schedule-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 @media(max-width:760px){
   .landing{padding:28px 14px}
   .landing-cards{grid-template-columns:1fr!important}
   .scratch-screen{max-width:100%!important}
   #landing-editorial-calendar-editor .scratch-screen>div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}
   #editorial-calendar-grid{min-width:860px!important}
+  .news-social-schedule-grid{grid-template-columns:1fr}
   .topbar{padding:0 12px;gap:8px}
   .tbar-r{gap:6px}
 }
@@ -609,6 +614,56 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn-lg" onclick="showManualNewsBrief()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Back</button>
         <button class="btn-lg btn-y" id="manual-news-submit-btn" onclick="submitManualNewsBriefToCms()" style="flex:1">Submit to Firebase + CMS</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="news-brief-social-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;padding:24px">
+    <div style="background:#fff;border:1px solid var(--bdr);border-radius:10px;width:min(460px,100%);padding:22px;box-shadow:0 18px 60px rgba(0,0,0,0.25)">
+      <h2 style="font-size:20px;margin-bottom:8px;font-family:Georgia,serif;color:var(--blk)">News brief submitted</h2>
+      <p style="font-size:14px;color:var(--g3);line-height:1.6;margin-bottom:18px">Would you like to prepare a LinkedIn post for this story?</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()" style="flex:1">Work on socials</button>
+        <button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Not now</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="landing-news-brief-social" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:980px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
+        <button onclick="confirmLeaveNewsBriefSocialWorkflow(skipNewsBriefSocialWorkflow)" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">&larr; Back to staff dashboard</button>
+        <button class="btn" id="news-social-regenerate-btn" onclick="regenerateNewsBriefSocialOptions()">Regenerate options</button>
+      </div>
+      <h2>LinkedIn post</h2>
+      <p class="sub">Prepare a LinkedIn post for the submitted news brief. Choose an option, edit freely, then add it to the Editorial Calendar.</p>
+      <div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-bottom:18px">
+        <div id="news-social-headline" style="font-size:17px;font-weight:700;line-height:1.35;color:var(--blk)"></div>
+        <div id="news-social-context" style="font-size:13px;color:var(--g3);line-height:1.6;margin-top:8px"></div>
+      </div>
+      <div id="news-social-status" class="hint" style="margin-bottom:12px"></div>
+      <div id="news-social-options" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:20px"></div>
+      <div style="padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-bottom:18px">
+        <h3 style="font-size:15px;margin-bottom:12px">Schedule in Editorial Calendar</h3>
+        <div class="news-social-schedule-grid">
+          <div class="sfield"><label>Calendar title</label><input id="news-social-calendar-title" /></div>
+          <div class="sfield"><label>Owner</label><input id="news-social-owner" /></div>
+          <div class="sfield"><label>Publish date</label><input id="news-social-publish-date" type="date" /></div>
+          <div class="sfield"><label>Publish time</label><input id="news-social-publish-time" type="time" /></div>
+          <div class="sfield"><label>Status</label><select id="news-social-calendar-status" class="wf-input"><option>Draft</option><option>Working</option><option>Ready</option><option>Scheduled</option><option>Published</option><option>Cancelled</option></select></div>
+        </div>
+        <div id="news-social-save-status" class="hint"></div>
+      </div>
+      <div id="news-social-complete" style="display:none;padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-bottom:18px">
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--blk)">LinkedIn post added to the Editorial Calendar.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+          <button class="btn-lg btn-y" onclick="openNewsBriefSocialCalendarEntry()">Open Editorial Calendar</button>
+          <button class="btn-lg" onclick="finishNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Return home</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-lg btn-y" id="news-social-save-btn" onclick="saveNewsBriefSocialToCalendar()" style="flex:1">Add to Editorial Calendar</button>
+        <button class="btn-lg" onclick="confirmLeaveNewsBriefSocialWorkflow(skipNewsBriefSocialWorkflow)" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Skip and return home</button>
       </div>
     </div>
   </div>
@@ -1378,6 +1433,16 @@ var editorialCalendarState = {
   editorRecoveryKey: '',
   searchOutsideMonth: false
 };
+var newsBriefSocialState = {
+  articleId: '',
+  article: null,
+  options: [],
+  selectedIndex: 0,
+  generating: false,
+  saving: false,
+  calendarEntryId: '',
+  dirty: false
+};
 
 function isStaffUser(user) {
   return !!(user && STAFF_EMAILS.indexOf((user.email || '').toLowerCase()) !== -1);
@@ -1395,7 +1460,7 @@ function guardStaffScreen() {
 }
 function enforceStaffScreenAccess() {
   if (isStaffUser(currentUser)) return;
-  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-editorial-calendar','landing-editorial-calendar-editor','landing-unsent-admin','landing-blog-comments-admin','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
+  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-editorial-calendar','landing-editorial-calendar-editor','landing-news-brief-social','landing-unsent-admin','landing-blog-comments-admin','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
     var el = document.getElementById(id);
     return el && el.style.display !== 'none';
   });
@@ -1441,6 +1506,7 @@ function isDirtyTrackedTarget(target) {
     '#landing-existing-draft',
     '#landing-prepare-interview',
     '#landing-editorial-calendar-editor',
+    '#landing-news-brief-social',
     '#guest-placeholder',
     '#guest-writer-registration',
     '#guest-writer-idea',
@@ -1531,6 +1597,8 @@ function hideAllAppScreens() {
   if (uploadBlock) uploadBlock.style.display = 'none';
   var submitBtn = document.getElementById('guest-writer-submit-story-btn');
   if (submitBtn) submitBtn.style.display = 'none';
+  var socialModal = document.getElementById('news-brief-social-modal');
+  if (socialModal) socialModal.style.display = 'none';
   updateTopUpdatedVisibility(false);
 }
 function showAccessScreen() {
@@ -1631,6 +1699,7 @@ function signInWithGoogle() {
 }
 function logout() {
   clearUnsavedChanges();
+  resetNewsBriefSocialState();
   clearAccessSession(false);
   currentUser = null;
   currentGuestWriterProfile = null;
@@ -5507,6 +5576,7 @@ function goToLanding() {
   if (currentAccessMode === 'guest') { loadGuestInterview(currentAccessKey); return; }
   if (currentAccessMode === 'guest_writer') { showGuestWriterDashboard(); return; }
   if (currentAccessMode !== 'staff') { showAccessScreen(); return; }
+  resetNewsBriefSocialState();
   document.getElementById('main').style.display = 'none';
   document.getElementById('workflow').style.display = 'none';
   document.getElementById('access-screen').style.display = 'none';
@@ -5524,6 +5594,7 @@ function goToLanding() {
 }
 function showMain() {
   if (!guardStaffScreen()) return;
+  resetNewsBriefSocialState();
   document.getElementById('landing').style.display = 'none';
   document.getElementById('main').style.display = 'block';
   document.getElementById('stats-bar').style.display = 'grid';
@@ -5550,6 +5621,7 @@ function hideStaffLandingPanels() {
     'landing-editorial-tracker',
     'landing-editorial-calendar',
     'landing-editorial-calendar-editor',
+    'landing-news-brief-social',
     'landing-unsent-admin',
     'landing-blog-comments-admin'
   ].forEach(function(id) {
@@ -5573,6 +5645,9 @@ function showUrlEntry() {
 function showManualNewsBrief() {
   if (!guardStaffScreen()) return;
   console.log('Manual news brief opened');
+  resetNewsBriefSocialState();
+  workflowMode = 'manual_news_brief';
+  window._workflowMode = 'manual_news_brief';
   hideStaffLandingPanels();
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-manual-news-brief').style.display = 'flex';
@@ -5674,10 +5749,12 @@ function startFromUrl() {
   if (!url) return;
   workflowGeneratedDraftOnly = false;
   _workflowSource = 'landing';
-  document.getElementById('landing').style.display = 'none';
   var host = 'link';
   try { host = new URL(url).hostname.replace('www.',''); } catch(e) {}
-  setWorkflowCard({title:url, src:host, cat:'general', heat:8, ago:'now', link:url, _url:url});
+  pendingDraftIndex = null;
+  pendingDraftWorkflowSource = 'landing';
+  pendingDraftCard = {title:url, src:host, cat:'general', heat:8, ago:'now', link:url, _url:url};
+  showDraftTypeModal();
 }
 function selectRadio(el, hiddenId) {
   el.closest('.radio-grid').querySelectorAll('.radio-opt').forEach(function(o){ o.classList.remove('sel'); });
@@ -6454,6 +6531,7 @@ var officialLoaded = false;
 var workflowMode = 'long_form';
 var pendingDraftIndex = null;
 var pendingDraftCard = null;
+var pendingDraftWorkflowSource = 'main';
 var pendingNewsBriefCard = null;
 var manualNewsBriefCmsData = null;
 var currentCard = null;
@@ -6567,6 +6645,7 @@ function draftSaved(idx) {
   var s = saved[idx];
   if (!s) return;
   pendingDraftIndex = null;
+  pendingDraftWorkflowSource = 'main';
   pendingDraftCard = {title:s.title||s.url, src:s.src, cat:'general', heat:8, ago:s.savedAt, link:s.url, _url:s.url};
   showDraftTypeModal();
 }
@@ -7278,6 +7357,9 @@ function resetLongFormBriefScreen() {
 
 function setWorkflowCard(card) {
   workflowMode = 'long_form';
+  window._workflowMode = 'long_form';
+  resetNewsBriefSocialState();
+  generatedContent = {};
   renderLongFormCmsReviewFields({});
   pendingNewsBriefCard = null;
   resetLongFormBriefScreen();
@@ -7301,6 +7383,8 @@ function setWorkflowCard(card) {
 }
 function generateNewsBrief(card, instructions) {
   instructions = instructions || {};
+  workflowMode = 'news_brief';
+  window._workflowMode = 'news_brief';
   var steps = ['gs1','gs2','gs3','gs4'];
   steps.forEach(function(s){ var el=document.getElementById(s); if(el){el.classList.remove('active');el.classList.remove('done');} });
   var si = 0;
@@ -7385,6 +7469,8 @@ Important: The body field must contain only the article body. It must not includ
     var e = txt.lastIndexOf('}');
     if (s !== -1 && e !== -1) txt = txt.slice(s,e+1);
     generatedContent = JSON.parse(txt);
+    generatedContent.contentType = 'news_brief';
+    generatedContent.cmsType = 'news';
     generatedContent.title = toSentenceCaseHeadline(generatedContent.title);
     generatedContent.standfirst = generatedContent.standfirst || generatedContent.shortIntro || generatedContent.excerpt || '';
     generatedContent.shortIntro = generatedContent.standfirst;
@@ -7525,7 +7611,12 @@ function cleanNewsBriefBody(title, standfirst, body) {
 }
 var longFormCmsReviewFieldsHtml = '';
 function isNewsBriefWorkflow() {
-  return workflowMode === 'news_brief' || workflowMode === 'manual_news_brief';
+  return workflowMode === 'news_brief' ||
+         workflowMode === 'manual_news_brief' ||
+         window._workflowMode === 'news_brief' ||
+         window._workflowMode === 'manual_news_brief' ||
+         (generatedContent && generatedContent.contentType === 'news_brief') ||
+         (generatedContent && generatedContent.cmsType === 'news');
 }
 function cmsFieldValue(id) {
   var el = document.getElementById(id);
@@ -7604,6 +7695,7 @@ function openDraft(idx) {
   var card = cards[idx];
   if (!card) return;
   pendingDraftIndex = idx;
+  pendingDraftWorkflowSource = 'main';
   pendingDraftCard = null;
   showDraftTypeModal();
 }
@@ -7615,34 +7707,47 @@ function closeDraftTypeModal() {
   var modal = document.getElementById('draft-type-modal');
   if (modal) modal.style.display = 'none';
   pendingDraftIndex = null;
+  pendingDraftWorkflowSource = 'main';
   pendingDraftCard = null;
 }
 function chooseDraftType(type) {
   var i = pendingDraftIndex;
   var card = pendingDraftCard || (i !== null && i !== undefined ? cards[i] : null);
+  var workflowSource = pendingDraftWorkflowSource || 'main';
   var modal = document.getElementById('draft-type-modal');
   if (modal) modal.style.display = 'none';
   pendingDraftIndex = null;
+  pendingDraftWorkflowSource = 'main';
   pendingDraftCard = null;
   if (!card) return;
+  _workflowSource = workflowSource;
   if (type === 'long') { openLongFormDraft(card); return; }
-  if (type === 'brief') { openNewsBriefDraft(card); return; }
+  if (type === 'brief') {
+    workflowMode = 'news_brief';
+    window._workflowMode = 'news_brief';
+    openNewsBriefDraft(card);
+    return;
+  }
 }
-function openLongFormDraft(card) { _workflowSource = 'main'; setWorkflowCard(card); }
+function openLongFormDraft(card) { setWorkflowCard(card); }
 function openNewsBriefDraft(card) {
+  workflowMode = 'news_brief';
+  window._workflowMode = 'news_brief';
   showNewsBriefBriefStep(card);
 }
 function showNewsBriefBriefStep(card) {
   workflowMode = 'news_brief';
-  _workflowSource = 'main';
+  window._workflowMode = 'news_brief';
+  resetNewsBriefSocialState();
+  _workflowSource = _workflowSource || 'main';
   pendingNewsBriefCard = card;
   currentCard = Object.assign({}, card, {_url:card.link});
   workflowHasBriefStep = true;
-  workflowPreviousLandingScreen = 'main';
+  workflowPreviousLandingScreen = _workflowSource === 'landing' ? 'landing-url' : 'main';
   workflowReviewPrepared = false;
   currentWorkflowStep = '';
   maxWorkflowStepReached = 1;
-  generatedContent = {};
+  generatedContent = {contentType:'news_brief', cmsType:'news'};
   document.getElementById('main').style.display = 'none';
   document.getElementById('workflow').style.display = 'block';
   updateTopUpdatedVisibility(false);
@@ -7700,7 +7805,10 @@ function openDraftFromUrl() {
   _workflowSource = 'main';
   var host = 'link';
   try { host = new URL(url).hostname.replace('www.',''); } catch(e) {}
-  setWorkflowCard({title:url, src:host, cat:'general', heat:8, ago:'now', link:url, _url:url});
+  pendingDraftIndex = null;
+  pendingDraftWorkflowSource = 'main';
+  pendingDraftCard = {title:url, src:host, cat:'general', heat:8, ago:'now', link:url, _url:url};
+  showDraftTypeModal();
 }
 function closeWorkflow() {
   document.getElementById('workflow').style.display = 'none';
@@ -8469,6 +8577,352 @@ function saveGuestWriterDraft(status, options) {
   });
 }
 
+function resetNewsBriefSocialState() {
+  newsBriefSocialState = {
+    articleId: '',
+    article: null,
+    options: [],
+    selectedIndex: 0,
+    generating: false,
+    saving: false,
+    calendarEntryId: '',
+    dirty: false
+  };
+  var modal = document.getElementById('news-brief-social-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function getSubmittedStoryUrl(webflowData, article) {
+  webflowData = webflowData || {};
+  article = article || {};
+  var fieldData = webflowData.fieldData || webflowData.field_data || {};
+  return webflowData.publishedUrl || webflowData.url || webflowData.link || fieldData.publishedUrl || fieldData.url || article.publishedUrl || '';
+}
+
+function offerNewsBriefSocialWorkflow(articleContext) {
+  if (!isStaffUser(currentUser)) return;
+  if (!articleContext || !articleContext.articleId) {
+    fbToast('News brief submitted, but social workflow needs the Firebase article ID.', false);
+    return;
+  }
+  newsBriefSocialState.articleId = articleContext.articleId;
+  newsBriefSocialState.article = articleContext;
+  newsBriefSocialState.options = [];
+  newsBriefSocialState.selectedIndex = 0;
+  newsBriefSocialState.generating = false;
+  newsBriefSocialState.saving = false;
+  newsBriefSocialState.calendarEntryId = '';
+  newsBriefSocialState.dirty = false;
+  var modal = document.getElementById('news-brief-social-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function skipNewsBriefSocialWorkflow() {
+  resetNewsBriefSocialState();
+  clearUnsavedChanges();
+  goToLanding();
+}
+
+function startNewsBriefSocialWorkflow() {
+  if (!guardStaffScreen()) return;
+  var modal = document.getElementById('news-brief-social-modal');
+  if (modal) modal.style.display = 'none';
+  hideStaffLandingPanels();
+  document.getElementById('landing').style.display = 'block';
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('workflow').style.display = 'none';
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-news-brief-social').style.display = 'flex';
+  populateNewsBriefSocialScreen();
+  generateNewsBriefSocialOptions();
+}
+
+function confirmLeaveNewsBriefSocialWorkflow(onContinue) {
+  if (newsBriefSocialState.dirty && !newsBriefSocialState.calendarEntryId) {
+    if (!window.confirm('You have unsaved LinkedIn copy. Leave without adding it to the Editorial Calendar?')) return;
+  }
+  onContinue();
+}
+
+function newsBriefSocialArticleUrl() {
+  var article = newsBriefSocialState.article || {};
+  return article.submittedStoryUrl || article.publishedUrl || article.sourceUrl || '';
+}
+
+function populateNewsBriefSocialScreen() {
+  var article = newsBriefSocialState.article || {};
+  var headline = article.title || 'Untitled news brief';
+  var headlineEl = document.getElementById('news-social-headline');
+  var contextEl = document.getElementById('news-social-context');
+  if (headlineEl) headlineEl.textContent = headline;
+  if (contextEl) {
+    var bits = [];
+    if (article.standfirst || article.shortIntro) bits.push(article.standfirst || article.shortIntro);
+    if (newsBriefSocialArticleUrl()) bits.push('Link: ' + newsBriefSocialArticleUrl());
+    contextEl.textContent = bits.join(' · ');
+  }
+  var user = currentUser || {};
+  var titleEl = document.getElementById('news-social-calendar-title');
+  if (titleEl) titleEl.value = 'LinkedIn: ' + headline;
+  var ownerEl = document.getElementById('news-social-owner');
+  if (ownerEl) ownerEl.value = user.displayName || user.email || '';
+  var statusEl = document.getElementById('news-social-calendar-status');
+  if (statusEl) statusEl.value = 'Draft';
+  var dateEl = document.getElementById('news-social-publish-date');
+  if (dateEl) {
+    var d = article.publishedDate || article.publishDate || '';
+    var dt = d ? new Date(d) : null;
+    dateEl.value = dt && !isNaN(dt.getTime()) && dt.getTime() > Date.now() ? editorialCalendarDateKey(dt) : '';
+  }
+  var complete = document.getElementById('news-social-complete');
+  if (complete) complete.style.display = 'none';
+  var saveBtn = document.getElementById('news-social-save-btn');
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Add to Editorial Calendar'; }
+}
+
+function fallbackNewsBriefSocialOption() {
+  var article = newsBriefSocialState.article || {};
+  var url = newsBriefSocialArticleUrl();
+  var text = (article.title || 'New Wocult news brief') + '\n\n'
+    + (article.standfirst || article.shortIntro || stripHtml(article.body || '') || 'Here is the latest Wocult news brief for working professionals.')
+    + (url ? '\n\nRead the full story: ' + url : '');
+  return [{label:'Straight news', text:text}];
+}
+
+function validateNewsBriefSocialOptions(data) {
+  var options = data && Array.isArray(data.linkedinOptions) ? data.linkedinOptions : [];
+  options = options.filter(function(opt) {
+    return opt && opt.label && opt.text && String(opt.text).trim().length > 20;
+  }).slice(0, 3).map(function(opt) {
+    return {label:String(opt.label).trim(), text:String(opt.text).trim()};
+  });
+  if (!options.length) throw new Error('AI returned no usable LinkedIn options.');
+  return options;
+}
+
+function renderNewsBriefSocialOptions() {
+  var wrap = document.getElementById('news-social-options');
+  if (!wrap) return;
+  if (!newsBriefSocialState.options.length) {
+    wrap.innerHTML = '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3)">No options yet.</div>';
+    return;
+  }
+  wrap.innerHTML = newsBriefSocialState.options.map(function(opt, idx) {
+    var selected = idx === newsBriefSocialState.selectedIndex;
+    return '<div class="news-social-option '+(selected ? 'selected' : '')+'" onclick="selectNewsBriefSocialOption('+idx+')">'
+      + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px">'
+      + '<div style="font-size:14px;font-weight:700;color:var(--blk)">'+escapeHtml(opt.label || ('Option '+(idx+1)))+'</div>'
+      + '<span style="font-size:11px;color:'+(selected ? 'var(--yd)' : 'var(--g3)')+'">'+(selected ? 'Selected' : 'Select')+'</span>'
+      + '</div>'
+      + '<textarea id="news-social-option-'+idx+'" onclick="event.stopPropagation()" oninput="updateNewsBriefSocialOption('+idx+',this.value)">'+escapeHtml(opt.text || '')+'</textarea>'
+      + '<div id="news-social-count-'+idx+'" class="hint" style="margin-top:6px">'+String(opt.text || '').length+' characters</div>'
+      + '</div>';
+  }).join('');
+}
+
+function selectNewsBriefSocialOption(index) {
+  if (index < 0 || index >= newsBriefSocialState.options.length) return;
+  newsBriefSocialState.selectedIndex = index;
+  renderNewsBriefSocialOptions();
+}
+
+function updateNewsBriefSocialOption(index, value) {
+  if (!newsBriefSocialState.options[index]) return;
+  newsBriefSocialState.options[index].text = value;
+  newsBriefSocialState.selectedIndex = index;
+  newsBriefSocialState.dirty = true;
+  markUnsavedChanges();
+  var count = document.getElementById('news-social-count-'+index);
+  if (count) count.textContent = String(value || '').length + ' characters';
+}
+
+function generateNewsBriefSocialOptions() {
+  if (!guardStaffScreen()) return;
+  var article = newsBriefSocialState.article || {};
+  var status = document.getElementById('news-social-status');
+  var btn = document.getElementById('news-social-regenerate-btn');
+  newsBriefSocialState.generating = true;
+  if (status) status.textContent = 'Generating LinkedIn options...';
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
+  renderNewsBriefSocialOptions();
+  var prompt = 'Generate three distinct LinkedIn post options for the Wocult LinkedIn page from this submitted news brief. Return structured JSON only in this shape: {"linkedinOptions":[{"label":"Straight news","text":"..."},{"label":"Why it matters","text":"..."},{"label":"Sharp perspective","text":"..."}]}. Requirements: British English; professional but human; avoid jargon; avoid excessive hashtags; avoid emojis unless genuinely useful; include a clear reading prompt; use the submitted story link when available; never invent quotes, numbers or facts. Option 1 Straight news: clear factual summary. Option 2 Why it matters: connect the story to working professionals, leadership, careers or workplace culture. Option 3 Sharp perspective: stronger editorial observation, thought-provoking but fact-based.\n\nHeadline:\n' + (article.title || '') + '\n\nStandfirst:\n' + (article.standfirst || article.shortIntro || '') + '\n\nBody or summary:\n' + stripHtml(article.body || article.summary || '') + '\n\nSource URL:\n' + (article.sourceUrl || '') + '\n\nSubmitted story link:\n' + newsBriefSocialArticleUrl();
+  return fetch(WORKER+'/generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      briefType:'news_brief',
+      model:'claude-sonnet-4-6',
+      max_tokens:1200,
+      messages:[{role:'user',content:prompt}]
+    })
+  }).then(function(r){ return r.json(); }).then(function(data) {
+    if (data.error) throw new Error(data.error.message || data.error || 'LinkedIn generation failed');
+    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('').trim();
+    txt = txt.replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim();
+    var s = txt.indexOf('{');
+    var e = txt.lastIndexOf('}');
+    if (s !== -1 && e !== -1) txt = txt.slice(s,e+1);
+    newsBriefSocialState.options = validateNewsBriefSocialOptions(JSON.parse(txt));
+    newsBriefSocialState.selectedIndex = 0;
+    newsBriefSocialState.dirty = false;
+    if (status) status.textContent = 'Choose and edit one option.';
+  }).catch(function(err) {
+    console.error('LinkedIn copy generation failed:', err);
+    newsBriefSocialState.options = fallbackNewsBriefSocialOption();
+    newsBriefSocialState.selectedIndex = 0;
+    newsBriefSocialState.dirty = true;
+    if (status) status.textContent = 'Could not generate options. A fallback draft is editable below.';
+  }).finally(function() {
+    newsBriefSocialState.generating = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Regenerate options'; }
+    renderNewsBriefSocialOptions();
+  });
+}
+
+function regenerateNewsBriefSocialOptions() {
+  if (newsBriefSocialState.dirty && !window.confirm('Regenerating will replace your current LinkedIn drafts. Continue?')) return;
+  generateNewsBriefSocialOptions();
+}
+
+function selectedNewsBriefSocialCopy() {
+  var opt = newsBriefSocialState.options[newsBriefSocialState.selectedIndex];
+  return opt ? String(opt.text || '').trim() : '';
+}
+
+function newsBriefSocialSummary() {
+  var article = newsBriefSocialState.article || {};
+  var link = newsBriefSocialArticleUrl();
+  return [
+    article.title ? 'Original news brief: ' + article.title : '',
+    article.standfirst || article.shortIntro || '',
+    link ? 'Story link: ' + link : '',
+    article.sourceUrl && article.sourceUrl !== link ? 'Source: ' + article.sourceUrl : ''
+  ].filter(Boolean).join('\n');
+}
+
+function saveNewsBriefSocialToCalendar() {
+  if (!guardStaffScreen() || !db) return;
+  if (newsBriefSocialState.saving) return;
+  if (newsBriefSocialState.calendarEntryId) {
+    showNewsBriefSocialSaveComplete(newsBriefSocialState.calendarEntryId);
+    return;
+  }
+  var article = newsBriefSocialState.article || {};
+  if (!newsBriefSocialState.articleId) { alert('Missing submitted article ID.'); return; }
+  var copy = selectedNewsBriefSocialCopy();
+  if (!copy) { alert('Please choose or write LinkedIn copy before saving.'); return; }
+  var title = (document.getElementById('news-social-calendar-title').value || '').trim();
+  var publishDate = document.getElementById('news-social-publish-date').value;
+  if (!title) { alert('Calendar title is required.'); return; }
+  if (!publishDate) { alert('Publish date is required before adding this to the Editorial Calendar.'); return; }
+  var status = document.getElementById('news-social-save-status');
+  var btn = document.getElementById('news-social-save-btn');
+  newsBriefSocialState.saving = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+  if (status) status.textContent = 'Saving to Editorial Calendar...';
+  var existingLocal = (editorialCalendarState.entries || []).find(function(e) {
+    return e.originalCollection === 'articles' && e.originalRecordId === newsBriefSocialState.articleId && e.contentType === 'Social post' && (e.channels || []).indexOf('LinkedIn') !== -1;
+  });
+  var duplicateCheck = existingLocal ? Promise.resolve(existingLocal.id) : db.collection('editorial_calendar')
+    .where('originalCollection','==','articles')
+    .where('originalRecordId','==',newsBriefSocialState.articleId)
+    .where('contentType','==','Social post')
+    .limit(1)
+    .get()
+    .then(function(snap) {
+      var found = '';
+      snap.forEach(function(doc) {
+        var data = doc.data() || {};
+        if (!found && (data.channels || []).indexOf('LinkedIn') !== -1) found = doc.id;
+      });
+      return found;
+    }).catch(function(err) {
+      console.warn('Could not check duplicate social calendar entry:', err);
+      return '';
+    });
+  duplicateCheck.then(function(foundId) {
+    if (foundId) {
+      newsBriefSocialState.calendarEntryId = foundId;
+      showNewsBriefSocialSaveComplete(foundId);
+      return null;
+    }
+    var user = currentUser || {};
+    var entryRef = db.collection('editorial_calendar').doc('linkedin_' + newsBriefSocialState.articleId);
+    var storyUrl = newsBriefSocialArticleUrl();
+    var contentHtml = escapeHtml(copy).replace(/\n/g,'<br>');
+    var data = {
+      title:title,
+      channels:['LinkedIn'],
+      contentType:'Social post',
+      summary:newsBriefSocialSummary(),
+      contentCopy:contentHtml,
+      imageUrl:article.imageUrl || article.newsImage || article.coverImageUrl || '',
+      owner:(document.getElementById('news-social-owner').value || '').trim() || user.displayName || user.email || 'Wocult editor',
+      publishDate:publishDate,
+      publishTime:document.getElementById('news-social-publish-time').value || '',
+      status:document.getElementById('news-social-calendar-status').value || 'Draft',
+      sourceUrl:storyUrl || article.sourceUrl || '',
+      publishedUrl:article.submittedStoryUrl || article.publishedUrl || '',
+      originalCollection:'articles',
+      originalRecordId:newsBriefSocialState.articleId,
+      originalRecordLink:storyUrl || article.sourceUrl || '',
+      creatorUid:user.uid || '',
+      creatorEmail:user.email || '',
+      creatorName:user.displayName || user.email || 'Wocult editor',
+      createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy:user.email || '',
+      createdByUid:user.uid || '',
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy:user.email || '',
+      updatedByUid:user.uid || '',
+      archived:false
+    };
+    return entryRef.set(data, {merge:true}).then(function() {
+      newsBriefSocialState.calendarEntryId = entryRef.id;
+      editorialCalendarState.entries = (editorialCalendarState.entries || []).concat([Object.assign({id:entryRef.id}, data)]);
+      editorialCalendarState.linkedSourceKeys['articles:' + newsBriefSocialState.articleId] = entryRef.id;
+      return editorialCalendarLogActivity(entryRef.id, 'Created entry', 'Created from news brief social workflow.');
+    }).then(function() {
+      showNewsBriefSocialSaveComplete(entryRef.id);
+    });
+  }).catch(function(err) {
+    console.error('Could not save LinkedIn calendar entry:', err);
+    if (status) status.textContent = 'Could not save: ' + err.message;
+    alert('Could not save calendar entry: ' + err.message);
+  }).finally(function() {
+    newsBriefSocialState.saving = false;
+    if (!newsBriefSocialState.calendarEntryId && btn) { btn.disabled = false; btn.textContent = 'Add to Editorial Calendar'; }
+  });
+}
+
+function showNewsBriefSocialSaveComplete(entryId) {
+  newsBriefSocialState.calendarEntryId = entryId || newsBriefSocialState.calendarEntryId;
+  newsBriefSocialState.dirty = false;
+  clearUnsavedChanges();
+  var status = document.getElementById('news-social-save-status');
+  if (status) status.textContent = 'LinkedIn post added to the Editorial Calendar.';
+  var complete = document.getElementById('news-social-complete');
+  if (complete) complete.style.display = 'block';
+  var btn = document.getElementById('news-social-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Added to Editorial Calendar'; }
+}
+
+function openNewsBriefSocialCalendarEntry() {
+  var publishDate = document.getElementById('news-social-publish-date') ? document.getElementById('news-social-publish-date').value : '';
+  if (publishDate) {
+    var parts = publishDate.split('-');
+    if (parts.length === 3) editorialCalendarState.month = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, 1);
+  }
+  resetNewsBriefSocialState();
+  showEditorialCalendar();
+}
+
+function finishNewsBriefSocialWorkflow() {
+  resetNewsBriefSocialState();
+  clearUnsavedChanges();
+  goToLanding();
+}
+
 function submitArticle() {
   if (isNewsBriefWorkflow()) {
     submitNewsBriefArticle('Wocult Team');
@@ -8655,6 +9109,10 @@ function prepareManualNewsBriefCmsFields() {
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing...'; }
   if (status) status.textContent = 'Preparing CMS fields...';
   generateManualNewsBriefFields(headline, body).then(function(fields) {
+    workflowMode = 'manual_news_brief';
+    window._workflowMode = 'manual_news_brief';
+    fields.contentType = 'news_brief';
+    fields.cmsType = 'news';
     manualNewsBriefCmsData = fields;
     populateManualNewsBriefReview(fields);
     console.log('Manual news brief CMS fields generated');
@@ -8703,6 +9161,8 @@ function collectManualNewsBriefReviewData() {
     sourceUrl: document.getElementById('manual-review-source-url').value.trim(),
     imageUrl: document.getElementById('manual-review-news-image').value.trim(),
     newsImage: document.getElementById('manual-review-news-image').value.trim(),
+    contentType: 'news_brief',
+    cmsType: 'news',
     status: 'submitted'
   };
 }
@@ -8711,11 +9171,13 @@ function submitManualNewsBriefToCms() {
   var btn = document.getElementById('manual-news-submit-btn');
   var status = document.getElementById('manual-review-status');
   var data = collectManualNewsBriefReviewData();
+  var savedDocId = '';
   if (!data.title) { alert('Title is required.'); return; }
   if (!stripHtml(data.body) || stripHtml(data.body).length < 50) { alert('Body should be at least 50 characters.'); return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
   if (status) status.textContent = 'Submitting to Firebase and CMS...';
   saveArticleToFirebase(Object.assign({}, data, {sourceType:'manual_news_brief'}), 'submitted').then(function(docId) {
+    savedDocId = docId || '';
     return fetch(WORKER + '/webflow-news', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -8724,9 +9186,12 @@ function submitManualNewsBriefToCms() {
   }).then(function(r){ return r.json().then(function(d){return {ok:r.ok,data:d};}); }).then(function(res) {
     if (!res.ok) throw new Error((res.data&&res.data.message)||JSON.stringify(res.data).substring(0,300));
     console.log('Manual news brief submitted');
-    alert('News brief saved and submitted to CMS.');
-    manualNewsBriefCmsData = null;
-    goToLanding();
+    if (status) status.textContent = 'News brief saved and submitted to CMS.';
+    offerNewsBriefSocialWorkflow(Object.assign({}, data, {
+      articleId:savedDocId,
+      submittedStoryUrl:getSubmittedStoryUrl(res.data, data),
+      sourceType:'manual_news_brief'
+    }));
   }).catch(function(err) {
     console.error('Manual news brief submit failed', err);
     if (status) status.textContent = 'Could not submit: '+err.message;
@@ -8741,7 +9206,9 @@ function submitNewsBriefArticle(writerName) {
   btn.disabled = true;
   btn.textContent = 'Submitting...';
   var newsData = collectNewsBriefData(writerName);
+  var savedDocId = '';
   saveArticleToFirebase(Object.assign({}, newsData, {sourceType:'news_brief'}), 'submitted').then(function(docId) {
+    savedDocId = docId || '';
     return fetch(WORKER + '/webflow-news', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -8752,6 +9219,11 @@ function submitNewsBriefArticle(writerName) {
     document.getElementById('publish-result').style.display = 'block';
     document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief submitted</div><div class="publish-sub">Saved to Firebase and published to Webflow News as draft.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
     document.getElementById('publish-actions').style.display = 'none';
+    offerNewsBriefSocialWorkflow(Object.assign({}, newsData, {
+      articleId:savedDocId,
+      submittedStoryUrl:getSubmittedStoryUrl(res.data, newsData),
+      sourceType:'news_brief'
+    }));
   }).catch(function(e) {
     fbToast('Error: '+e.message.substring(0,60), false);
   }).finally(function() {
