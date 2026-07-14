@@ -225,7 +225,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">14.1</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">14.2</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -1441,6 +1441,7 @@ var newsBriefSocialState = {
   generating: false,
   saving: false,
   calendarEntryId: '',
+  completed: false,
   dirty: false
 };
 
@@ -7381,6 +7382,55 @@ function setWorkflowCard(card) {
   if (document.getElementById('r-date')) document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
   showWorkflowStep('brief');
 }
+function finalizeGeneratedNewsBrief(content, card) {
+  generatedContent = validateNewsBriefObject(content);
+  generatedContent.contentType = 'news_brief';
+  generatedContent.cmsType = 'news';
+  generatedContent.title = toSentenceCaseHeadline(generatedContent.title);
+  generatedContent.standfirst = generatedContent.standfirst || generatedContent.shortIntro || generatedContent.excerpt || '';
+  generatedContent.shortIntro = generatedContent.standfirst;
+  generatedContent.seoDescription = limitSeoDescription(
+    generatedContent.seoDescription ||
+    generatedContent.standfirst ||
+    generatedContent.excerpt ||
+    generatedContent.body
+  );
+  generatedContent.excerpt = generatedContent.seoDescription || generatedContent.standfirst || generatedContent.excerpt || '';
+  generatedContent.intro40 = generatedContent.standfirst || generatedContent.intro40 || '';
+  generatedContent.introRichText = '';
+  generatedContent.sourceUrl = generatedContent.sourceUrl || card.link || '';
+  generatedContent.sourceTitle = card.title || '';
+  generatedContent.sourceName = generatedContent.sourceName || card.src || '';
+  generatedContent.publishedDate = toWebflowDateTime(generatedContent.publishedDate || generatedContent.publishDate || new Date());
+  generatedContent.publishDate = generatedContent.publishedDate;
+  generatedContent.slug = generatedContent.slug || safeFileName(generatedContent.title || card.title || 'news-brief');
+  generatedContent.readTime = generatedContent.readTime || '2 min read';
+  generatedContent.body = cleanNewsBriefBody(
+    generatedContent.title,
+    generatedContent.standfirst || generatedContent.shortIntro || generatedContent.excerpt,
+    generatedContent.body
+  );
+  maxWorkflowStepReached = workflowStepIndex('refine');
+  showWorkflowStep('refine');
+  document.getElementById('chat-article-preview').innerHTML = normalizeRefineDraftHtml(renderPreview(generatedContent), generatedContent.title);
+  window._versionCount = 1;
+  resetDraftRevert();
+  updateWordCount();
+  document.getElementById('chat-messages').innerHTML = '';
+  window._chatHistory = [
+    {
+      role: 'user',
+      content: 'You are a Wocult senior editor. The user generated a short news brief. Help refine it while preserving factual accuracy, source integrity, and concise reported style. Do not invent facts, quotes, numbers, or context. Keep it suitable for a Wocult news brief.\n\nCurrent news brief:\n' + document.getElementById('chat-article-preview').innerHTML
+    },
+    {
+      role: 'assistant',
+      content: 'Ready. I prepared the news brief for refinement. What would you like to change?'
+    }
+  ];
+  markUnsavedChanges();
+  window.scrollTo(0, 0);
+  pendingNewsBriefCard = null;
+}
 function generateNewsBrief(card, instructions) {
   instructions = instructions || {};
   workflowMode = 'news_brief';
@@ -7462,63 +7512,52 @@ Important: The body field must contain only the article body. It must not includ
   }).then(function(r){return r.json();}).then(function(data) {
     clearInterval(anim);
     steps.forEach(function(s){var el=document.getElementById(s); if(el){el.classList.remove('active');el.classList.add('done');}});
-    if (data.error) throw new Error(data.error.message || 'News brief generation failed');
-    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('').trim();
-    txt = txt.replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim();
-    var s = txt.indexOf('{');
-    var e = txt.lastIndexOf('}');
-    if (s !== -1 && e !== -1) txt = txt.slice(s,e+1);
-    generatedContent = JSON.parse(txt);
-    generatedContent.contentType = 'news_brief';
-    generatedContent.cmsType = 'news';
-    generatedContent.title = toSentenceCaseHeadline(generatedContent.title);
-    generatedContent.standfirst = generatedContent.standfirst || generatedContent.shortIntro || generatedContent.excerpt || '';
-    generatedContent.shortIntro = generatedContent.standfirst;
-    generatedContent.seoDescription = limitSeoDescription(
-      generatedContent.seoDescription ||
-      generatedContent.standfirst ||
-      generatedContent.excerpt ||
-      generatedContent.body
-    );
-    generatedContent.excerpt = generatedContent.seoDescription || generatedContent.standfirst || generatedContent.excerpt || '';
-    generatedContent.intro40 = generatedContent.standfirst || generatedContent.intro40 || '';
-    generatedContent.introRichText = '';
-    generatedContent.sourceUrl = generatedContent.sourceUrl || card.link || '';
-    generatedContent.sourceTitle = card.title || '';
-    generatedContent.sourceName = generatedContent.sourceName || card.src || '';
-    generatedContent.publishedDate = toWebflowDateTime(generatedContent.publishedDate || generatedContent.publishDate || new Date());
-    generatedContent.publishDate = generatedContent.publishedDate;
-    generatedContent.slug = generatedContent.slug || safeFileName(generatedContent.title || card.title || 'news-brief');
-    generatedContent.readTime = generatedContent.readTime || '2 min read';
-    generatedContent.body = cleanNewsBriefBody(
-      generatedContent.title,
-      generatedContent.standfirst || generatedContent.shortIntro || generatedContent.excerpt,
-      generatedContent.body
-    );
-    maxWorkflowStepReached = workflowStepIndex('refine');
-    showWorkflowStep('refine');
-    document.getElementById('chat-article-preview').innerHTML = normalizeRefineDraftHtml(renderPreview(generatedContent), generatedContent.title);
-    window._versionCount = 1;
-    resetDraftRevert();
-    updateWordCount();
-    document.getElementById('chat-messages').innerHTML = '';
-    window._chatHistory = [
-      {
-        role: 'user',
-        content: 'You are a Wocult senior editor. The user generated a short news brief. Help refine it while preserving factual accuracy, source integrity, and concise reported style. Do not invent facts, quotes, numbers, or context. Keep it suitable for a Wocult news brief.\n\nCurrent news brief:\n' + document.getElementById('chat-article-preview').innerHTML
-      },
-      {
-        role: 'assistant',
-        content: 'Ready. I prepared the news brief for refinement. What would you like to change?'
-      }
-    ];
-    markUnsavedChanges();
-    window.scrollTo(0, 0);
-    pendingNewsBriefCard = null;
+    var responseText = '';
+    var extractedJsonText = '';
+    var originalParseError = null;
+    try {
+      responseText = extractGeneratedText(data);
+      var parsed = parseGeneratedJson(responseText);
+      extractedJsonText = parsed.jsonText;
+      finalizeGeneratedNewsBrief(parsed.parsed, card);
+      return null;
+    } catch (parseErr) {
+      originalParseError = parseErr;
+      extractedJsonText = parseErr.extractedJsonText || extractedJsonText || '';
+      if (!responseText) throw parseErr;
+      console.error('Initial news brief JSON parse failed:', {
+        responseTextLength: responseText.length,
+        extractedJsonLength: extractedJsonText.length,
+        error: parseErr.message,
+        excerpt: getJsonErrorExcerpt(extractedJsonText, getJsonParseErrorPosition(parseErr))
+      });
+      return repairGeneratedJsonOnce(
+        extractedJsonText || responseText,
+        ['title','slug','standfirst','body','seoDescription','sourceName','sourceUrl','beat','publishedDate'],
+        3200
+      ).then(function(repaired) {
+        finalizeGeneratedNewsBrief(repaired.parsed, card);
+      }).catch(function(repairErr) {
+        console.error('News brief JSON repair failed:', {
+          responseTextLength: responseText.length,
+          extractedJsonLength: extractedJsonText.length,
+          originalParseError: originalParseError && originalParseError.message,
+          repairParseError: repairErr && repairErr.message,
+          excerpt: getJsonErrorExcerpt(extractedJsonText, getJsonParseErrorPosition(originalParseError))
+        });
+        throw new Error('INVALID_NEWS_BRIEF_JSON');
+      });
+    }
   }).catch(function(e) {
     clearInterval(anim);
-    alert('News brief failed: '+e.message);
-    showPreviousWorkflowScreen();
+    steps.forEach(function(s){var el=document.getElementById(s); if(el){el.classList.remove('active');el.classList.remove('done');}});
+    if (e && e.message === 'INVALID_NEWS_BRIEF_JSON') {
+      alert('The AI returned an invalid news-brief response. Please try generating it again.');
+    } else {
+      console.error('News brief generation failed:', e);
+      alert('News brief failed. Please try generating it again.');
+    }
+    showWorkflowStep('brief');
   });
 }
 function escapeRegExp(str) {
@@ -7580,6 +7619,96 @@ function firstUrlFromText(text) {
 function sourceNameFromUrl(url) {
   if (!url) return '';
   try { return new URL(url).hostname.replace(/^www\./,''); } catch(e) { return ''; }
+}
+function extractGeneratedText(data) {
+  if (data && data.error) throw new Error((data.error && data.error.message) || data.error || 'AI generation failed');
+  var blocks = data && Array.isArray(data.content) ? data.content : [];
+  var text = blocks.filter(function(b){ return b && b.type === 'text'; }).map(function(b){ return b.text || ''; }).join('').trim();
+  text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  if (!text) throw new Error('No text was returned by the AI worker.');
+  return text;
+}
+function extractJsonObjectText(text) {
+  var source = String(text || '');
+  var start = -1;
+  var depth = 0;
+  var inString = false;
+  var escaped = false;
+  for (var i = 0; i < source.length; i++) {
+    var ch = source.charAt(i);
+    if (start === -1) {
+      if (ch === '{') { start = i; depth = 1; }
+      continue;
+    }
+    if (escaped) { escaped = false; continue; }
+    if (ch === '\\') {
+      if (inString) escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    if (ch === '}') {
+      depth--;
+      if (depth === 0) return source.slice(start, i + 1);
+    }
+  }
+  throw new Error('No complete JSON object was returned');
+}
+function getJsonParseErrorPosition(error) {
+  var msg = error && error.message ? error.message : '';
+  var m = msg.match(/position\s+(\d+)/i) || msg.match(/at\s+(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+function getJsonErrorExcerpt(text, position) {
+  if (position === null || position === undefined || isNaN(position)) return '';
+  var source = String(text || '');
+  var start = Math.max(0, position - 120);
+  var end = Math.min(source.length, position + 120);
+  return source.slice(start, end);
+}
+function parseGeneratedJson(text) {
+  var jsonText = extractJsonObjectText(text);
+  try {
+    return {parsed: JSON.parse(jsonText), jsonText: jsonText};
+  } catch (err) {
+    err.extractedJsonText = jsonText;
+    throw err;
+  }
+}
+function isPlainObject(value) {
+  return !!value && Object.prototype.toString.call(value) === '[object Object]';
+}
+function validateNewsBriefObject(value) {
+  if (!isPlainObject(value)) throw new Error('News brief JSON must be an object.');
+  if (!String(value.title || '').trim()) throw new Error('News brief JSON is missing title.');
+  if (!String(value.body || '').trim()) throw new Error('News brief JSON is missing body.');
+  if (value.standfirst !== undefined && typeof value.standfirst !== 'string') throw new Error('News brief standfirst must be a string.');
+  return value;
+}
+function repairGeneratedJsonOnce(malformedJson, requiredFields, maxTokens) {
+  var prompt = 'You are repairing malformed JSON produced by another model.\n\n'
+    + 'Correct JSON syntax only. Preserve the original field values and article wording. Do not rewrite, summarise, add, remove, fact-check or otherwise alter the content.\n\n'
+    + 'Return one valid JSON object only, with no markdown or explanation.\n\n'
+    + 'The required fields are:\n'
+    + requiredFields.join('\n')
+    + '\n\nMalformed JSON:\n'
+    + malformedJson;
+  return fetch(WORKER+'/generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      briefType:'news_brief',
+      model:'claude-sonnet-4-6',
+      max_tokens:maxTokens || 2600,
+      messages:[{role:'user',content:prompt}]
+    })
+  }).then(function(r){ return r.json(); }).then(function(data) {
+    return parseGeneratedJson(extractGeneratedText(data));
+  });
 }
 function cleanNewsBriefBody(title, standfirst, body) {
   var cleaned = String(body || '').trim();
@@ -8586,6 +8715,7 @@ function resetNewsBriefSocialState() {
     generating: false,
     saving: false,
     calendarEntryId: '',
+    completed: false,
     dirty: false
   };
   var modal = document.getElementById('news-brief-social-modal');
@@ -8596,13 +8726,28 @@ function getSubmittedStoryUrl(webflowData, article) {
   webflowData = webflowData || {};
   article = article || {};
   var fieldData = webflowData.fieldData || webflowData.field_data || {};
-  return webflowData.publishedUrl || webflowData.url || webflowData.link || fieldData.publishedUrl || fieldData.url || article.publishedUrl || '';
+  var item = webflowData.item || webflowData.data || {};
+  var itemFields = item.fieldData || item.field_data || {};
+  return webflowData.publishedUrl || webflowData.webflowUrl || webflowData.url || webflowData.link ||
+    fieldData.publishedUrl || fieldData.url || item.publishedUrl || item.url || item.link ||
+    itemFields.publishedUrl || itemFields.url || article.publishedUrl || '';
 }
 
 function offerNewsBriefSocialWorkflow(articleContext) {
-  if (!isStaffUser(currentUser)) return;
+  if (!isStaffUser(currentUser)) {
+    console.warn('News brief social workflow skipped: current user is not staff.');
+    return;
+  }
   if (!articleContext || !articleContext.articleId) {
     fbToast('News brief submitted, but social workflow needs the Firebase article ID.', false);
+    return;
+  }
+  var isNewsBrief = articleContext.contentType === 'news_brief' ||
+    articleContext.cmsType === 'news' ||
+    articleContext.sourceType === 'news_brief' ||
+    articleContext.sourceType === 'manual_news_brief';
+  if (!isNewsBrief) {
+    console.warn('News brief social workflow skipped: submitted item is not a news brief.');
     return;
   }
   newsBriefSocialState.articleId = articleContext.articleId;
@@ -8612,9 +8757,14 @@ function offerNewsBriefSocialWorkflow(articleContext) {
   newsBriefSocialState.generating = false;
   newsBriefSocialState.saving = false;
   newsBriefSocialState.calendarEntryId = '';
+  newsBriefSocialState.completed = false;
   newsBriefSocialState.dirty = false;
   var modal = document.getElementById('news-brief-social-modal');
-  if (modal) modal.style.display = 'flex';
+  if (modal) {
+    modal.style.display = 'flex';
+  } else {
+    console.error('News brief social modal element is missing.');
+  }
 }
 
 function skipNewsBriefSocialWorkflow() {
@@ -8756,13 +8906,28 @@ function generateNewsBriefSocialOptions() {
       messages:[{role:'user',content:prompt}]
     })
   }).then(function(r){ return r.json(); }).then(function(data) {
-    if (data.error) throw new Error(data.error.message || data.error || 'LinkedIn generation failed');
-    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('').trim();
-    txt = txt.replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim();
-    var s = txt.indexOf('{');
-    var e = txt.lastIndexOf('}');
-    if (s !== -1 && e !== -1) txt = txt.slice(s,e+1);
-    newsBriefSocialState.options = validateNewsBriefSocialOptions(JSON.parse(txt));
+    var responseText = '';
+    var extractedJsonText = '';
+    try {
+      responseText = extractGeneratedText(data);
+      var parsed = parseGeneratedJson(responseText);
+      extractedJsonText = parsed.jsonText;
+      newsBriefSocialState.options = validateNewsBriefSocialOptions(parsed.parsed);
+      return null;
+    } catch (parseErr) {
+      extractedJsonText = parseErr.extractedJsonText || extractedJsonText || '';
+      if (!responseText) throw parseErr;
+      console.error('Initial LinkedIn JSON parse failed:', {
+        responseTextLength: responseText.length,
+        extractedJsonLength: extractedJsonText.length,
+        error: parseErr.message,
+        excerpt: getJsonErrorExcerpt(extractedJsonText, getJsonParseErrorPosition(parseErr))
+      });
+      return repairGeneratedJsonOnce(extractedJsonText || responseText, ['linkedinOptions'], 1800).then(function(repaired) {
+        newsBriefSocialState.options = validateNewsBriefSocialOptions(repaired.parsed);
+      });
+    }
+  }).then(function() {
     newsBriefSocialState.selectedIndex = 0;
     newsBriefSocialState.dirty = false;
     if (status) status.textContent = 'Choose and edit one option.';
@@ -8771,7 +8936,7 @@ function generateNewsBriefSocialOptions() {
     newsBriefSocialState.options = fallbackNewsBriefSocialOption();
     newsBriefSocialState.selectedIndex = 0;
     newsBriefSocialState.dirty = true;
-    if (status) status.textContent = 'Could not generate options. A fallback draft is editable below.';
+    if (status) status.textContent = 'LinkedIn options could not be generated. You can edit the fallback draft below or try again.';
   }).finally(function() {
     newsBriefSocialState.generating = false;
     if (btn) { btn.disabled = false; btn.textContent = 'Regenerate options'; }
@@ -8814,7 +8979,6 @@ function saveNewsBriefSocialToCalendar() {
   var title = (document.getElementById('news-social-calendar-title').value || '').trim();
   var publishDate = document.getElementById('news-social-publish-date').value;
   if (!title) { alert('Calendar title is required.'); return; }
-  if (!publishDate) { alert('Publish date is required before adding this to the Editorial Calendar.'); return; }
   var status = document.getElementById('news-social-save-status');
   var btn = document.getElementById('news-social-save-btn');
   newsBriefSocialState.saving = true;
@@ -8843,6 +9007,7 @@ function saveNewsBriefSocialToCalendar() {
   duplicateCheck.then(function(foundId) {
     if (foundId) {
       newsBriefSocialState.calendarEntryId = foundId;
+      if (status) status.textContent = 'A LinkedIn calendar entry already exists for this news brief.';
       showNewsBriefSocialSaveComplete(foundId);
       return null;
     }
@@ -8887,8 +9052,8 @@ function saveNewsBriefSocialToCalendar() {
     });
   }).catch(function(err) {
     console.error('Could not save LinkedIn calendar entry:', err);
-    if (status) status.textContent = 'Could not save: ' + err.message;
-    alert('Could not save calendar entry: ' + err.message);
+    if (status) status.textContent = 'The LinkedIn post could not be added to the Editorial Calendar. Please try again.';
+    alert('The LinkedIn post could not be added to the Editorial Calendar. Please try again.');
   }).finally(function() {
     newsBriefSocialState.saving = false;
     if (!newsBriefSocialState.calendarEntryId && btn) { btn.disabled = false; btn.textContent = 'Add to Editorial Calendar'; }
@@ -8897,6 +9062,7 @@ function saveNewsBriefSocialToCalendar() {
 
 function showNewsBriefSocialSaveComplete(entryId) {
   newsBriefSocialState.calendarEntryId = entryId || newsBriefSocialState.calendarEntryId;
+  newsBriefSocialState.completed = true;
   newsBriefSocialState.dirty = false;
   clearUnsavedChanges();
   var status = document.getElementById('news-social-save-status');
@@ -9068,13 +9234,7 @@ function generateManualNewsBriefFields(headline, body) {
       messages:[{role:'user',content:prompt}]
     })
   }).then(function(r){ return r.json(); }).then(function(data) {
-    if (data.error) throw new Error(data.error.message || 'Manual CMS field generation failed');
-    var txt = (data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('').trim();
-    txt = txt.replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim();
-    var s = txt.indexOf('{');
-    var e = txt.lastIndexOf('}');
-    if (s !== -1 && e !== -1) txt = txt.slice(s,e+1);
-    var generated = JSON.parse(txt);
+    var generated = parseGeneratedJson(extractGeneratedText(data)).parsed;
     var title = toSentenceCaseHeadline(generated.title || fallback.title);
     var standfirst = generated.standfirst || fallback.standfirst;
     var bodyHtml = cleanNewsBriefBody(title, standfirst, formatManualNewsBody(body));
@@ -9185,11 +9345,15 @@ function submitManualNewsBriefToCms() {
     });
   }).then(function(r){ return r.json().then(function(d){return {ok:r.ok,data:d};}); }).then(function(res) {
     if (!res.ok) throw new Error((res.data&&res.data.message)||JSON.stringify(res.data).substring(0,300));
-    console.log('Manual news brief submitted');
     if (status) status.textContent = 'News brief saved and submitted to CMS.';
     offerNewsBriefSocialWorkflow(Object.assign({}, data, {
       articleId:savedDocId,
+      contentType:'news_brief',
+      cmsType:'news',
+      publishedUrl:getSubmittedStoryUrl(res.data, data),
       submittedStoryUrl:getSubmittedStoryUrl(res.data, data),
+      publishDate:data.publishedDate || data.publishDate || '',
+      firebaseData:data,
       sourceType:'manual_news_brief'
     }));
   }).catch(function(err) {
@@ -9221,7 +9385,12 @@ function submitNewsBriefArticle(writerName) {
     document.getElementById('publish-actions').style.display = 'none';
     offerNewsBriefSocialWorkflow(Object.assign({}, newsData, {
       articleId:savedDocId,
+      contentType:'news_brief',
+      cmsType:'news',
+      publishedUrl:getSubmittedStoryUrl(res.data, newsData),
       submittedStoryUrl:getSubmittedStoryUrl(res.data, newsData),
+      publishDate:newsData.publishedDate || newsData.publishDate || '',
+      firebaseData:newsData,
       sourceType:'news_brief'
     }));
   }).catch(function(e) {
