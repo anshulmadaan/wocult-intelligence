@@ -595,7 +595,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <div id="landing-manual-news-review" class="landing" style="display:none;padding-top:32px">
     <div class="scratch-screen" style="max-width:900px">
       <h2>Review CMS fields</h2>
-      <div class="sfield"><label>Title</label><input id="manual-review-title" /></div>
+      <div class="sfield"><label>Name / Title</label><input id="manual-review-title" /></div>
       <div class="sfield"><label>Slug</label><input id="manual-review-slug" /></div>
       <div class="sfield"><label>Standfirst</label><textarea id="manual-review-standfirst" rows="3"></textarea></div>
       <div class="sfield"><label>Body</label><textarea id="manual-review-body" rows="14"></textarea></div>
@@ -1217,6 +1217,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <div class="wf-section">
     <div style="font-size:20px;font-weight:700;margin-bottom:4px">Review & Submit</div>
     <div style="font-size:13px;color:var(--g3);margin-bottom:24px">Edit any field before submitting. Body renders as rich text — edit directly.</div>
+    <div id="cms-review-fields">
     <div class="wf-field"><label class="wf-label">Post Title</label><input class="wf-input" id="r-title" /></div>
     <div class="wf-field"><label class="wf-label">Slug</label><input class="wf-input" id="r-slug" /></div>
     <div class="wf-field"><label class="wf-label">Short Story Intro <span class="field-badge">15-20 words</span></label><input class="wf-input" id="r-short" /></div>
@@ -1247,6 +1248,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
         </div>
         <div id="r-img-name" style="font-size:12px;color:var(--g3)"></div>
       </div>
+    </div>
     </div>
   </div>
   <div id="publish-result" style="display:none"></div>
@@ -2289,6 +2291,7 @@ function getBestShortIntro(existingValue) {
   );
 }
 function populateGuestWriterReviewFields(story) {
+  renderLongFormCmsReviewFields(story || {});
   generatedContent = Object.assign({}, generatedContent || {}, story || {});
   document.getElementById('r-title').value = story.title || '';
   document.getElementById('r-slug').value = story.slug || '';
@@ -7275,6 +7278,7 @@ function resetLongFormBriefScreen() {
 
 function setWorkflowCard(card) {
   workflowMode = 'long_form';
+  renderLongFormCmsReviewFields({});
   pendingNewsBriefCard = null;
   resetLongFormBriefScreen();
   workflowGeneratedDraftOnly = false;
@@ -7292,7 +7296,7 @@ function setWorkflowCard(card) {
   document.getElementById('source-card').innerHTML = '<span class="source-badge">'+card.cat+'</span><div><div class="source-title">'+(card._url||card.title)+'</div><div class="source-meta">'+card.src+' &middot; '+(card.ago||'now')+'</div></div>';
   document.getElementById('b-title').value = '';
   document.getElementById('b-angle').value = '';
-  document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
+  if (document.getElementById('r-date')) document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
   showWorkflowStep('brief');
 }
 function generateNewsBrief(card, instructions) {
@@ -7519,19 +7523,81 @@ function cleanNewsBriefBody(title, standfirst, body) {
 
   return cleaned;
 }
-function populateNewsBriefReviewFields() {
-  document.getElementById('r-title').value = generatedContent.title || '';
-  document.getElementById('r-slug').value = generatedContent.slug || '';
-  document.getElementById('r-short').value = generatedContent.standfirst || generatedContent.shortIntro || '';
-  document.getElementById('r-40').value = generatedContent.intro40 || '';
-  document.getElementById('r-excerpt').value = generatedContent.excerpt || '';
-  document.getElementById('r-intro-rt').value = generatedContent.introRichText || '';
-  document.getElementById('r-intro-render').innerHTML = generatedContent.introRichText || '';
-  document.getElementById('r-body').value = generatedContent.body || '';
-  document.getElementById('r-body-render').innerHTML = generatedContent.body || '';
-  document.getElementById('r-readtime').value = generatedContent.readTime || '2 min read';
-  document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
-  if (document.getElementById('r-writer-name')) document.getElementById('r-writer-name').value = (currentUser && currentUser.displayName) || 'Wocult Team';
+var longFormCmsReviewFieldsHtml = '';
+function isNewsBriefWorkflow() {
+  return workflowMode === 'news_brief' || workflowMode === 'manual_news_brief';
+}
+function cmsFieldValue(id) {
+  var el = document.getElementById(id);
+  return el ? el.value : '';
+}
+function setCmsFieldValue(id, value) {
+  var el = document.getElementById(id);
+  if (el) el.value = value || '';
+}
+function renderLongFormCmsReviewFields(content) {
+  var box = document.getElementById('cms-review-fields');
+  if (!box) return;
+  if (!longFormCmsReviewFieldsHtml) longFormCmsReviewFieldsHtml = box.innerHTML;
+  if (box.getAttribute('data-layout') !== 'long_form') {
+    box.innerHTML = longFormCmsReviewFieldsHtml;
+    box.setAttribute('data-layout', 'long_form');
+  }
+  populateLongFormCmsReviewFields(content || generatedContent || {});
+}
+function populateLongFormCmsReviewFields(content) {
+  content = content || {};
+  setCmsFieldValue('r-title', content.title || '');
+  setCmsFieldValue('r-slug', content.slug || '');
+  setCmsFieldValue('r-short', content.shortIntro || '');
+  setCmsFieldValue('r-40', content.intro40 || '');
+  setCmsFieldValue('r-excerpt', content.excerpt || '');
+  setCmsFieldValue('r-intro-rt', content.introRichText || '');
+  var introRender = document.getElementById('r-intro-render');
+  if (introRender) introRender.innerHTML = content.introRichText || '';
+  setCmsFieldValue('r-body', content.body || '');
+  var bodyRender = document.getElementById('r-body-render');
+  if (bodyRender) bodyRender.innerHTML = content.body || '';
+  setCmsFieldValue('r-readtime', content.readTime || '5 min read');
+  setCmsFieldValue('r-date', content.publishDate || content.publishedDate || new Date().toISOString().split('T')[0]);
+  setCmsFieldValue('r-writer-name', content.writerName || (currentAccessMode === 'guest_writer' && currentGuestWriterProfile ? currentGuestWriterProfile.fullName : '') || '');
+  setCmsFieldValue('r-img-url', content.coverImageUrl || content.imageUrl || '');
+  var imgName = document.getElementById('r-img-name');
+  if (imgName) imgName.textContent = (content.coverImageUrl || content.imageUrl) ? 'URL ready' : '';
+  updateReviewWordCount();
+}
+function renderNewsBriefCmsReviewFields(content) {
+  var box = document.getElementById('cms-review-fields');
+  if (!box) return;
+  if (!longFormCmsReviewFieldsHtml) longFormCmsReviewFieldsHtml = box.innerHTML;
+  if (box.getAttribute('data-layout') !== 'news_brief') {
+    box.innerHTML =
+      '<div class="wf-field"><label class="wf-label">Name / Title</label><input class="wf-input" id="r-title" /></div>'
+      + '<div class="wf-field"><label class="wf-label">Slug</label><input class="wf-input" id="r-slug" /></div>'
+      + '<div class="wf-field"><label class="wf-label">Standfirst</label><textarea class="wf-textarea" id="r-standfirst" style="min-height:80px"></textarea></div>'
+      + '<div class="wf-field"><label class="wf-label">Body <span class="field-badge" id="r-body-wc">0 words</span></label><div id="r-body-render" contenteditable="true" style="border:1px solid var(--bdr);border-radius:8px;padding:16px;min-height:320px;font-size:14px;line-height:1.8;background:#fff;outline:none" oninput="updateReviewWordCount()"></div><textarea id="r-body" style="display:none"></textarea></div>'
+      + '<div class="wf-row"><div class="wf-field"><label class="wf-label">Beat</label><input class="wf-input" id="r-beat" /></div><div class="wf-field"><label class="wf-label">Published date</label><input class="wf-input" id="r-published-date" /></div></div>'
+      + '<div class="wf-row"><div class="wf-field"><label class="wf-label">Source name</label><input class="wf-input" id="r-source-name" /></div><div class="wf-field"><label class="wf-label">Source URL</label><input class="wf-input" id="r-source-url" /></div></div>'
+      + '<div class="wf-field"><label class="wf-label">SEO description</label><textarea class="wf-textarea" id="r-seo-description" style="min-height:80px"></textarea></div>'
+      + '<div class="wf-field"><label class="wf-label">News image</label><input class="wf-input" id="r-news-image" placeholder="Add image URL..." /></div>';
+    box.setAttribute('data-layout', 'news_brief');
+  }
+  populateNewsBriefReviewFields(content || generatedContent || {});
+}
+function populateNewsBriefReviewFields(content) {
+  content = content || generatedContent || {};
+  setCmsFieldValue('r-title', content.title || '');
+  setCmsFieldValue('r-slug', content.slug || '');
+  setCmsFieldValue('r-standfirst', content.standfirst || content.shortIntro || '');
+  setCmsFieldValue('r-body', content.body || '');
+  var bodyRender = document.getElementById('r-body-render');
+  if (bodyRender) bodyRender.innerHTML = content.body || '';
+  setCmsFieldValue('r-beat', content.beat || '');
+  setCmsFieldValue('r-published-date', toWebflowDateTime(content.publishedDate || content.publishDate || new Date()));
+  setCmsFieldValue('r-source-name', content.sourceName || (currentCard && currentCard.src) || '');
+  setCmsFieldValue('r-source-url', content.sourceUrl || (currentCard && currentCard.link) || '');
+  setCmsFieldValue('r-seo-description', content.seoDescription || content.excerpt || content.standfirst || content.shortIntro || '');
+  setCmsFieldValue('r-news-image', content.newsImage || content.imageUrl || '');
   updateReviewWordCount();
 }
 function openDraft(idx) {
@@ -7689,6 +7755,13 @@ function updateWorkflowStepNav() {
 function showWorkflowStep(stepKey) {
   if (stepKey === 'review' && currentAccessMode === 'guest_writer' && currentGuestWriterStory && !workflowReviewPrepared && currentGuestWriterStory.status !== 'changes_requested') return;
   if (stepKey === 'refine' && currentAccessMode === 'guest_writer' && currentGuestWriterStory && workflowReviewPrepared) return;
+  if (stepKey === 'review') {
+    if (isNewsBriefWorkflow()) {
+      renderNewsBriefCmsReviewFields(generatedContent);
+    } else {
+      renderLongFormCmsReviewFields(generatedContent);
+    }
+  }
   ['step1','step2','step2b','step3'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
@@ -7865,6 +7938,7 @@ var hasUrl = !!currentCard._url;
         readTime: extract('readTime')
       };
     }
+    renderLongFormCmsReviewFields(generatedContent);
     document.getElementById('r-title').value = generatedContent.title||'';
     document.getElementById('r-slug').value = generatedContent.slug||'';
     document.getElementById('r-short').value = getBestShortIntro(document.getElementById('r-short').value);
@@ -7962,7 +8036,7 @@ function finishProceedToReview() {
     document.getElementById('r-writer-name').value = (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || (currentUser && currentUser.displayName) || '';
   }
   setGuestWriterPublishDateVisibility(currentAccessMode === 'guest_writer');
-  document.getElementById('r-img-name').textContent = '';
+  if (document.getElementById('r-img-name')) document.getElementById('r-img-name').textContent = '';
   if (document.getElementById('r-img-url')) document.getElementById('r-img-url').value = '';
   updateReviewWordCount();
   document.getElementById('publish-result').style.display = 'none';
@@ -7974,8 +8048,11 @@ function finishProceedToReview() {
   if (document.getElementById('publish-btn')) document.getElementById('publish-btn').textContent = currentAccessMode === 'guest_writer' ? 'Submit for review' : 'Submit';
   var backToRefineBtn = document.querySelector('#publish-actions button[onclick="showWorkflowStep(\'refine\')"]');
   if (backToRefineBtn) backToRefineBtn.style.display = 'inline-flex';
-  if (workflowMode === 'news_brief') {
+  var exportBtn = document.querySelector('#publish-actions button[onclick="exportCSV()"]');
+  if (exportBtn) exportBtn.style.display = 'inline-flex';
+  if (isNewsBriefWorkflow()) {
     if (backToRefineBtn) backToRefineBtn.style.display = 'none';
+    if (exportBtn) exportBtn.style.display = 'none';
     if (document.getElementById('publish-btn')) document.getElementById('publish-btn').textContent = 'Submit news brief';
     return;
   }
@@ -8226,9 +8303,9 @@ function syncRefinePreviewToReviewFields() {
   generatedContent.title = title;
   if (shortIntro) {
     generatedContent.shortIntro = shortIntro.innerText;
-    if (workflowMode === 'news_brief') generatedContent.standfirst = shortIntro.innerText;
+    if (isNewsBriefWorkflow()) generatedContent.standfirst = shortIntro.innerText;
   }
-  if (workflowMode === 'news_brief') {
+  if (isNewsBriefWorkflow()) {
     if (h2) h2.remove();
     if (shortIntro) shortIntro.remove();
     generatedContent.body = cleanNewsBriefBody(
@@ -8245,7 +8322,14 @@ function syncRefinePreviewToReviewFields() {
   generatedContent.writerName = generatedContent.writerName || (currentGuestWriterStory && currentGuestWriterStory.writerName) || (currentGuestWriterProfile && currentGuestWriterProfile.fullName) || (currentUser && currentUser.displayName) || '';
   if (document.getElementById('r-title')) document.getElementById('r-title').value = generatedContent.title || '';
   if (document.getElementById('r-slug')) document.getElementById('r-slug').value = generatedContent.slug || '';
-  if (document.getElementById('r-short')) document.getElementById('r-short').value = workflowMode === 'news_brief' ? (generatedContent.standfirst || generatedContent.shortIntro || '') : getBestShortIntro(document.getElementById('r-short').value);
+  if (document.getElementById('r-standfirst')) document.getElementById('r-standfirst').value = generatedContent.standfirst || generatedContent.shortIntro || '';
+  if (document.getElementById('r-seo-description')) document.getElementById('r-seo-description').value = generatedContent.seoDescription || generatedContent.excerpt || generatedContent.standfirst || generatedContent.shortIntro || '';
+  if (document.getElementById('r-beat')) document.getElementById('r-beat').value = generatedContent.beat || '';
+  if (document.getElementById('r-published-date')) document.getElementById('r-published-date').value = toWebflowDateTime(generatedContent.publishedDate || generatedContent.publishDate || new Date());
+  if (document.getElementById('r-source-name')) document.getElementById('r-source-name').value = generatedContent.sourceName || (currentCard && currentCard.src) || '';
+  if (document.getElementById('r-source-url')) document.getElementById('r-source-url').value = generatedContent.sourceUrl || (currentCard && currentCard.link) || '';
+  if (document.getElementById('r-news-image')) document.getElementById('r-news-image').value = generatedContent.newsImage || generatedContent.imageUrl || '';
+  if (document.getElementById('r-short')) document.getElementById('r-short').value = isNewsBriefWorkflow() ? (generatedContent.standfirst || generatedContent.shortIntro || '') : getBestShortIntro(document.getElementById('r-short').value);
   if (document.getElementById('r-40')) document.getElementById('r-40').value = generatedContent.intro40 || (currentGuestWriterStory && currentGuestWriterStory.intro40) || '';
   if (document.getElementById('r-excerpt')) document.getElementById('r-excerpt').value = generatedContent.excerpt || (currentGuestWriterStory && currentGuestWriterStory.excerpt) || '';
   if (document.getElementById('r-intro-rt')) document.getElementById('r-intro-rt').value = generatedContent.introRichText || (currentGuestWriterStory && currentGuestWriterStory.introRichText) || '';
@@ -8386,6 +8470,10 @@ function saveGuestWriterDraft(status, options) {
 }
 
 function submitArticle() {
+  if (isNewsBriefWorkflow()) {
+    submitNewsBriefArticle('Wocult Team');
+    return;
+  }
   var writerField = document.getElementById('r-writer-name');
   var writerName = writerField ? writerField.value.trim() : '';
   if (!writerName) {
@@ -8398,10 +8486,6 @@ function submitArticle() {
       alert('Story saved.');
       navigateHome();
     });
-    return;
-  }
-  if (workflowMode === 'news_brief') {
-    submitNewsBriefArticle(writerName);
     return;
   }
   var btn = document.getElementById('publish-btn');
@@ -8447,29 +8531,29 @@ function submitArticle() {
 }
 
 function collectNewsBriefData(writerName) {
-  var bodyHtml = document.getElementById('r-body-render').innerHTML;
-  var introHtml = document.getElementById('r-intro-render').innerHTML;
-  document.getElementById('r-body').value = bodyHtml;
-  document.getElementById('r-intro-rt').value = introHtml;
+  var bodyRender = document.getElementById('r-body-render');
+  var bodyHtml = bodyRender ? bodyRender.innerHTML : cmsFieldValue('r-body');
+  setCmsFieldValue('r-body', bodyHtml);
+  var title = toSentenceCaseHeadline(cmsFieldValue('r-title'));
+  var standfirst = cmsFieldValue('r-standfirst') || cmsFieldValue('r-short');
+  var publishedDate = cmsFieldValue('r-published-date') || cmsFieldValue('r-date');
+  var newsImage = cmsFieldValue('r-news-image') || cmsFieldValue('r-img-url');
   return {
-    title: document.getElementById('r-title').value,
-    slug: document.getElementById('r-slug').value,
-    standfirst: document.getElementById('r-short').value,
-    shortIntro: document.getElementById('r-short').value,
-    intro40: document.getElementById('r-40').value,
-    excerpt: document.getElementById('r-excerpt').value,
-    introRichText: introHtml,
+    title: title,
+    slug: makeSlug(cmsFieldValue('r-slug') || title),
+    standfirst: standfirst,
+    shortIntro: standfirst,
     body: bodyHtml,
-    seoDescription: (generatedContent && generatedContent.seoDescription) || document.getElementById('r-excerpt').value || document.getElementById('r-short').value,
-    beat: (generatedContent && generatedContent.beat) || '',
-    publishedDate: (generatedContent && (generatedContent.publishedDate || generatedContent.publishDate)) || document.getElementById('r-date').value,
-    readTime: document.getElementById('r-readtime').value || '2 min read',
-    publishDate: document.getElementById('r-date').value,
+    seoDescription: limitSeoDescription(cmsFieldValue('r-seo-description') || standfirst || stripHtml(bodyHtml)),
+    beat: cmsFieldValue('r-beat') || (generatedContent && generatedContent.beat) || '',
+    publishedDate: toWebflowDateTime(publishedDate || new Date()),
+    publishDate: toWebflowDateTime(publishedDate || new Date()),
     writerName: writerName || 'Wocult Team',
-    sourceUrl: (generatedContent && generatedContent.sourceUrl) || (currentCard && currentCard.link) || '',
+    sourceUrl: cmsFieldValue('r-source-url') || (currentCard && currentCard.link) || '',
     sourceTitle: (generatedContent && generatedContent.sourceTitle) || (currentCard && currentCard.title) || '',
-    sourceName: (generatedContent && generatedContent.sourceName) || (currentCard && currentCard.src) || '',
-    imageUrl: document.getElementById('r-img-url') ? document.getElementById('r-img-url').value : '',
+    sourceName: cmsFieldValue('r-source-name') || (currentCard && currentCard.src) || '',
+    imageUrl: newsImage,
+    newsImage: newsImage,
     status: 'submitted'
   };
 }
