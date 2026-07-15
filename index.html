@@ -5709,6 +5709,7 @@ var automatedNewsBriefSelectedId = '';
 var AUTOMATED_NEWS_BRIEF_TABS = [
   ['awaiting_approval','Awaiting approval'],
   ['needs_editorial_check','Needs editorial check'],
+  ['rejected_by_filter','Rejected'],
   ['held','Held'],
   ['approved','Approved'],
   ['webflow_draft_created','Webflow draft created'],
@@ -5730,7 +5731,8 @@ function renderAutomatedNewsBriefTabs() {
   if (!el) return;
   el.innerHTML = AUTOMATED_NEWS_BRIEF_TABS.map(function(t) {
     var on = automatedNewsBriefFilter === t[0];
-    return '<button class="chip '+(on?'on':'')+'" onclick="setAutomatedNewsBriefFilter(\''+t[0]+'\')">'+escapeHtml(t[1])+'</button>';
+    var count = (automatedNewsBriefItems || []).filter(function(item) { return automatedNewsBriefMatchesFilter(item, t[0]); }).length;
+    return '<button class="chip '+(on?'on':'')+'" onclick="setAutomatedNewsBriefFilter(\''+t[0]+'\')">'+escapeHtml(t[1])+' <span style="opacity:.7">('+count+')</span></button>';
   }).join('');
 }
 
@@ -5761,10 +5763,11 @@ function loadAutomatedNewsBriefs(force) {
   });
 }
 
-function automatedNewsBriefMatchesFilter(item) {
+function automatedNewsBriefMatchesFilter(item, filter) {
+  filter = filter || automatedNewsBriefFilter;
   var status = item.status || item.decisionStatus || '';
-  if (automatedNewsBriefFilter === 'failed') return /failed|verification_failed|drafting_failed|webflow_failed/.test(status) || item.webflowStatus === 'webflow_failed';
-  return status === automatedNewsBriefFilter;
+  if (filter === 'failed') return /failed|qualification_failed|verification_failed|drafting_failed|webflow_failed/.test(status) || item.webflowStatus === 'webflow_failed';
+  return status === filter;
 }
 
 function renderAutomatedNewsBriefList() {
@@ -5793,23 +5796,34 @@ function renderAutomatedNewsBriefDetail(item) {
   if (!detail) return;
   var draft = item.generatedDraft || {};
   var sources = [].concat(item.primarySourceUrl ? [item.primarySourceUrl] : []).concat(item.supportingSourceUrls || []);
+  var rejected = (item.status || item.decisionStatus || '') === 'rejected_by_filter';
+  var rejectionReasons = []
+    .concat(item.rejectionReasons || [])
+    .concat((item.qualificationResult && item.qualificationResult.rejectionReasons) || [])
+    .concat(item.lastError ? [item.lastError] : [])
+    .filter(Boolean);
+  var actions = rejected
+    ? '<div style="margin-top:12px;padding:10px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);color:var(--g3)">Rejected items are read-only in this queue.</div>'
+    : '<div style="margin-top:12px"><label style="font-weight:700;color:var(--blk)">Editable draft JSON</label><textarea id="automated-news-brief-draft-editor" rows="14" style="width:100%;margin-top:6px;border:1px solid var(--bdr);border-radius:8px;padding:10px;font-family:monospace;font-size:12px">'+escapeHtml(JSON.stringify(draft, null, 2))+'</textarea></div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'
+      + '<button class="btn" onclick="saveAutomatedNewsBriefDraft(\''+escapeAttr(item.id)+'\')">Save changes</button>'
+      + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'approve\')">Approve</button>'
+      + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'hold\')">Hold</button>'
+      + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'decline\')">Decline</button>'
+      + '<button class="btn" onclick="resendAutomatedNewsBriefEmail(\''+escapeAttr(item.id)+'\')">Send or resend approval email</button>'
+      + '<button class="btn" onclick="retryAutomatedNewsBriefWebflow(\''+escapeAttr(item.id)+'\')">Retry Webflow submission</button>'
+      + (item.webflowDraftUrl ? '<a class="btn" href="'+escapeAttr(item.webflowDraftUrl)+'" target="_blank" rel="noopener">Open Webflow draft</a>' : '')
+      + (item.canonicalUrl ? '<a class="btn" href="'+escapeAttr(item.canonicalUrl)+'" target="_blank" rel="noopener">Open original source</a>' : '')
+      + '</div>';
   detail.innerHTML = '<h3 style="font-size:20px;font-family:Georgia,serif;margin:0 0 8px;color:var(--blk)">'+escapeHtml(draft.title || item.proposedHeadline || item.originalHeadline || '')+'</h3>'
     + '<div class="hint">'+escapeHtml(item.status || '')+' · Score '+escapeHtml(String(item.qualificationScore || ''))+' · '+escapeHtml(item.recommendedPriority || '')+'</div>'
     + '<div style="margin-top:14px"><strong>Original headline</strong><br>'+escapeHtml(item.originalHeadline || '')+'</div>'
     + '<div style="margin-top:12px"><strong>Sources</strong><br>'+sources.map(function(u){return '<a href="'+escapeAttr(u)+'" target="_blank" rel="noopener">'+escapeHtml(u)+'</a>';}).join('<br>')+'</div>'
+    + (rejectionReasons.length ? '<div style="margin-top:12px"><strong>Rejection reasons</strong><ul style="margin:8px 0 0 18px;padding:0">'+rejectionReasons.map(function(reason){ return '<li>'+escapeHtml(reason)+'</li>'; }).join('')+'</ul></div>' : '')
     + '<div style="margin-top:12px"><strong>Qualification assessment</strong><pre style="white-space:pre-wrap;background:var(--gray);padding:10px;border-radius:8px;max-height:180px;overflow:auto">'+escapeHtml(JSON.stringify(item.qualificationResult || {}, null, 2))+'</pre></div>'
     + '<div style="margin-top:12px"><strong>Verification</strong><br>'+escapeHtml(item.verificationSummary || item.verificationStatus || '')+'</div>'
-    + '<div style="margin-top:12px"><label style="font-weight:700;color:var(--blk)">Editable draft JSON</label><textarea id="automated-news-brief-draft-editor" rows="14" style="width:100%;margin-top:6px;border:1px solid var(--bdr);border-radius:8px;padding:10px;font-family:monospace;font-size:12px">'+escapeHtml(JSON.stringify(draft, null, 2))+'</textarea></div>'
-    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'
-    + '<button class="btn" onclick="saveAutomatedNewsBriefDraft(\''+escapeAttr(item.id)+'\')">Save changes</button>'
-    + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'approve\')">Approve</button>'
-    + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'hold\')">Hold</button>'
-    + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'decline\')">Decline</button>'
-    + '<button class="btn" onclick="resendAutomatedNewsBriefEmail(\''+escapeAttr(item.id)+'\')">Send or resend approval email</button>'
-    + '<button class="btn" onclick="retryAutomatedNewsBriefWebflow(\''+escapeAttr(item.id)+'\')">Retry Webflow submission</button>'
-    + (item.webflowDraftUrl ? '<a class="btn" href="'+escapeAttr(item.webflowDraftUrl)+'" target="_blank" rel="noopener">Open Webflow draft</a>' : '')
-    + (item.canonicalUrl ? '<a class="btn" href="'+escapeAttr(item.canonicalUrl)+'" target="_blank" rel="noopener">Open original source</a>' : '')
-    + '</div><div id="automated-news-brief-action-status" class="hint" style="margin-top:10px"></div>'
+    + actions
+    + '<div id="automated-news-brief-action-status" class="hint" style="margin-top:10px"></div>'
     + '<div style="margin-top:16px"><strong>Activity history</strong><div id="automated-news-brief-activity" class="hint">Loading activity...</div></div>';
   loadAutomatedNewsBriefActivity(item.id);
 }
