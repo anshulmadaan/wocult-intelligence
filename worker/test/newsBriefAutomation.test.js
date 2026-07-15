@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import worker from '../src/index.js';
 import {
   automationCandidateToArticle,
   candidateFromTrackerItem,
@@ -274,6 +275,83 @@ test('test-email route is protected and cannot create approval actions or Webflo
   assert.equal(response.status, 200);
   assert.equal(data.skipped, true);
   assert.equal(fetchCalls, 0);
+});
+
+test('automation handler returns neutral null for non-automation routes', async () => {
+  const paths = [
+    { method: 'GET', path: '/debug' },
+    { method: 'GET', path: '/?debug=1' },
+    { method: 'POST', path: '/generate', body: '{}' },
+    { method: 'POST', path: '/webflow', body: '{}' },
+    { method: 'POST', path: '/webflow-news', body: '{}' },
+    { method: 'GET', path: '/webflow-schema' },
+    { method: 'GET', path: '/ordinary-unknown-path' },
+  ];
+
+  for (const route of paths) {
+    const response = await handleAutomationRequest(new Request(`https://worker.test${route.path}`, {
+      method: route.method,
+      body: route.body,
+      headers: route.body ? { 'Content-Type': 'application/json' } : {},
+    }), {
+      WORKER_ADMIN_TOKEN: 'admin',
+    });
+    assert.equal(response, null, `${route.method} ${route.path} should not be handled by automation`);
+  }
+});
+
+test('automation namespace applies auth, supported route handling and namespace fallback only after path match', async () => {
+  const unauthenticated = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/status'), {}, null, {}, {
+    store: { statusCounts: async () => ({}), latestRuns: async () => [] },
+  });
+  assert.equal(unauthenticated.status, 401);
+
+  const authenticated = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/status', {
+    headers: { Authorization: 'Bearer admin' },
+  }), { WORKER_ADMIN_TOKEN: 'admin' }, null, {}, {
+    store: { statusCounts: async () => ({ awaiting_approval: 0 }), latestRuns: async () => [] },
+  });
+  const authenticatedData = await authenticated.json();
+  assert.equal(authenticated.status, 200);
+  assert.equal(authenticatedData.ok, true);
+
+  const unsupported = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/status', {
+    method: 'PUT',
+    headers: { Authorization: 'Bearer admin' },
+  }), { WORKER_ADMIN_TOKEN: 'admin' });
+  const unsupportedData = await unsupported.json();
+  assert.equal(unsupported.status, 404);
+  assert.equal(unsupportedData.error, 'automation_route_not_found');
+
+  const options = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/status', {
+    method: 'OPTIONS',
+  }), {}, null, { cors: { 'Access-Control-Allow-Origin': '*' } });
+  assert.equal(options.status, 200);
+  assert.equal(options.headers.get('Access-Control-Allow-Origin'), '*');
+});
+
+test('main Worker fetch still routes debug and generate requests to original handlers', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ fields: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  try {
+    const debug = await worker.fetch(new Request('https://worker.test/debug'), {});
+    assert.equal(debug.status, 200);
+    assert.equal((await debug.json()).workerVersion, 'firebase-brief-v2');
+
+    const defaultDebug = await worker.fetch(new Request('https://worker.test/?debug=1'), {});
+    assert.equal(defaultDebug.status, 200);
+    assert.equal((await defaultDebug.json()).rawQ, null);
+
+    const generate = await worker.fetch(new Request('https://worker.test/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ debugBrief: true, briefType: 'generation', messages: [{ role: 'user', content: 'Test' }] }),
+    }), {});
+    assert.equal(generate.status, 200);
+    assert.equal((await generate.json()).debugMode, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('GET review route only renders confirmation and does not change decision state', async () => {
