@@ -40,7 +40,6 @@ const REQUIRED_QUALIFICATION_FIELDS = {
   verificationRequired: 'boolean',
   qualificationReasons: 'array',
   rejectionReasons: 'array',
-  recommendedPriority: ['P1', 'P2', 'P3'],
   recommendedAngle: 'string',
   materialFacts: 'array',
   missingInformation: 'array',
@@ -177,6 +176,11 @@ export function validateQualification(value) {
       errors.push(`${key}_not_${expected}`);
     }
   }
+  if (value.qualifies === true) {
+    if (!['P1', 'P2', 'P3'].includes(value.recommendedPriority)) errors.push('recommendedPriority_invalid');
+  } else if (value.qualifies === false && value.recommendedPriority !== null) {
+    errors.push('recommendedPriority_invalid');
+  }
   if (value.overallScore < 0 || value.overallScore > 100) errors.push('overallScore_out_of_range');
   return { ok: errors.length === 0, errors };
 }
@@ -196,25 +200,59 @@ export function normalizeQualificationResponse(value) {
     duplicationRisk: normalizeEnumValue(value.duplicationRisk, { high: 'high', medium: 'medium', low: 'low' }),
     factualRisk: normalizeEnumValue(value.factualRisk, { high: 'high', medium: 'medium', low: 'low' }),
     legalRisk: normalizeEnumValue(value.legalRisk, { high: 'high', medium: 'medium', low: 'low' }),
-    recommendedPriority: normalizeEnumValue(value.recommendedPriority, {
-      p1: 'P1',
-      'priority 1': 'P1',
-      'priority one': 'P1',
-      high: 'P1',
-      urgent: 'P1',
-      p2: 'P2',
-      'priority 2': 'P2',
-      'priority two': 'P2',
-      medium: 'P2',
-      normal: 'P2',
-      p3: 'P3',
-      'priority 3': 'P3',
-      'priority three': 'P3',
-      low: 'P3',
-    }),
+    recommendedPriority: normalizeRecommendedPriority(value.recommendedPriority, value.qualifies),
   };
   if (value.rawModelResponse) attachRawModelResponse(normalized, value.rawModelResponse);
   return normalized;
+}
+
+function normalizeRecommendedPriority(value, qualifies) {
+  if (qualifies === false) {
+    if (value === null || value === undefined) return null;
+    return normalizeEnumValue(value, {
+      p1: null,
+      'priority 1': null,
+      'priority one': null,
+      high: null,
+      urgent: null,
+      p2: null,
+      'priority 2': null,
+      'priority two': null,
+      medium: null,
+      normal: null,
+      p3: null,
+      'priority 3': null,
+      'priority three': null,
+      low: null,
+      p4: null,
+      'priority 4': null,
+      'priority four': null,
+      reject: null,
+      rejected: null,
+      none: null,
+      'n/a': null,
+      na: null,
+      'n a': null,
+      'not applicable': null,
+      '': null,
+    }, null);
+  }
+  return normalizeEnumValue(value, {
+    p1: 'P1',
+    'priority 1': 'P1',
+    'priority one': 'P1',
+    high: 'P1',
+    urgent: 'P1',
+    p2: 'P2',
+    'priority 2': 'P2',
+    'priority two': 'P2',
+    medium: 'P2',
+    normal: 'P2',
+    p3: 'P3',
+    'priority 3': 'P3',
+    'priority three': 'P3',
+    low: 'P3',
+  });
 }
 
 export function qualificationStatus(qualification, minScore = 75) {
@@ -383,6 +421,9 @@ export function buildQualificationPrompt(item) {
 Return ONLY valid JSON with this exact structure:
 {"qualifies":true,"overallScore":0,"currentAffairsScore":0,"wocultRelevanceScore":0,"significanceScore":0,"sourceQualityScore":0,"newsBriefSuitabilityScore":0,"indiaRelevance":"high","duplicationRisk":"low","factualRisk":"low","legalRisk":"low","verificationRequired":true,"qualificationReasons":[],"rejectionReasons":[],"recommendedPriority":"P2","recommendedAngle":"","materialFacts":[],"missingInformation":[]}
 
+If qualifies is true, recommendedPriority must be exactly P1, P2, or P3.
+If qualifies is false, recommendedPriority must be null. Do not return P4.
+
 Assess the item independently. suggestedFormat is only a signal, not a decision.
 
 News Tracker item:
@@ -421,7 +462,7 @@ export function candidateFromTrackerItem(item, qualification = null, verificatio
     originalWhyItMatters: item.whyItMatters,
     qualificationResult: storedQualification,
     qualificationScore: storedQualification?.overallScore || 0,
-    recommendedPriority: storedQualification?.recommendedPriority || '',
+    recommendedPriority: storedQualification ? storedQualification.recommendedPriority : '',
     recommendedAngle: storedQualification?.recommendedAngle || '',
     verificationStatus: verification?.status || '',
     verificationSummary: verification?.summary || '',
