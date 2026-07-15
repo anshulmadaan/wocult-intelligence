@@ -1,4 +1,14 @@
+import {
+  handleAutomationRequest,
+  requireProtectedRoute,
+  scheduledNewsBriefAutomation,
+} from './newsBriefAutomation.js';
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(scheduledNewsBriefAutomation(env, ctx));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
 
@@ -107,6 +117,9 @@ export default {
       return new Response(null, { headers: cors });
     }
 
+    const automationResponse = await handleAutomationRequest(request, env, null, { cors, jsonResponse });
+    if (automationResponse) return automationResponse;
+
     // /generate — proxy to Anthropic, with Firebase editorial brief injection
     if (url.pathname === '/generate') {
       try {
@@ -208,6 +221,8 @@ export default {
 
     // /webflow — proxy to Webflow API
     if (url.pathname === '/webflow') {
+      const unauthorized = await requireProtectedRoute(request, env);
+      if (unauthorized) return unauthorized;
       try {
         const body = await request.json();
 
@@ -217,7 +232,7 @@ export default {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + env.WEBFLOW_TOKEN,
+              'Authorization': 'Bearer ' + (env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN),
               'accept': 'application/json',
             },
             body: JSON.stringify(body),
@@ -233,17 +248,19 @@ export default {
 
     // /webflow-news - proxy to Webflow News collection
     if (url.pathname === '/webflow-news') {
+      const unauthorized = await requireProtectedRoute(request, env);
+      if (unauthorized) return unauthorized;
       try {
         const body = await request.json();
         const newsFieldData = buildNewsFieldData(body);
 
         const webflowRes = await fetch(
-          `https://api.webflow.com/v2/collections/${NEWS_COLLECTION_ID}/items`,
+          `https://api.webflow.com/v2/collections/${env.WEBFLOW_NEWS_COLLECTION_ID || NEWS_COLLECTION_ID}/items`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + env.WEBFLOW_TOKEN,
+              'Authorization': 'Bearer ' + (env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN),
               'accept': 'application/json',
             },
             body: JSON.stringify({
@@ -291,13 +308,15 @@ export default {
     // /reddit - public Reddit JSON scan for workplace signals
     // /webflow-schema - debug Webflow collection field slugs
     if (url.pathname === '/webflow-schema') {
+      const unauthorized = await requireProtectedRoute(request, env);
+      if (unauthorized) return unauthorized;
       try {
         const collectionId = url.searchParams.get('collectionId') || NEWS_COLLECTION_ID;
         const schemaRes = await fetch(
           `https://api.webflow.com/v2/collections/${collectionId}`,
           {
             headers: {
-              'Authorization': 'Bearer ' + env.WEBFLOW_TOKEN,
+              'Authorization': 'Bearer ' + (env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN),
               'accept': 'application/json',
             },
           }
@@ -994,6 +1013,8 @@ export default {
 
     // /webflow-from-firebase — fetch doc from Firebase, push to Webflow
     if (url.pathname === '/webflow-from-firebase') {
+      const unauthorized = await requireProtectedRoute(request, env);
+      if (unauthorized) return unauthorized;
       try {
         const { docId } = await request.json();
 
@@ -1029,7 +1050,7 @@ export default {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + env.WEBFLOW_TOKEN,
+              'Authorization': 'Bearer ' + (env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN),
               'accept': 'application/json',
             },
             body: JSON.stringify({
@@ -1053,7 +1074,7 @@ export default {
         workerVersion: 'firebase-brief-v2',
         updatedAt: '2026-04-27',
         hasAnthropicKey: Boolean(env.ANTHROPIC_API_KEY),
-        hasWebflowToken: Boolean(env.WEBFLOW_TOKEN),
+        hasWebflowToken: Boolean(env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN),
         hasNewsDataKey: Boolean(env.NEWSDATA_API_KEY),
         newsDataKeyStartsWithPub: env.NEWSDATA_API_KEY
           ? env.NEWSDATA_API_KEY.trim().startsWith('pub_')

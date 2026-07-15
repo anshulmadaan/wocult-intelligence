@@ -495,6 +495,12 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         <div class="lcard-desc">Already have the story? Paste the headline and body. Wocult will prepare the CMS fields and let you submit directly.</div>
         <div class="lcard-cta">Prepare CMS fields</div>
       </div>
+      <div class="lcard" onclick="showAutomatedNewsBriefs()">
+        <div class="lcard-icon">AN</div>
+        <div class="lcard-title">Automated News Briefs</div>
+        <div class="lcard-desc">Review AI-selected current-affairs stories, drafts, decisions and Webflow submissions.</div>
+        <div class="lcard-cta">Open queue &rarr;</div>
+      </div>
         </div>
       </section>
       <div style="height:1px;background:var(--bdr);width:100%"></div>
@@ -666,6 +672,28 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn-lg btn-y" id="news-social-save-btn" onclick="saveNewsBriefSocialToCalendar()" style="flex:1">Add to Editorial Calendar</button>
         <button class="btn-lg" onclick="confirmLeaveNewsBriefSocialWorkflow(skipNewsBriefSocialWorkflow)" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Skip and return home</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="landing-automated-news-briefs" class="landing" style="display:none;padding-top:32px">
+    <div style="width:min(1180px,calc(100vw - 40px));display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div>
+          <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:10px">&larr; Back to staff dashboard</button>
+          <h2 style="font-size:24px;font-family:Georgia,serif;margin:0">Automated News Briefs</h2>
+          <div id="automated-news-briefs-status" class="hint" style="margin-top:6px">Loading queue...</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="loadAutomatedNewsBriefs(true)">Refresh</button>
+          <button class="btn" onclick="sendAutomatedNewsBriefTestEmail()">Send test email</button>
+          <button class="btn" onclick="runAutomatedNewsBriefDryRun()">Dry run</button>
+        </div>
+      </div>
+      <div id="automated-news-brief-tabs" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      <div style="display:grid;grid-template-columns:minmax(280px,420px) minmax(0,1fr);gap:16px;align-items:start">
+        <div id="automated-news-brief-list" style="display:flex;flex-direction:column;gap:10px"></div>
+        <div id="automated-news-brief-detail" style="min-height:420px;background:#fff;border:1px solid var(--bdr);border-radius:8px;padding:18px;color:var(--g3);font-size:14px;line-height:1.6">Select a candidate to review.</div>
       </div>
     </div>
   </div>
@@ -1320,7 +1348,6 @@ There are no right or wrong answers here. Please answer openly and in your own v
 </div>
 
 <script>
-var WF_TOKEN = '9739ddc13b83dbc83edc6bf981bf7804df98e6bee9a29853af92c8b6ec3a89ab';
 var WF_COLLECTION = '695be252bae2cf37c3a4b17b';
 var WORKER = 'https://wocult-news-proxy.anmadaan.workers.dev';
 // --- News Tracker source ---
@@ -1465,7 +1492,7 @@ function guardStaffScreen() {
 }
 function enforceStaffScreenAccess() {
   if (isStaffUser(currentUser)) return;
-  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-editorial-calendar','landing-editorial-calendar-editor','landing-news-brief-social','landing-unsent-admin','landing-blog-comments-admin','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
+  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-editorial-calendar','landing-editorial-calendar-editor','landing-news-brief-social','landing-automated-news-briefs','landing-unsent-admin','landing-blog-comments-admin','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
     var el = document.getElementById(id);
     return el && el.style.display !== 'none';
   });
@@ -2539,6 +2566,9 @@ function showGuestPlaceholder(key) {
 }
 function escapeHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/'/g,'&#39;').replace(/`/g,'&#96;');
 }
 function stripHtml(s) {
   var div = document.createElement('div');
@@ -5627,6 +5657,7 @@ function hideStaffLandingPanels() {
     'landing-editorial-calendar',
     'landing-editorial-calendar-editor',
     'landing-news-brief-social',
+    'landing-automated-news-briefs',
     'landing-unsent-admin',
     'landing-blog-comments-admin'
   ].forEach(function(id) {
@@ -5659,6 +5690,213 @@ function showManualNewsBrief() {
   var status = document.getElementById('manual-news-status');
   if (status) status.textContent = '';
   setTimeout(function(){ document.getElementById('manual-news-headline').focus(); }, 100);
+}
+
+function workerFetch(path, options) {
+  options = options || {};
+  options.headers = Object.assign({'Content-Type':'application/json'}, options.headers || {});
+  var send = function(token) {
+    if (token) options.headers.Authorization = 'Bearer ' + token;
+    return fetch(WORKER + path, options);
+  };
+  if (!currentUser || !currentUser.getIdToken) return send('');
+  return currentUser.getIdToken().then(send);
+}
+
+var automatedNewsBriefFilter = 'awaiting_approval';
+var automatedNewsBriefItems = [];
+var automatedNewsBriefSelectedId = '';
+var AUTOMATED_NEWS_BRIEF_TABS = [
+  ['awaiting_approval','Awaiting approval'],
+  ['needs_editorial_check','Needs editorial check'],
+  ['held','Held'],
+  ['approved','Approved'],
+  ['webflow_draft_created','Webflow draft created'],
+  ['declined','Declined'],
+  ['failed','Failed']
+];
+
+function showAutomatedNewsBriefs() {
+  if (!guardStaffScreen()) return;
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-automated-news-briefs').style.display = 'flex';
+  renderAutomatedNewsBriefTabs();
+  loadAutomatedNewsBriefs(false);
+}
+
+function renderAutomatedNewsBriefTabs() {
+  var el = document.getElementById('automated-news-brief-tabs');
+  if (!el) return;
+  el.innerHTML = AUTOMATED_NEWS_BRIEF_TABS.map(function(t) {
+    var on = automatedNewsBriefFilter === t[0];
+    return '<button class="chip '+(on?'on':'')+'" onclick="setAutomatedNewsBriefFilter(\''+t[0]+'\')">'+escapeHtml(t[1])+'</button>';
+  }).join('');
+}
+
+function setAutomatedNewsBriefFilter(filter) {
+  automatedNewsBriefFilter = filter;
+  renderAutomatedNewsBriefTabs();
+  renderAutomatedNewsBriefList();
+}
+
+function loadAutomatedNewsBriefs(force) {
+  var status = document.getElementById('automated-news-briefs-status');
+  if (!db) { if (status) status.textContent = 'Firebase is not connected.'; return Promise.resolve([]); }
+  if (status) status.textContent = 'Loading queue...';
+  return db.collection('news_brief_automation').orderBy('updatedAt','desc').limit(80).get().then(function(snap) {
+    automatedNewsBriefItems = [];
+    snap.forEach(function(doc) {
+      var item = doc.data() || {};
+      item.id = doc.id;
+      automatedNewsBriefItems.push(item);
+    });
+    if (status) status.textContent = automatedNewsBriefItems.length + ' candidates loaded.';
+    renderAutomatedNewsBriefList();
+    return automatedNewsBriefItems;
+  }).catch(function(err) {
+    console.error('Automated News Brief queue failed', err);
+    if (status) status.textContent = 'Could not load queue: ' + err.message;
+    return [];
+  });
+}
+
+function automatedNewsBriefMatchesFilter(item) {
+  var status = item.status || item.decisionStatus || '';
+  if (automatedNewsBriefFilter === 'failed') return /failed|verification_failed|drafting_failed|webflow_failed/.test(status) || item.webflowStatus === 'webflow_failed';
+  return status === automatedNewsBriefFilter;
+}
+
+function renderAutomatedNewsBriefList() {
+  var list = document.getElementById('automated-news-brief-list');
+  if (!list) return;
+  var rows = (automatedNewsBriefItems || []).filter(automatedNewsBriefMatchesFilter);
+  if (!rows.length) { list.innerHTML = '<div class="empty" style="padding:18px">No candidates in this view.</div>'; return; }
+  list.innerHTML = rows.map(function(item) {
+    var title = item.proposedHeadline || (item.generatedDraft && item.generatedDraft.title) || item.originalHeadline || 'Untitled candidate';
+    return '<button onclick="selectAutomatedNewsBrief(\''+escapeAttr(item.id)+'\')" style="text-align:left;background:#fff;border:1px solid var(--bdr);border-radius:8px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px">'
+      + '<strong style="font-size:14px;color:var(--blk);line-height:1.35">'+escapeHtml(title)+'</strong>'
+      + '<span style="font-size:12px;color:var(--g3)">'+escapeHtml((item.publishers && item.publishers[0]) || item.publisher || '')+' · Score '+escapeHtml(String(item.qualificationScore || ''))+' · '+escapeHtml(item.recommendedPriority || '')+'</span>'
+      + '<span style="font-size:12px;color:var(--g3)">'+escapeHtml(item.status || '')+' · Webflow: '+escapeHtml(item.webflowStatus || 'not started')+'</span>'
+      + '</button>';
+  }).join('');
+}
+
+function selectAutomatedNewsBrief(id) {
+  automatedNewsBriefSelectedId = id;
+  var item = (automatedNewsBriefItems || []).find(function(i){ return i.id === id; });
+  if (item) renderAutomatedNewsBriefDetail(item);
+}
+
+function renderAutomatedNewsBriefDetail(item) {
+  var detail = document.getElementById('automated-news-brief-detail');
+  if (!detail) return;
+  var draft = item.generatedDraft || {};
+  var sources = [].concat(item.primarySourceUrl ? [item.primarySourceUrl] : []).concat(item.supportingSourceUrls || []);
+  detail.innerHTML = '<h3 style="font-size:20px;font-family:Georgia,serif;margin:0 0 8px;color:var(--blk)">'+escapeHtml(draft.title || item.proposedHeadline || item.originalHeadline || '')+'</h3>'
+    + '<div class="hint">'+escapeHtml(item.status || '')+' · Score '+escapeHtml(String(item.qualificationScore || ''))+' · '+escapeHtml(item.recommendedPriority || '')+'</div>'
+    + '<div style="margin-top:14px"><strong>Original headline</strong><br>'+escapeHtml(item.originalHeadline || '')+'</div>'
+    + '<div style="margin-top:12px"><strong>Sources</strong><br>'+sources.map(function(u){return '<a href="'+escapeAttr(u)+'" target="_blank" rel="noopener">'+escapeHtml(u)+'</a>';}).join('<br>')+'</div>'
+    + '<div style="margin-top:12px"><strong>Qualification assessment</strong><pre style="white-space:pre-wrap;background:var(--gray);padding:10px;border-radius:8px;max-height:180px;overflow:auto">'+escapeHtml(JSON.stringify(item.qualificationResult || {}, null, 2))+'</pre></div>'
+    + '<div style="margin-top:12px"><strong>Verification</strong><br>'+escapeHtml(item.verificationSummary || item.verificationStatus || '')+'</div>'
+    + '<div style="margin-top:12px"><label style="font-weight:700;color:var(--blk)">Editable draft JSON</label><textarea id="automated-news-brief-draft-editor" rows="14" style="width:100%;margin-top:6px;border:1px solid var(--bdr);border-radius:8px;padding:10px;font-family:monospace;font-size:12px">'+escapeHtml(JSON.stringify(draft, null, 2))+'</textarea></div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'
+    + '<button class="btn" onclick="saveAutomatedNewsBriefDraft(\''+escapeAttr(item.id)+'\')">Save changes</button>'
+    + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'approve\')">Approve</button>'
+    + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'hold\')">Hold</button>'
+    + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'decline\')">Decline</button>'
+    + '<button class="btn" onclick="resendAutomatedNewsBriefEmail(\''+escapeAttr(item.id)+'\')">Send or resend approval email</button>'
+    + '<button class="btn" onclick="retryAutomatedNewsBriefWebflow(\''+escapeAttr(item.id)+'\')">Retry Webflow submission</button>'
+    + (item.webflowDraftUrl ? '<a class="btn" href="'+escapeAttr(item.webflowDraftUrl)+'" target="_blank" rel="noopener">Open Webflow draft</a>' : '')
+    + (item.canonicalUrl ? '<a class="btn" href="'+escapeAttr(item.canonicalUrl)+'" target="_blank" rel="noopener">Open original source</a>' : '')
+    + '</div><div id="automated-news-brief-action-status" class="hint" style="margin-top:10px"></div>'
+    + '<div style="margin-top:16px"><strong>Activity history</strong><div id="automated-news-brief-activity" class="hint">Loading activity...</div></div>';
+  loadAutomatedNewsBriefActivity(item.id);
+}
+
+function loadAutomatedNewsBriefActivity(id) {
+  var el = document.getElementById('automated-news-brief-activity');
+  if (!el || !db || !id) return;
+  db.collection('news_brief_automation').doc(id).collection('activity').orderBy('createdAt','desc').limit(30).get().then(function(snap) {
+    if (snap.empty) { el.textContent = 'No activity recorded yet.'; return; }
+    var rows = [];
+    snap.forEach(function(doc) {
+      var a = doc.data() || {};
+      rows.push('<div style="padding:8px 0;border-bottom:1px solid var(--bdr)"><strong style="color:var(--blk)">'+escapeHtml(a.type || 'activity')+'</strong><br><span>'+escapeHtml(formatFirestoreDate(a.createdAt) || '')+'</span></div>');
+    });
+    el.innerHTML = rows.join('');
+  }).catch(function(err) {
+    el.textContent = 'Could not load activity: ' + err.message;
+  });
+}
+
+function saveAutomatedNewsBriefDraft(id) {
+  var item = (automatedNewsBriefItems || []).find(function(i){ return i.id === id; });
+  var status = document.getElementById('automated-news-brief-action-status');
+  var editor = document.getElementById('automated-news-brief-draft-editor');
+  if (!item || !editor || !db) return;
+  var draft;
+  try { draft = JSON.parse(editor.value); } catch(e) { alert('Draft JSON is invalid.'); return; }
+  var nextVersion = Number(item.version || 1) + 1;
+  if (status) status.textContent = 'Saving draft changes...';
+  db.collection('news_brief_automation').doc(id).set({
+    generatedDraft: draft,
+    proposedHeadline: draft.title || item.proposedHeadline || '',
+    version: nextVersion,
+    decisionCycleId: '',
+    updatedBy: currentUser ? currentUser.email : '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, {merge:true}).then(function() {
+    return db.collection('news_brief_automation').doc(id).collection('activity').add({
+      type: 'manual dashboard edits',
+      updatedBy: currentUser ? currentUser.email : '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }).then(function() {
+    if (status) status.textContent = 'Saved. Existing approval links were invalidated by version change.';
+    loadAutomatedNewsBriefs(true);
+  }).catch(function(err) { if (status) status.textContent = 'Could not save: ' + err.message; });
+}
+
+function dashboardAutomatedNewsBriefAction(id, action) {
+  var status = document.getElementById('automated-news-brief-action-status');
+  if (!confirm('Confirm '+action+' for this candidate?')) return;
+  if (status) status.textContent = 'Submitting action...';
+  return workerFetch('/automation/news-briefs/action', {method:'POST', body:JSON.stringify({candidateId:id, action:action, actorEmail:(currentUser && currentUser.email) || ''})})
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res) { if (!res.ok) throw new Error(res.data.error || 'Action failed'); if (status) status.textContent = 'Action recorded.'; return loadAutomatedNewsBriefs(true); })
+    .catch(function(err) { if (status) status.textContent = 'Could not submit action: ' + err.message; });
+}
+
+function resendAutomatedNewsBriefEmail(id) {
+  alert('Resend approval email is prepared in the Worker design but live sending remains feature-flagged. Use test email until Phase 3 is enabled.');
+}
+
+function retryAutomatedNewsBriefWebflow(id) {
+  var status = document.getElementById('automated-news-brief-action-status');
+  if (status) status.textContent = 'Retrying Webflow...';
+  return workerFetch('/automation/news-briefs/retry', {method:'POST', body:JSON.stringify({candidateId:id})})
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res){ if (!res.ok) throw new Error(res.data.error || 'Retry failed'); if (status) status.textContent = 'Retry complete.'; return loadAutomatedNewsBriefs(true); })
+    .catch(function(err){ if (status) status.textContent = 'Retry failed: ' + err.message; });
+}
+
+function runAutomatedNewsBriefDryRun() {
+  var status = document.getElementById('automated-news-briefs-status');
+  if (status) status.textContent = 'Starting dry run...';
+  return workerFetch('/automation/news-briefs/run', {method:'POST', body:JSON.stringify({dryRun:true, triggerType:'dashboard_dry_run'})})
+    .then(function(r){ return r.json(); })
+    .then(function(data){ if (status) status.textContent = 'Dry run complete: ' + JSON.stringify(data.summary || data).slice(0,180); return loadAutomatedNewsBriefs(true); })
+    .catch(function(err){ if (status) status.textContent = 'Dry run failed: ' + err.message; });
+}
+
+function sendAutomatedNewsBriefTestEmail() {
+  var status = document.getElementById('automated-news-briefs-status');
+  if (status) status.textContent = 'Sending test email...';
+  return workerFetch('/automation/news-briefs/test-email', {method:'POST', body:JSON.stringify({})})
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res){ if (status) status.textContent = res.ok ? 'Test email route completed.' : ('Test email failed: ' + (res.data.error || 'unknown')); })
+    .catch(function(err){ if (status) status.textContent = 'Test email failed: ' + err.message; });
 }
 function showPrepareInterview() {
   if (!guardStaffScreen()) return;
@@ -9225,7 +9463,7 @@ function submitArticle() {
     var body = docId
       ? JSON.stringify({docId: docId})
       : JSON.stringify({fieldData: buildFieldData(articleData), isDraft:true, isArchived:false});
-    return fetch(WORKER + endpoint, {method:'POST', headers:{'Content-Type':'application/json'}, body:body});
+    return workerFetch(endpoint, {method:'POST', body:body});
   }).then(function(r){ return r.json().then(function(d){return {ok:r.ok,data:d};}); }).then(function(res){
     if (res.ok && (res.data.id || res.data._id || res.data.fieldData)) {
       document.getElementById('publish-result').style.display = 'block';
@@ -9430,7 +9668,6 @@ function submitManualNewsBriefToCms() {
     savedDocId = docId || '';
     return fetch(WORKER + '/webflow-news', {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({docId:docId, fieldData:buildNewsBriefFieldData(data), isDraft:true, isArchived:false})
     });
   }).then(function(r){ return r.json().then(function(d){return {ok:r.ok,data:d};}); }).then(function(res) {
@@ -9467,7 +9704,6 @@ function submitNewsBriefArticle(writerName) {
     console.log('[social] news brief Firebase saved', {docId: submittedDocId});
     return fetch(WORKER + '/webflow-news', {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({docId:docId, fieldData:buildNewsBriefFieldData(newsData), isDraft:true, isArchived:false})
     });
   }).then(function(response) {

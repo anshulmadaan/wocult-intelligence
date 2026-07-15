@@ -1,4 +1,9 @@
 {
+  "type": "module",
+  "scripts": {
+    "test": "node --test worker/test/*.test.js",
+    "syntax": "node --check worker/src/index.js && node --check worker/src/newsBriefAutomation.js"
+  },
   "devDependencies": {
     "wrangler": "^4.85.0"
   }
