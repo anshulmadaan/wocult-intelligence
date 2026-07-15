@@ -123,12 +123,30 @@ test('qualification priority normalization keeps strict allowed values with safe
   for (const priority of ['P1', 'P2', 'P3']) {
     assert.equal(validateQualification({ ...goodQualification, recommendedPriority: priority }).ok, true);
   }
+  assert.equal(validateQualification(normalizeQualificationResponse({ ...goodQualification, qualifies: true, recommendedPriority: 'P4' })).ok, false);
+  assert.equal(validateQualification(normalizeQualificationResponse({ ...goodQualification, qualifies: true, recommendedPriority: null })).ok, false);
   assert.equal(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: 'p1' }).recommendedPriority, 'P1');
   assert.equal(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: ' P2 ' }).recommendedPriority, 'P2');
   assert.equal(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: 'p3.' }).recommendedPriority, 'P3');
   assert.equal(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: 'High' }).recommendedPriority, 'P1');
   assert.equal(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: 'medium priority' }).recommendedPriority, 'medium priority');
   assert.equal(validateQualification(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: 'medium priority' })).ok, false);
+});
+
+test('rejected qualification priority normalizes only non-priority equivalents to null', () => {
+  const rejected = { ...goodQualification, qualifies: false, overallScore: 42, rejectionReasons: ['No Wocult angle'] };
+  assert.equal(validateQualification(normalizeQualificationResponse({ ...rejected, recommendedPriority: null })).ok, true);
+  assert.equal(normalizeQualificationResponse({ ...rejected, recommendedPriority: undefined }).recommendedPriority, null);
+  assert.equal(normalizeQualificationResponse({ ...rejected, recommendedPriority: '' }).recommendedPriority, null);
+  assert.equal(normalizeQualificationResponse({ ...rejected, recommendedPriority: 'P4' }).recommendedPriority, null);
+  for (const value of ['reject', 'rejected', 'none', 'n-a', 'n/a', 'not applicable']) {
+    const normalized = normalizeQualificationResponse({ ...rejected, recommendedPriority: value });
+    assert.equal(normalized.recommendedPriority, null);
+    assert.equal(validateQualification(normalized).ok, true);
+  }
+  const arbitrary = normalizeQualificationResponse({ ...rejected, recommendedPriority: 'banana' });
+  assert.equal(arbitrary.recommendedPriority, 'banana');
+  assert.equal(validateQualification(arbitrary).ok, false);
 });
 
 test('qualification enum normalization handles safe casing while unsupported enums still fail', () => {
@@ -327,7 +345,7 @@ test('malformed qualification JSON fails one item without stopping remaining can
       if (anthropicCalls === 1) {
         return new Response(JSON.stringify({ content: [{ type: 'text', text: '{not valid json' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
-      return new Response(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ ...goodQualification, qualifies: false, overallScore: 45, recommendedPriority: ' p3 ' }) }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ ...goodQualification, qualifies: false, overallScore: 45, rejectionReasons: ['No Wocult angle'], recommendedPriority: ' p4 ' }) }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
     throw new Error(`unexpected fetch ${url}`);
   };
@@ -341,7 +359,11 @@ test('malformed qualification JSON fails one item without stopping remaining can
   assert.equal(result.summary.itemsRejected, 1);
   assert.equal(saved.length, 1);
   assert.equal(saved[0].status, 'rejected_by_filter');
-  assert.equal(saved[0].qualificationResult.recommendedPriority, 'P3');
+  assert.equal(saved[0].qualificationResult.qualifies, false);
+  assert.equal(saved[0].qualificationResult.recommendedPriority, null);
+  assert.equal(saved[0].recommendedPriority, null);
+  assert.equal(saved[0].generatedDraft, null);
+  assert.equal(result.summary.draftsGenerated, 0);
   assert.equal(Object.prototype.hasOwnProperty.call(saved[0].qualificationResult, 'rawModelResponse'), false);
   assert.equal(JSON.stringify(saved[0]).includes('rawModelResponse'), false);
   assert.match(result.summary.errorSummary[0].qualificationDiagnostic, /\{not valid json/);
