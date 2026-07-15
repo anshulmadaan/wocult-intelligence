@@ -7,6 +7,7 @@ export const AUTOMATION_STATUSES = [
   'rejected_by_filter',
   'needs_editorial_check',
   'verifying',
+  'qualification_failed',
   'verification_failed',
   'drafting',
   'drafting_failed',
@@ -479,6 +480,47 @@ export function candidateFromTrackerItem(item, qualification = null, verificatio
   };
 }
 
+export function candidateCreatedAtFallback(existing = {}, now = new Date().toISOString()) {
+  return existing.createdAt
+    || existing.discoveredAt
+    || existing.discoveredTimestamp
+    || existing.sourceDiscoveredTimestamp
+    || existing.trackerItem?.dateFound
+    || existing.updatedAt
+    || now;
+}
+
+export function withCandidateMetadata(candidate, existing = null, options = {}) {
+  const now = options.now || new Date().toISOString();
+  const candidateId = candidate.candidateId || candidate.id;
+  const existingDoc = existing || null;
+  const processingRunId = options.runId
+    || candidate.lastProcessedRunId
+    || candidate.runId
+    || existingDoc?.lastProcessedRunId
+    || existingDoc?.runId
+    || '';
+  const firstSeenRunId = existingDoc?.firstSeenRunId
+    || candidate.firstSeenRunId
+    || processingRunId
+    || '';
+  const createdAt = existingDoc
+    ? candidateCreatedAtFallback(existingDoc, now)
+    : candidate.createdAt || now;
+  const updated = {
+    ...candidate,
+    candidateId,
+    createdAt,
+    updatedAt: now,
+    firstSeenRunId,
+    lastProcessedRunId: processingRunId,
+    runId: processingRunId,
+  };
+  if (existingDoc && !existingDoc.createdAt) updated.metadataBackfilled = true;
+  if (existingDoc && !existingDoc.firstSeenRunId && processingRunId) updated.metadataBackfilled = true;
+  return updated;
+}
+
 export async function requireWorkerAdmin(request, env, deps = {}) {
   const auth = request.headers.get('Authorization') || '';
   const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1] || '';
@@ -595,6 +637,7 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
     let attemptedItems = 0;
 
     for (const item of tracker.items) {
+      let processingStage = 'qualification';
       try {
         const fingerprint = createStoryFingerprint(item);
         const cKey = clusterKey(item);
@@ -608,14 +651,22 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
         const deterministic = deterministicEligibility(item);
         if (!deterministic.eligible) {
           summary.itemsRejected += 1;
-          await store.saveCandidate({ ...candidateFromTrackerItem(item), candidateId: `nt_${fingerprint}`, status: 'rejected_by_filter', rejectionReasons: deterministic.reasons }, { dryRun });
+          await store.saveCandidate(withCandidateMetadata({
+            ...candidateFromTrackerItem(item),
+            candidateId: `nt_${fingerprint}`,
+            status: 'rejected_by_filter',
+            rejectionReasons: deterministic.reasons,
+            dryRun,
+          }, null, { runId }), { dryRun, runId });
           continue;
         }
+        processingStage = 'qualification';
         const qualification = normalizeQualificationResponse(await callClaudeJson(env, buildQualificationPrompt(item), 1400, deps));
         const qValid = validateQualification(qualification);
         if (!qValid.ok) {
           const err = new Error(`Invalid qualification JSON: ${qValid.errors.join(',')}`);
           err.qualificationDiagnostic = safeModelDiagnostic(qualification?.rawModelResponse || JSON.stringify(qualification || {}));
+          err.failureStatus = 'qualification_failed';
           throw err;
         }
         const nextStatus = qualificationStatus(qualification, config.minScore);
@@ -625,20 +676,26 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
         let draft = null;
         let status = nextStatus;
         if (nextStatus === 'verifying') {
+          processingStage = 'verification';
           verification = await verifyCandidateSources(item, deps);
           if (!verification.ok) status = 'verification_failed';
           else {
             summary.itemsVerified += 1;
+            processingStage = 'drafting';
             status = 'drafting';
             draft = await callClaudeJson(env, buildDraftPrompt({ item, qualification, verification }), 1800, deps);
             const dValid = validateDraft(draft);
-            if (!dValid.ok) throw new Error(`Invalid draft JSON: ${dValid.errors.join(',')}`);
+            if (!dValid.ok) {
+              const err = new Error(`Invalid draft JSON: ${dValid.errors.join(',')}`);
+              err.failureStatus = 'drafting_failed';
+              throw err;
+            }
             status = 'awaiting_approval';
             summary.draftsGenerated += 1;
           }
         }
-        const candidate = { ...candidateFromTrackerItem(item, qualification, verification, draft), status, dryRun, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-        await store.saveCandidate(candidate, { dryRun });
+        const candidate = withCandidateMetadata({ ...candidateFromTrackerItem(item, qualification, verification, draft), status, dryRun }, null, { runId });
+        await store.saveCandidate(candidate, { dryRun, runId });
         await store.addActivity(candidate.candidateId, 'qualification', { status, score: qualification.overallScore }, { dryRun });
         if (status === 'awaiting_approval') awaiting.push(candidate);
       } catch (e) {
@@ -648,6 +705,15 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
           error: e.message,
           qualificationDiagnostic: e.qualificationDiagnostic || e.modelDiagnostic,
         }));
+        const failedStatus = e.failureStatus || `${processingStage}_failed`;
+        const failedCandidate = withCandidateMetadata({
+          ...candidateFromTrackerItem(item),
+          status: failedStatus,
+          dryRun,
+          lastError: e.message,
+          qualificationDiagnostic: e.qualificationDiagnostic || e.modelDiagnostic || '',
+        }, null, { runId });
+        await store.saveCandidate(failedCandidate, { dryRun, runId }).catch(() => {});
       }
     }
 
@@ -740,6 +806,7 @@ async function confirmDecision(token, note, env, deps = {}) {
     if (p.action === 'approve') {
       after = await createArticleAndWebflowDraft(after, env, deps);
     }
+    after = withCandidateMetadata(after, candidate, { runId: `decision_${Date.now()}` });
     await store.addActivity(p.candidateId, 'confirmed decision', { action: p.action, recipient: p.recipient }, {});
     return { ok: true, status: after.status, candidate: after };
   });
@@ -776,6 +843,7 @@ async function dashboardDecision(candidateId, action, actorEmail, note, env, dep
       updatedAt: new Date().toISOString(),
     };
     if (action === 'approve') updated = await createArticleAndWebflowDraft(updated, env, deps);
+    updated = withCandidateMetadata(updated, candidate, { runId: `decision_${Date.now()}` });
     await store.addActivity(candidateId, 'manual dashboard edits', { action, actorEmail }, {});
     return { ok: true, status: updated.status, candidate: updated };
   });
@@ -892,8 +960,9 @@ async function retryCandidate(candidateId, env, deps = {}) {
   const candidate = await store.getCandidate(candidateId);
   if (!candidate) return { ok: false, error: 'candidate_not_found' };
   if (candidate.webflowStatus === 'webflow_failed' || candidate.status === 'approved') {
-    const updated = await createArticleAndWebflowDraft(candidate, env, deps);
-    await store.saveCandidate(updated, {});
+    const retryRunId = `retry_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const updated = withCandidateMetadata(await createArticleAndWebflowDraft(candidate, env, deps), candidate, { runId: retryRunId });
+    await store.saveCandidate(updated, { existingCandidate: candidate, runId: retryRunId });
     return { ok: true, candidate: updated };
   }
   return { ok: false, error: 'retry_not_available_for_status' };
@@ -978,9 +1047,18 @@ function createFirestoreStore(env, deps = {}) {
       const id = candidate.candidateId || candidate.id;
       const target = new URL(`${root}/news_brief_automation/${encodeURIComponent(id)}`);
       if (options.updateTime) target.searchParams.set('currentDocument.updateTime', options.updateTime);
+      let existing = options.existingCandidate || null;
+      if (!existing) {
+        try {
+          existing = await this.getCandidate(id);
+        } catch (e) {
+          existing = null;
+        }
+      }
+      const storedCandidate = withCandidateMetadata(candidate, existing, { runId: options.runId });
       const res = await firestoreFetch(target.toString(), env, fetchImpl, {
         method: 'PATCH',
-        body: JSON.stringify({ fields: toFirestoreFields({ ...candidate, candidateId: id, updatedAt: new Date().toISOString() }) }),
+        body: JSON.stringify({ fields: toFirestoreFields(storedCandidate) }),
       });
       return fromFirestoreDoc(await res.json());
     },
@@ -1011,7 +1089,7 @@ function createFirestoreStore(env, deps = {}) {
       const result = await fn(candidate);
       if (result.ok && result.candidate) {
         try {
-          await this.saveCandidate(result.candidate, { updateTime: candidate?._updateTime });
+          await this.saveCandidate(result.candidate, { updateTime: candidate?._updateTime, existingCandidate: candidate, runId: result.candidate.lastProcessedRunId || result.candidate.runId });
         } catch (e) {
           if (/Firestore 409|Firestore 412|ABORTED|FAILED_PRECONDITION/i.test(e.message || '')) {
             return { ok: false, error: 'decision_conflict', message: 'This item has already been changed by another decision.' };
@@ -1026,7 +1104,7 @@ function createFirestoreStore(env, deps = {}) {
       await Promise.all(AUTOMATION_STATUSES.concat(['failed']).map(async (status) => {
         if (status === 'failed') {
           counts.failed = 0;
-          for (const failedStatus of ['verification_failed', 'drafting_failed', 'webflow_failed']) {
+          for (const failedStatus of ['qualification_failed', 'verification_failed', 'drafting_failed', 'webflow_failed']) {
             counts.failed += await this.countByStatus(failedStatus);
           }
           return;
