@@ -225,7 +225,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">14.2</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">14.3</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -618,12 +618,12 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     </div>
   </div>
 
-  <div id="news-brief-social-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;padding:24px">
+  <div id="news-brief-social-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:10050;align-items:center;justify-content:center;padding:24px">
     <div style="background:#fff;border:1px solid var(--bdr);border-radius:10px;width:min(460px,100%);padding:22px;box-shadow:0 18px 60px rgba(0,0,0,0.25)">
       <h2 style="font-size:20px;margin-bottom:8px;font-family:Georgia,serif;color:var(--blk)">News brief submitted</h2>
-      <p style="font-size:14px;color:var(--g3);line-height:1.6;margin-bottom:18px">Would you like to prepare a LinkedIn post for this story?</p>
+      <p style="font-size:14px;color:var(--g3);line-height:1.6;margin-bottom:18px">Would you like to produce LinkedIn post copy for this story?</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()" style="flex:1">Work on socials</button>
+        <button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()" style="flex:1">Produce LinkedIn copy</button>
         <button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Not now</button>
       </div>
     </div>
@@ -651,7 +651,9 @@ We’re looking for honest, experience-led stories — not polished perfection.<
           <div class="sfield"><label>Publish date</label><input id="news-social-publish-date" type="date" /></div>
           <div class="sfield"><label>Publish time</label><input id="news-social-publish-time" type="time" /></div>
           <div class="sfield"><label>Status</label><select id="news-social-calendar-status" class="wf-input"><option>Draft</option><option>Working</option><option>Ready</option><option>Scheduled</option><option>Published</option><option>Cancelled</option></select></div>
+          <div class="sfield"><label>Image link</label><input id="news-social-image-url" placeholder="Paste an image URL for the LinkedIn post" oninput="newsBriefSocialSetImageUrl(this.value, true)" /></div>
         </div>
+        <div id="news-social-image-preview" class="hint" style="margin:8px 0 10px">No image selected.</div>
         <div id="news-social-save-status" class="hint"></div>
       </div>
       <div id="news-social-complete" style="display:none;padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-bottom:18px">
@@ -1442,6 +1444,8 @@ var newsBriefSocialState = {
   saving: false,
   calendarEntryId: '',
   completed: false,
+  imageUrl: '',
+  imageUrlEdited: false,
   dirty: false
 };
 
@@ -8716,6 +8720,8 @@ function resetNewsBriefSocialState() {
     saving: false,
     calendarEntryId: '',
     completed: false,
+    imageUrl: '',
+    imageUrlEdited: false,
     dirty: false
   };
   var modal = document.getElementById('news-brief-social-modal');
@@ -8731,6 +8737,17 @@ function getSubmittedStoryUrl(webflowData, article) {
   return webflowData.publishedUrl || webflowData.webflowUrl || webflowData.url || webflowData.link ||
     fieldData.publishedUrl || fieldData.url || item.publishedUrl || item.url || item.link ||
     itemFields.publishedUrl || itemFields.url || article.publishedUrl || '';
+}
+
+function openNewsBriefSocialModal() {
+  var modal = document.getElementById('news-brief-social-modal');
+  console.log('[social] modal element found', !!modal);
+  if (!modal) {
+    console.error('News brief social modal element is missing.');
+    return false;
+  }
+  modal.style.display = 'flex';
+  return true;
 }
 
 function offerNewsBriefSocialWorkflow(articleContext) {
@@ -8758,13 +8775,14 @@ function offerNewsBriefSocialWorkflow(articleContext) {
   newsBriefSocialState.saving = false;
   newsBriefSocialState.calendarEntryId = '';
   newsBriefSocialState.completed = false;
+  newsBriefSocialState.imageUrl = articleContext.imageUrl ||
+    articleContext.newsImage ||
+    (articleContext.firebaseData && articleContext.firebaseData.imageUrl) ||
+    (articleContext.firebaseData && articleContext.firebaseData.newsImage) ||
+    '';
+  newsBriefSocialState.imageUrlEdited = false;
   newsBriefSocialState.dirty = false;
-  var modal = document.getElementById('news-brief-social-modal');
-  if (modal) {
-    modal.style.display = 'flex';
-  } else {
-    console.error('News brief social modal element is missing.');
-  }
+  openNewsBriefSocialModal();
 }
 
 function skipNewsBriefSocialWorkflow() {
@@ -8799,6 +8817,73 @@ function newsBriefSocialArticleUrl() {
   return article.submittedStoryUrl || article.publishedUrl || article.sourceUrl || '';
 }
 
+function newsBriefSocialSetImageUrl(value, fromUser) {
+  newsBriefSocialState.imageUrl = String(value || '').trim();
+  if (fromUser) {
+    newsBriefSocialState.imageUrlEdited = true;
+    newsBriefSocialState.dirty = true;
+    markUnsavedChanges();
+  }
+  newsBriefSocialUpdateImagePreview();
+}
+
+function newsBriefSocialUpdateImagePreview() {
+  var preview = document.getElementById('news-social-image-preview');
+  if (!preview) return;
+  var url = newsBriefSocialState.imageUrl || '';
+  preview.textContent = '';
+  preview.innerHTML = '';
+  if (!url) {
+    preview.textContent = 'No image selected.';
+    return;
+  }
+  try { new URL(url); } catch(e) {
+    preview.textContent = 'Image preview unavailable. Check the link before scheduling.';
+    return;
+  }
+  var img = document.createElement('img');
+  img.src = url;
+  img.alt = 'LinkedIn post image preview';
+  img.style.maxWidth = '220px';
+  img.style.width = '100%';
+  img.style.height = '140px';
+  img.style.objectFit = 'cover';
+  img.style.border = '1px solid var(--bdr)';
+  img.style.borderRadius = '8px';
+  img.style.background = '#fff';
+  img.onerror = function() {
+    preview.innerHTML = '';
+    preview.textContent = 'Image preview unavailable. Check the link before scheduling.';
+  };
+  preview.appendChild(img);
+}
+
+function newsBriefSocialLoadExistingCalendarEntry() {
+  if (!db || !newsBriefSocialState.articleId) return;
+  db.collection('editorial_calendar')
+    .where('originalCollection','==','articles')
+    .where('originalRecordId','==',newsBriefSocialState.articleId)
+    .where('contentType','==','Social post')
+    .limit(1)
+    .get()
+    .then(function(snap) {
+      snap.forEach(function(doc) {
+        var data = doc.data() || {};
+        if ((data.channels || []).indexOf('LinkedIn') === -1) return;
+        newsBriefSocialState.calendarEntryId = doc.id;
+        if (data.imageUrl && !newsBriefSocialState.imageUrlEdited) {
+          newsBriefSocialState.imageUrl = data.imageUrl;
+          var input = document.getElementById('news-social-image-url');
+          if (input) input.value = data.imageUrl;
+          newsBriefSocialUpdateImagePreview();
+        }
+      });
+    })
+    .catch(function(err) {
+      console.warn('Could not load existing LinkedIn calendar entry image:', err);
+    });
+}
+
 function populateNewsBriefSocialScreen() {
   var article = newsBriefSocialState.article || {};
   var headline = article.title || 'Untitled news brief';
@@ -8818,6 +8903,10 @@ function populateNewsBriefSocialScreen() {
   if (ownerEl) ownerEl.value = user.displayName || user.email || '';
   var statusEl = document.getElementById('news-social-calendar-status');
   if (statusEl) statusEl.value = 'Draft';
+  var imageEl = document.getElementById('news-social-image-url');
+  if (imageEl) imageEl.value = newsBriefSocialState.imageUrl || '';
+  newsBriefSocialUpdateImagePreview();
+  newsBriefSocialLoadExistingCalendarEntry();
   var dateEl = document.getElementById('news-social-publish-date');
   if (dateEl) {
     var d = article.publishedDate || article.publishDate || '';
@@ -8968,10 +9057,6 @@ function newsBriefSocialSummary() {
 function saveNewsBriefSocialToCalendar() {
   if (!guardStaffScreen() || !db) return;
   if (newsBriefSocialState.saving) return;
-  if (newsBriefSocialState.calendarEntryId) {
-    showNewsBriefSocialSaveComplete(newsBriefSocialState.calendarEntryId);
-    return;
-  }
   var article = newsBriefSocialState.article || {};
   if (!newsBriefSocialState.articleId) { alert('Missing submitted article ID.'); return; }
   var copy = selectedNewsBriefSocialCopy();
@@ -8979,6 +9064,8 @@ function saveNewsBriefSocialToCalendar() {
   var title = (document.getElementById('news-social-calendar-title').value || '').trim();
   var publishDate = document.getElementById('news-social-publish-date').value;
   if (!title) { alert('Calendar title is required.'); return; }
+  var imageInput = document.getElementById('news-social-image-url');
+  if (imageInput) newsBriefSocialSetImageUrl(imageInput.value, false);
   var status = document.getElementById('news-social-save-status');
   var btn = document.getElementById('news-social-save-btn');
   newsBriefSocialState.saving = true;
@@ -8987,7 +9074,7 @@ function saveNewsBriefSocialToCalendar() {
   var existingLocal = (editorialCalendarState.entries || []).find(function(e) {
     return e.originalCollection === 'articles' && e.originalRecordId === newsBriefSocialState.articleId && e.contentType === 'Social post' && (e.channels || []).indexOf('LinkedIn') !== -1;
   });
-  var duplicateCheck = existingLocal ? Promise.resolve(existingLocal.id) : db.collection('editorial_calendar')
+  var duplicateCheck = newsBriefSocialState.calendarEntryId ? Promise.resolve(newsBriefSocialState.calendarEntryId) : (existingLocal ? Promise.resolve(existingLocal.id) : db.collection('editorial_calendar')
     .where('originalCollection','==','articles')
     .where('originalRecordId','==',newsBriefSocialState.articleId)
     .where('contentType','==','Social post')
@@ -9003,16 +9090,15 @@ function saveNewsBriefSocialToCalendar() {
     }).catch(function(err) {
       console.warn('Could not check duplicate social calendar entry:', err);
       return '';
-    });
+    }));
   duplicateCheck.then(function(foundId) {
+    var entryId = foundId || ('linkedin_' + newsBriefSocialState.articleId);
     if (foundId) {
       newsBriefSocialState.calendarEntryId = foundId;
-      if (status) status.textContent = 'A LinkedIn calendar entry already exists for this news brief.';
-      showNewsBriefSocialSaveComplete(foundId);
-      return null;
+      if (status) status.textContent = 'Updating the existing LinkedIn calendar entry...';
     }
     var user = currentUser || {};
-    var entryRef = db.collection('editorial_calendar').doc('linkedin_' + newsBriefSocialState.articleId);
+    var entryRef = db.collection('editorial_calendar').doc(entryId);
     var storyUrl = newsBriefSocialArticleUrl();
     var contentHtml = escapeHtml(copy).replace(/\n/g,'<br>');
     var data = {
@@ -9021,7 +9107,7 @@ function saveNewsBriefSocialToCalendar() {
       contentType:'Social post',
       summary:newsBriefSocialSummary(),
       contentCopy:contentHtml,
-      imageUrl:article.imageUrl || article.newsImage || article.coverImageUrl || '',
+      imageUrl:newsBriefSocialState.imageUrl || '',
       owner:(document.getElementById('news-social-owner').value || '').trim() || user.displayName || user.email || 'Wocult editor',
       publishDate:publishDate,
       publishTime:document.getElementById('news-social-publish-time').value || '',
@@ -9044,7 +9130,9 @@ function saveNewsBriefSocialToCalendar() {
     };
     return entryRef.set(data, {merge:true}).then(function() {
       newsBriefSocialState.calendarEntryId = entryRef.id;
-      editorialCalendarState.entries = (editorialCalendarState.entries || []).concat([Object.assign({id:entryRef.id}, data)]);
+      editorialCalendarState.entries = (editorialCalendarState.entries || []).filter(function(e) {
+        return e.id !== entryRef.id;
+      }).concat([Object.assign({id:entryRef.id}, data)]);
       editorialCalendarState.linkedSourceKeys['articles:' + newsBriefSocialState.articleId] = entryRef.id;
       return editorialCalendarLogActivity(entryRef.id, 'Created entry', 'Created from news brief social workflow.');
     }).then(function() {
@@ -9174,6 +9262,8 @@ function collectNewsBriefData(writerName) {
     sourceName: cmsFieldValue('r-source-name') || (currentCard && currentCard.src) || '',
     imageUrl: newsImage,
     newsImage: newsImage,
+    contentType: 'news_brief',
+    cmsType: 'news',
     status: 'submitted'
   };
 }
@@ -9370,29 +9460,49 @@ function submitNewsBriefArticle(writerName) {
   btn.disabled = true;
   btn.textContent = 'Submitting...';
   var newsData = collectNewsBriefData(writerName);
-  var savedDocId = '';
-  saveArticleToFirebase(Object.assign({}, newsData, {sourceType:'news_brief'}), 'submitted').then(function(docId) {
-    savedDocId = docId || '';
+  var submittedDocId = '';
+  var submittedWebflowResult = null;
+  return saveArticleToFirebase(Object.assign({}, newsData, {sourceType:'news_brief'}), 'submitted').then(function(docId) {
+    submittedDocId = docId || '';
+    console.log('[social] news brief Firebase saved', {docId: submittedDocId});
     return fetch(WORKER + '/webflow-news', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({docId:docId, fieldData:buildNewsBriefFieldData(newsData), isDraft:true, isArchived:false})
     });
-  }).then(function(r){ return r.json().then(function(d){return {ok:r.ok,data:d};}); }).then(function(res) {
-    if (!res.ok) throw new Error((res.data&&res.data.message)||JSON.stringify(res.data).substring(0,200));
+  }).then(function(response) {
+    return response.json().then(function(data) {
+      return {ok:response.ok, data:data};
+    });
+  }).then(function(result) {
+    if (!result.ok) throw new Error((result.data&&result.data.message)||JSON.stringify(result.data).substring(0,200));
+    submittedWebflowResult = result.data;
+    console.log('[social] Webflow News succeeded');
+    var publishedUrl = getSubmittedStoryUrl(submittedWebflowResult, newsData);
+    console.log('[social] offering workflow', {
+      articleId: submittedDocId,
+      contentType: newsData.contentType
+    });
+    offerNewsBriefSocialWorkflow({
+      articleId: submittedDocId,
+      title: newsData.title || '',
+      standfirst: newsData.standfirst || newsData.shortIntro || '',
+      body: newsData.body || '',
+      sourceUrl: newsData.sourceUrl || '',
+      publishedUrl: publishedUrl || '',
+      submittedStoryUrl: publishedUrl || '',
+      imageUrl: newsData.imageUrl || newsData.newsImage || '',
+      newsImage: newsData.newsImage || newsData.imageUrl || '',
+      publishDate: newsData.publishedDate || newsData.publishDate || '',
+      publishedDate: newsData.publishedDate || newsData.publishDate || '',
+      contentType: 'news_brief',
+      cmsType: 'news',
+      sourceType: 'news_brief',
+      firebaseData: Object.assign({}, newsData)
+    });
     document.getElementById('publish-result').style.display = 'block';
-    document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief submitted</div><div class="publish-sub">Saved to Firebase and published to Webflow News as draft.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
+    document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief submitted</div><div class="publish-sub">Saved to Firebase and submitted to Webflow News. Choose whether to produce LinkedIn post copy.</div><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()">Produce LinkedIn copy</button><button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Not now</button></div></div>';
     document.getElementById('publish-actions').style.display = 'none';
-    offerNewsBriefSocialWorkflow(Object.assign({}, newsData, {
-      articleId:savedDocId,
-      contentType:'news_brief',
-      cmsType:'news',
-      publishedUrl:getSubmittedStoryUrl(res.data, newsData),
-      submittedStoryUrl:getSubmittedStoryUrl(res.data, newsData),
-      publishDate:newsData.publishedDate || newsData.publishDate || '',
-      firebaseData:newsData,
-      sourceType:'news_brief'
-    }));
   }).catch(function(e) {
     fbToast('Error: '+e.message.substring(0,60), false);
   }).finally(function() {
