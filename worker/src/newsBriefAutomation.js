@@ -590,13 +590,12 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
     if (!config.automationEnabled && !dryRun) throw new Error('NEWS_BRIEF_AUTOMATION_ENABLED is not enabled');
     const tracker = await fetchNewsTracker(config, deps);
     summary.itemsReceived = tracker.items.length;
-    const candidates = tracker.items.slice(0, config.maxItemsPerRun);
     const awaiting = [];
     const seenClusters = new Set();
+    let attemptedItems = 0;
 
-    for (const item of candidates) {
+    for (const item of tracker.items) {
       try {
-        const deterministic = deterministicEligibility(item);
         const fingerprint = createStoryFingerprint(item);
         const cKey = clusterKey(item);
         if (seenClusters.has(cKey) || await store.existsByFingerprint(fingerprint) || await store.isDeclinedSuppressed(cKey)) {
@@ -604,6 +603,9 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
           continue;
         }
         seenClusters.add(cKey);
+        if (attemptedItems >= config.maxItemsPerRun) break;
+        attemptedItems += 1;
+        const deterministic = deterministicEligibility(item);
         if (!deterministic.eligible) {
           summary.itemsRejected += 1;
           await store.saveCandidate({ ...candidateFromTrackerItem(item), candidateId: `nt_${fingerprint}`, status: 'rejected_by_filter', rejectionReasons: deterministic.reasons }, { dryRun });

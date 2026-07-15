@@ -70,6 +70,50 @@ const goodDraft = {
   sourceUrl: baseItem.link,
 };
 
+function trackerItem(n, overrides = {}) {
+  return {
+    ...baseItem,
+    headline: `Company ${n} hiring update adds jobs for Indian workers`,
+    link: `https://economictimes.indiatimes.com/jobs/company-${n}-hiring`,
+    whyItMatters: 'The workforce update affects Indian working professionals.',
+    ...overrides,
+  };
+}
+
+function makeRunMocks(items, options = {}) {
+  const saved = [];
+  const activities = [];
+  const calls = { anthropic: 0, source: 0, draft: 0 };
+  const existingLinks = new Set(options.existingLinks || []);
+  const declinedLinks = new Set(options.declinedLinks || []);
+  const qualificationFor = options.qualificationFor || (() => ({ ...goodQualification, qualifies: false, overallScore: 45, rejectionReasons: ['No Wocult angle'], recommendedPriority: null }));
+  const store = {
+    existsByFingerprint: async (fingerprint) => existingLinks.has(fingerprint),
+    isDeclinedSuppressed: async (cKey) => declinedLinks.has(cKey),
+    saveCandidate: async (candidate) => { saved.push(candidate); return candidate; },
+    addActivity: async (id, type, data) => { activities.push({ id, type, data }); },
+    saveRun: async () => {},
+  };
+  const fetch = async (url, init = {}) => {
+    const href = String(url);
+    if (href.includes('tracker.example.test')) {
+      return new Response(JSON.stringify({ ok: true, items }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (href.includes('api.anthropic.com')) {
+      calls.anthropic += 1;
+      const body = JSON.parse(init.body || '{}');
+      if (String(body.messages?.[0]?.content || '').includes('Write a reported Wocult news brief')) calls.draft += 1;
+      const index = calls.anthropic - calls.draft;
+      const response = qualificationFor(index, body);
+      if (response instanceof Error) throw response;
+      return new Response(JSON.stringify({ content: [{ type: 'text', text: typeof response === 'string' ? response : JSON.stringify(response) }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    calls.source += 1;
+    return new Response('<html>source text about Indian workers and jobs</html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+  };
+  return { saved, activities, calls, store, fetch };
+}
+
 test('normalises News Tracker response fields without changing source shape', () => {
   const data = normalizeNewsTrackerResponse({ ok: true, updatedAt: recent, count: 1, items: [baseItem] });
   assert.equal(data.ok, true);
@@ -293,6 +337,142 @@ test('automation run fetches only the configured News Tracker API and skips exis
   assert.equal(result.summary.itemsSkipped, 1);
   assert.deepEqual(calls, ['https://tracker.example.test/current?t=' + calls[0].split('t=')[1]]);
   assert.equal(calls.some((url) => /reddit|official|newsdata|rss|radar|search/i.test(url)), false);
+});
+
+test('run skips first five handled records and processes the next five new tracker records', async () => {
+  const items = Array.from({ length: 10 }, (_, i) => trackerItem(i + 1));
+  const normalized = normalizeNewsTrackerResponse({ items }).items;
+  const existingLinks = normalized.slice(0, 5).map(createStoryFingerprint);
+  const mocks = makeRunMocks(items, { existingLinks });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_EMAIL_ENABLED: 'false',
+    NEWS_BRIEF_WEBFLOW_ENABLED: 'false',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsReceived, 10);
+  assert.equal(result.summary.itemsSkipped, 5);
+  assert.equal(result.summary.itemsRejected, 5);
+  assert.equal(result.summary.failures, 0);
+  assert.equal(mocks.calls.anthropic, 5);
+  assert.deepEqual(mocks.saved.map((c) => c.originalHeadline), normalized.slice(5, 10).map((i) => i.headline));
+});
+
+test('skipped records do not consume processing slots before five new items are attempted', async () => {
+  const items = Array.from({ length: 8 }, (_, i) => trackerItem(i + 1));
+  const normalized = normalizeNewsTrackerResponse({ items }).items;
+  const existingLinks = normalized.slice(0, 3).map(createStoryFingerprint);
+  const mocks = makeRunMocks(items, { existingLinks });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_EMAIL_ENABLED: 'false',
+    NEWS_BRIEF_WEBFLOW_ENABLED: 'false',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsSkipped, 3);
+  assert.equal(result.summary.itemsRejected, 5);
+  assert.equal(mocks.calls.anthropic, 5);
+  assert.equal(mocks.saved.length, 5);
+});
+
+test('run attempts all remaining new records when fewer than max remain', async () => {
+  const items = Array.from({ length: 7 }, (_, i) => trackerItem(i + 1));
+  const normalized = normalizeNewsTrackerResponse({ items }).items;
+  const existingLinks = normalized.slice(0, 4).map(createStoryFingerprint);
+  const mocks = makeRunMocks(items, { existingLinks });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsSkipped, 4);
+  assert.equal(result.summary.itemsRejected, 3);
+  assert.equal(mocks.calls.anthropic, 3);
+  assert.equal(mocks.saved.length, 3);
+});
+
+test('run succeeds with skips and no failures when no new records remain', async () => {
+  const items = Array.from({ length: 6 }, (_, i) => trackerItem(i + 1));
+  const normalized = normalizeNewsTrackerResponse({ items }).items;
+  const existingLinks = normalized.map(createStoryFingerprint);
+  const mocks = makeRunMocks(items, { existingLinks });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.itemsSkipped, 6);
+  assert.equal(result.summary.itemsRejected, 0);
+  assert.equal(result.summary.failures, 0);
+  assert.equal(mocks.calls.anthropic, 0);
+  assert.equal(mocks.calls.source, 0);
+  assert.equal(mocks.calls.draft, 0);
+  assert.equal(mocks.saved.length, 0);
+});
+
+test('new item processing never exceeds max and skips avoid Claude, verification and drafting', async () => {
+  const items = Array.from({ length: 12 }, (_, i) => trackerItem(i + 1));
+  const normalized = normalizeNewsTrackerResponse({ items }).items;
+  const existingLinks = normalized.slice(0, 2).map(createStoryFingerprint);
+  const mocks = makeRunMocks(items, { existingLinks });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsSkipped, 2);
+  assert.equal(result.summary.itemsRejected, 5);
+  assert.equal(mocks.calls.anthropic, 5);
+  assert.equal(mocks.calls.source, 0);
+  assert.equal(mocks.calls.draft, 0);
+  assert.equal(mocks.saved.length, 5);
+});
+
+test('failure among new records does not stop remaining allowed new records', async () => {
+  const items = Array.from({ length: 6 }, (_, i) => trackerItem(i + 1));
+  const mocks = makeRunMocks(items, {
+    qualificationFor: (index) => index === 1
+      ? '{not valid json'
+      : { ...goodQualification, qualifies: false, overallScore: 40, rejectionReasons: ['No Wocult angle'], recommendedPriority: null },
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.failures, 1);
+  assert.equal(result.summary.itemsRejected, 4);
+  assert.equal(mocks.calls.anthropic, 5);
+  assert.equal(mocks.saved.length, 4);
+});
+
+test('deduplication and declined-cluster suppression still skip without consuming new-item slots', async () => {
+  const duplicate = trackerItem(1, { link: 'https://economictimes.indiatimes.com/jobs/company-1-hiring-alt' });
+  const items = [trackerItem(1), duplicate, trackerItem(2), trackerItem(3), trackerItem(4), trackerItem(5), trackerItem(6)];
+  const normalized = normalizeNewsTrackerResponse({ items }).items;
+  const declinedLinks = [clusterKey(normalized[2])];
+  const mocks = makeRunMocks(items, { declinedLinks });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_EMAIL_ENABLED: 'false',
+    NEWS_BRIEF_WEBFLOW_ENABLED: 'false',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsSkipped, 2);
+  assert.equal(result.summary.itemsRejected, 5);
+  assert.equal(result.summary.emailsSent, 0);
+  assert.equal(mocks.calls.anthropic, 5);
 });
 
 test('empty qualifying set does not send an approval digest', async () => {
