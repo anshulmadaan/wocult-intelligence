@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import {
   automationCandidateToArticle,
+  callClaudeJson,
   candidateFromTrackerItem,
   clusterKey,
   createStoryFingerprint,
@@ -10,6 +11,7 @@ import {
   getAutomationConfig,
   handleAutomationRequest,
   normalizeNewsTrackerResponse,
+  normalizeQualificationResponse,
   qualificationStatus,
   renderApprovalEmail,
   runNewsBriefAutomation,
@@ -115,6 +117,47 @@ test('qualification JSON validation enforces required structure and enums', () =
   assert.equal(validateQualification(goodQualification).ok, true);
   assert.equal(validateQualification({ ...goodQualification, indiaRelevance: 'maybe' }).ok, false);
   assert.equal(validateQualification({ ...goodQualification, materialFacts: 'no' }).ok, false);
+});
+
+test('qualification priority normalization keeps strict allowed values with safe variants', () => {
+  for (const priority of ['P1', 'P2', 'P3']) {
+    assert.equal(validateQualification({ ...goodQualification, recommendedPriority: priority }).ok, true);
+  }
+  assert.equal(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: 'p1' }).recommendedPriority, 'P1');
+  assert.equal(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: ' P2 ' }).recommendedPriority, 'P2');
+  assert.equal(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: 'p3.' }).recommendedPriority, 'P3');
+  assert.equal(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: 'High' }).recommendedPriority, 'P1');
+  assert.equal(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: 'medium priority' }).recommendedPriority, 'medium priority');
+  assert.equal(validateQualification(normalizeQualificationResponse({ ...goodQualification, recommendedPriority: 'medium priority' })).ok, false);
+});
+
+test('qualification enum normalization handles safe casing while unsupported enums still fail', () => {
+  const normalized = normalizeQualificationResponse({
+    ...goodQualification,
+    indiaRelevance: ' HIGH ',
+    duplicationRisk: 'Low.',
+    factualRisk: 'medium',
+    legalRisk: 'LOW',
+  });
+  assert.equal(normalized.indiaRelevance, 'high');
+  assert.equal(normalized.duplicationRisk, 'low');
+  assert.equal(normalized.factualRisk, 'medium');
+  assert.equal(normalized.legalRisk, 'low');
+  assert.equal(validateQualification(normalized).ok, true);
+  assert.equal(validateQualification(normalizeQualificationResponse({ ...goodQualification, factualRisk: 'unclear' })).ok, false);
+  assert.equal(validateQualification({ ...goodQualification, qualifies: 'yes' }).ok, false);
+  assert.equal(validateQualification({ ...goodQualification, overallScore: '82' }).ok, false);
+  assert.equal(validateQualification({ ...goodQualification, qualificationReasons: 'because' }).ok, false);
+});
+
+test('raw model response is available for debugging but not enumerable', async () => {
+  const raw = JSON.stringify({ ...goodQualification, recommendedPriority: ' p2 ' });
+  const parsed = await callClaudeJson({}, 'prompt', 100, {
+    fetch: async () => new Response(JSON.stringify({ content: [{ type: 'text', text: raw }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+  });
+  assert.equal(parsed.rawModelResponse, raw);
+  assert.equal(Object.keys(parsed).includes('rawModelResponse'), false);
+  assert.equal(JSON.stringify(parsed).includes('rawModelResponse'), false);
 });
 
 test('threshold handling rejects, holds and advances candidates', () => {
@@ -257,6 +300,85 @@ test('empty qualifying set does not send an approval digest', async () => {
   assert.equal(result.summary.itemsRejected, 1);
   assert.equal(result.summary.emailsSent, 0);
   assert.equal(emailFetches, 0);
+});
+
+test('malformed qualification JSON fails one item without stopping remaining candidates', async () => {
+  const secondItem = {
+    ...baseItem,
+    headline: 'TCS workforce policy update affects Indian employees',
+    link: 'https://economictimes.indiatimes.com/jobs/tcs-policy-update',
+    whyItMatters: 'A workplace policy update affects Indian professionals.',
+  };
+  const saved = [];
+  const store = {
+    existsByFingerprint: async () => false,
+    isDeclinedSuppressed: async () => false,
+    saveCandidate: async (candidate) => { saved.push(candidate); return candidate; },
+    addActivity: async () => {},
+    saveRun: async () => {},
+  };
+  let anthropicCalls = 0;
+  const fetch = async (url) => {
+    if (String(url).includes('tracker.example.test')) {
+      return new Response(JSON.stringify({ ok: true, items: [baseItem, secondItem] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(url).includes('api.anthropic.com')) {
+      anthropicCalls += 1;
+      if (anthropicCalls === 1) {
+        return new Response(JSON.stringify({ content: [{ type: 'text', text: '{not valid json' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ ...goodQualification, qualifies: false, overallScore: 45, recommendedPriority: ' p3 ' }) }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '2',
+  }, { dryRun: true }, { fetch, store });
+  assert.equal(result.summary.failures, 1);
+  assert.equal(result.summary.itemsRejected, 1);
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].status, 'rejected_by_filter');
+  assert.equal(saved[0].qualificationResult.recommendedPriority, 'P3');
+  assert.equal(Object.prototype.hasOwnProperty.call(saved[0].qualificationResult, 'rawModelResponse'), false);
+  assert.equal(JSON.stringify(saved[0]).includes('rawModelResponse'), false);
+  assert.match(result.summary.errorSummary[0].qualificationDiagnostic, /\{not valid json/);
+});
+
+test('unsupported qualification enum failure stores only a truncated diagnostic', async () => {
+  const saved = [];
+  const longInvalidQualification = {
+    ...goodQualification,
+    recommendedPriority: `medium priority ${'x'.repeat(5000)}`,
+  };
+  const store = {
+    existsByFingerprint: async () => false,
+    isDeclinedSuppressed: async () => false,
+    saveCandidate: async (candidate) => { saved.push(candidate); return candidate; },
+    addActivity: async () => {},
+    saveRun: async () => {},
+  };
+  const fetch = async (url) => {
+    if (String(url).includes('tracker.example.test')) {
+      return new Response(JSON.stringify({ ok: true, items: [baseItem] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(url).includes('api.anthropic.com')) {
+      return new Response(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(longInvalidQualification) }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+  }, { dryRun: true }, { fetch, store });
+  assert.equal(result.summary.failures, 1);
+  assert.equal(result.summary.errorSummary[0].error, 'Invalid qualification JSON: recommendedPriority_invalid');
+  assert.equal(result.summary.errorSummary[0].qualificationDiagnostic.length, 4000);
+  assert.equal(saved.length, 0);
 });
 
 test('test-email route is protected and cannot create approval actions or Webflow items when email is disabled', async () => {

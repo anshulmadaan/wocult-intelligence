@@ -181,6 +181,42 @@ export function validateQualification(value) {
   return { ok: errors.length === 0, errors };
 }
 
+export function normalizeQualificationResponse(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const normalized = {
+    ...value,
+    indiaRelevance: normalizeEnumValue(value.indiaRelevance, {
+      high: 'high',
+      medium: 'medium',
+      low: 'low',
+      none: 'none',
+      no: 'none',
+      nil: 'none',
+    }),
+    duplicationRisk: normalizeEnumValue(value.duplicationRisk, { high: 'high', medium: 'medium', low: 'low' }),
+    factualRisk: normalizeEnumValue(value.factualRisk, { high: 'high', medium: 'medium', low: 'low' }),
+    legalRisk: normalizeEnumValue(value.legalRisk, { high: 'high', medium: 'medium', low: 'low' }),
+    recommendedPriority: normalizeEnumValue(value.recommendedPriority, {
+      p1: 'P1',
+      'priority 1': 'P1',
+      'priority one': 'P1',
+      high: 'P1',
+      urgent: 'P1',
+      p2: 'P2',
+      'priority 2': 'P2',
+      'priority two': 'P2',
+      medium: 'P2',
+      normal: 'P2',
+      p3: 'P3',
+      'priority 3': 'P3',
+      'priority three': 'P3',
+      low: 'P3',
+    }),
+  };
+  if (value.rawModelResponse) attachRawModelResponse(normalized, value.rawModelResponse);
+  return normalized;
+}
+
 export function qualificationStatus(qualification, minScore = 75) {
   const score = Number(qualification?.overallScore || 0);
   if (!qualification?.qualifies || score < 60) return 'rejected_by_filter';
@@ -333,7 +369,12 @@ export async function callClaudeJson(env, prompt, maxTokens = 1200, deps = {}) {
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error?.message || `Anthropic returned ${res.status}`);
   const txt = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
-  return parseJsonFromText(txt);
+  try {
+    return parseJsonFromText(txt);
+  } catch (e) {
+    e.modelDiagnostic = safeModelDiagnostic(txt);
+    throw e;
+  }
 }
 
 export function buildQualificationPrompt(item) {
@@ -359,6 +400,7 @@ ${JSON.stringify(candidate, null, 2)}`;
 
 export function candidateFromTrackerItem(item, qualification = null, verification = null, draft = null) {
   const fingerprint = createStoryFingerprint(item);
+  const storedQualification = sanitizeQualificationForStorage(qualification);
   return {
     candidateId: `nt_${fingerprint}`,
     newsTrackerSourceId: item.sourceId,
@@ -377,10 +419,10 @@ export function candidateFromTrackerItem(item, qualification = null, verificatio
     originalPriority: item.priority,
     originalSuggestedFormat: item.suggestedFormat,
     originalWhyItMatters: item.whyItMatters,
-    qualificationResult: qualification,
-    qualificationScore: qualification?.overallScore || 0,
-    recommendedPriority: qualification?.recommendedPriority || '',
-    recommendedAngle: qualification?.recommendedAngle || '',
+    qualificationResult: storedQualification,
+    qualificationScore: storedQualification?.overallScore || 0,
+    recommendedPriority: storedQualification?.recommendedPriority || '',
+    recommendedAngle: storedQualification?.recommendedAngle || '',
     verificationStatus: verification?.status || '',
     verificationSummary: verification?.summary || '',
     verifiedFacts: verification?.confirmedFacts || [],
@@ -526,9 +568,13 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
           await store.saveCandidate({ ...candidateFromTrackerItem(item), candidateId: `nt_${fingerprint}`, status: 'rejected_by_filter', rejectionReasons: deterministic.reasons }, { dryRun });
           continue;
         }
-        const qualification = await callClaudeJson(env, buildQualificationPrompt(item), 1400, deps);
+        const qualification = normalizeQualificationResponse(await callClaudeJson(env, buildQualificationPrompt(item), 1400, deps));
         const qValid = validateQualification(qualification);
-        if (!qValid.ok) throw new Error(`Invalid qualification JSON: ${qValid.errors.join(',')}`);
+        if (!qValid.ok) {
+          const err = new Error(`Invalid qualification JSON: ${qValid.errors.join(',')}`);
+          err.qualificationDiagnostic = safeModelDiagnostic(qualification?.rawModelResponse || JSON.stringify(qualification || {}));
+          throw err;
+        }
         const nextStatus = qualificationStatus(qualification, config.minScore);
         if (nextStatus === 'rejected_by_filter') summary.itemsRejected += 1;
         if (nextStatus === 'needs_editorial_check') summary.itemsNeedingEditorialCheck += 1;
@@ -554,7 +600,11 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
         if (status === 'awaiting_approval') awaiting.push(candidate);
       } catch (e) {
         summary.failures += 1;
-        summary.errorSummary.push({ headline: item.headline, error: e.message });
+        summary.errorSummary.push(stripEmptyOptionalFields({
+          headline: item.headline,
+          error: e.message,
+          qualificationDiagnostic: e.qualificationDiagnostic || e.modelDiagnostic,
+        }));
       }
     }
 
@@ -1230,15 +1280,47 @@ function stableHash(value) {
 
 function parseJsonFromText(text, forgiving = false) {
   try {
-    return JSON.parse(text);
+    return attachRawModelResponse(JSON.parse(text), text);
   } catch (e) {
     const s = String(text || '').replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim();
     const a = s.indexOf('{');
     const b = s.lastIndexOf('}');
-    if (a !== -1 && b !== -1) return JSON.parse(s.slice(a, b + 1));
+    if (a !== -1 && b !== -1) return attachRawModelResponse(JSON.parse(s.slice(a, b + 1)), text);
     if (forgiving) return {};
     throw e;
   }
+}
+
+function attachRawModelResponse(value, raw) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    Object.defineProperty(value, 'rawModelResponse', {
+      value: String(raw || ''),
+      enumerable: false,
+      configurable: true,
+    });
+  }
+  return value;
+}
+
+function sanitizeQualificationForStorage(qualification) {
+  if (!qualification || typeof qualification !== 'object' || Array.isArray(qualification)) return qualification;
+  const { rawModelResponse, ...stored } = qualification;
+  return stored;
+}
+
+function safeModelDiagnostic(value) {
+  return String(value || '').slice(0, 4000);
+}
+
+function normalizeEnumValue(value, mapping) {
+  if (typeof value !== 'string') return value;
+  const key = value
+    .trim()
+    .replace(/[.。]+$/g, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+  return Object.prototype.hasOwnProperty.call(mapping, key) ? mapping[key] : value;
 }
 
 async function fetchWithTimeout(url, init, timeoutMs, fetchImpl) {
