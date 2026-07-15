@@ -415,6 +415,12 @@ export async function requireProtectedRoute(request, env, deps = {}) {
 
 export async function handleAutomationRequest(request, env, ctx, shared = {}, deps = {}) {
   const url = new URL(request.url);
+  const isNewsBriefAutomationRoute =
+    url.pathname === '/automation/news-briefs'
+    || url.pathname.startsWith('/automation/news-briefs/');
+
+  if (!isNewsBriefAutomationRoute) return null;
+
   const json = shared.jsonResponse || ((data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } }));
   if (request.method === 'OPTIONS') return new Response(null, { headers: shared.cors || {} });
 
@@ -466,7 +472,7 @@ export async function handleAutomationRequest(request, env, ctx, shared = {}, de
   if (url.pathname === '/automation/news-briefs/test-email' && request.method === 'POST') {
     return json(await sendTestEmail(env, deps));
   }
-  return null;
+  return json({ ok: false, error: 'automation_route_not_found' }, 404);
 }
 
 export async function scheduledNewsBriefAutomation(env, ctx, deps = {}) {
