@@ -5710,12 +5710,93 @@ var AUTOMATED_NEWS_BRIEF_TABS = [
   ['awaiting_approval','Awaiting approval'],
   ['needs_editorial_check','Needs editorial check'],
   ['rejected_by_filter','Rejected'],
+  ['verifying','Verifying'],
+  ['drafting','Drafting'],
   ['held','Held'],
   ['approved','Approved'],
+  ['creating_webflow_draft','Creating Webflow draft'],
   ['webflow_draft_created','Webflow draft created'],
   ['declined','Declined'],
-  ['failed','Failed']
+  ['failed','Failed'],
+  ['other','Other']
 ];
+var AUTOMATED_NEWS_BRIEF_KNOWN_STATUSES = {
+  rejected_by_filter: true,
+  needs_editorial_check: true,
+  verifying: true,
+  verification_failed: true,
+  drafting: true,
+  drafting_failed: true,
+  awaiting_approval: true,
+  held: true,
+  declined: true,
+  approved: true,
+  creating_webflow_draft: true,
+  webflow_draft_created: true,
+  webflow_failed: true,
+  failed: true
+};
+var AUTOMATED_NEWS_BRIEF_STATUS_ALIASES = {
+  rejected: 'rejected_by_filter',
+  rejection: 'rejected_by_filter',
+  rejected_by_filter: 'rejected_by_filter',
+  needs_editorial_check: 'needs_editorial_check',
+  editorial_check: 'needs_editorial_check',
+  needs_editorial_review: 'needs_editorial_check',
+  awaiting_approval: 'awaiting_approval',
+  awaiting: 'awaiting_approval',
+  pending_approval: 'awaiting_approval',
+  verification_failed: 'verification_failed',
+  verifying: 'verifying',
+  drafting_failed: 'drafting_failed',
+  drafting: 'drafting',
+  held: 'held',
+  hold: 'held',
+  declined: 'declined',
+  approved: 'approved',
+  creating_webflow_draft: 'creating_webflow_draft',
+  webflow_draft_created: 'webflow_draft_created',
+  webflow_failed: 'webflow_failed',
+  failed: 'failed',
+  failure: 'failed',
+  qualification_failed: 'failed'
+};
+
+function normalizeAutomatedNewsBriefStatusValue(value) {
+  var raw = String(value || '').trim();
+  if (!raw) return '';
+  var key = raw.toLowerCase().replace(/[\s-]+/g, '_').replace(/[^\w]+/g, '_').replace(/^_+|_+$/g, '');
+  return AUTOMATED_NEWS_BRIEF_STATUS_ALIASES[key] || key;
+}
+
+function automatedNewsBriefStatus(item) {
+  item = item || {};
+  var status = normalizeAutomatedNewsBriefStatusValue(item.status || item.decisionStatus || item.workflowStatus || item.automationStatus);
+  if (!status && item.webflowStatus === 'webflow_failed') status = 'webflow_failed';
+  if (!status && item.qualificationResult && item.qualificationResult.qualifies === false) status = 'rejected_by_filter';
+  if (!status) return 'other';
+  if (/failed$/.test(status)) return status === 'webflow_failed' ? 'webflow_failed' : 'failed';
+  return AUTOMATED_NEWS_BRIEF_KNOWN_STATUSES[status] ? status : 'other';
+}
+
+function shouldLogAutomatedNewsBriefDiagnostics() {
+  try {
+    return new URLSearchParams(window.location.search).get('debugNewsBriefs') === '1'
+      || window.localStorage.getItem('debugAutomatedNewsBriefs') === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+function logAutomatedNewsBriefCandidateShape(item) {
+  if (!shouldLogAutomatedNewsBriefDiagnostics() || !window.console || !console.debug || !item) return;
+  console.debug('[automated-news-brief]', {
+    id: item.id || '',
+    rawStatus: item.status || item.decisionStatus || item.workflowStatus || item.automationStatus || '',
+    status: automatedNewsBriefStatus(item),
+    fields: Object.keys(item).sort()
+  });
+}
 
 function showAutomatedNewsBriefs() {
   if (!guardStaffScreen()) return;
@@ -5751,9 +5832,12 @@ function loadAutomatedNewsBriefs(force) {
     snap.forEach(function(doc) {
       var item = doc.data() || {};
       item.id = doc.id;
+      item.normalizedStatus = automatedNewsBriefStatus(item);
+      logAutomatedNewsBriefCandidateShape(item);
       automatedNewsBriefItems.push(item);
     });
     if (status) status.textContent = automatedNewsBriefItems.length + ' candidates loaded.';
+    renderAutomatedNewsBriefTabs();
     renderAutomatedNewsBriefList();
     return automatedNewsBriefItems;
   }).catch(function(err) {
@@ -5765,8 +5849,8 @@ function loadAutomatedNewsBriefs(force) {
 
 function automatedNewsBriefMatchesFilter(item, filter) {
   filter = filter || automatedNewsBriefFilter;
-  var status = item.status || item.decisionStatus || '';
-  if (filter === 'failed') return /failed|qualification_failed|verification_failed|drafting_failed|webflow_failed/.test(status) || item.webflowStatus === 'webflow_failed';
+  var status = item.normalizedStatus || automatedNewsBriefStatus(item);
+  if (filter === 'failed') return status === 'failed' || /failed$/.test(status) || item.webflowStatus === 'webflow_failed';
   return status === filter;
 }
 
@@ -5780,7 +5864,7 @@ function renderAutomatedNewsBriefList() {
     return '<button onclick="selectAutomatedNewsBrief(\''+escapeAttr(item.id)+'\')" style="text-align:left;background:#fff;border:1px solid var(--bdr);border-radius:8px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px">'
       + '<strong style="font-size:14px;color:var(--blk);line-height:1.35">'+escapeHtml(title)+'</strong>'
       + '<span style="font-size:12px;color:var(--g3)">'+escapeHtml((item.publishers && item.publishers[0]) || item.publisher || '')+' · Score '+escapeHtml(String(item.qualificationScore || ''))+' · '+escapeHtml(item.recommendedPriority || '')+'</span>'
-      + '<span style="font-size:12px;color:var(--g3)">'+escapeHtml(item.status || '')+' · Webflow: '+escapeHtml(item.webflowStatus || 'not started')+'</span>'
+      + '<span style="font-size:12px;color:var(--g3)">'+escapeHtml(item.normalizedStatus || automatedNewsBriefStatus(item))+' · Webflow: '+escapeHtml(item.webflowStatus || 'not started')+'</span>'
       + '</button>';
   }).join('');
 }
@@ -5796,7 +5880,8 @@ function renderAutomatedNewsBriefDetail(item) {
   if (!detail) return;
   var draft = item.generatedDraft || {};
   var sources = [].concat(item.primarySourceUrl ? [item.primarySourceUrl] : []).concat(item.supportingSourceUrls || []);
-  var rejected = (item.status || item.decisionStatus || '') === 'rejected_by_filter';
+  var normalizedStatus = item.normalizedStatus || automatedNewsBriefStatus(item);
+  var rejected = normalizedStatus === 'rejected_by_filter';
   var rejectionReasons = []
     .concat(item.rejectionReasons || [])
     .concat((item.qualificationResult && item.qualificationResult.rejectionReasons) || [])
@@ -5816,7 +5901,7 @@ function renderAutomatedNewsBriefDetail(item) {
       + (item.canonicalUrl ? '<a class="btn" href="'+escapeAttr(item.canonicalUrl)+'" target="_blank" rel="noopener">Open original source</a>' : '')
       + '</div>';
   detail.innerHTML = '<h3 style="font-size:20px;font-family:Georgia,serif;margin:0 0 8px;color:var(--blk)">'+escapeHtml(draft.title || item.proposedHeadline || item.originalHeadline || '')+'</h3>'
-    + '<div class="hint">'+escapeHtml(item.status || '')+' · Score '+escapeHtml(String(item.qualificationScore || ''))+' · '+escapeHtml(item.recommendedPriority || '')+'</div>'
+    + '<div class="hint">'+escapeHtml(normalizedStatus)+' · Score '+escapeHtml(String(item.qualificationScore || ''))+' · '+escapeHtml(item.recommendedPriority || '')+'</div>'
     + '<div style="margin-top:14px"><strong>Original headline</strong><br>'+escapeHtml(item.originalHeadline || '')+'</div>'
     + '<div style="margin-top:12px"><strong>Sources</strong><br>'+sources.map(function(u){return '<a href="'+escapeAttr(u)+'" target="_blank" rel="noopener">'+escapeHtml(u)+'</a>';}).join('<br>')+'</div>'
     + (rejectionReasons.length ? '<div style="margin-top:12px"><strong>Rejection reasons</strong><ul style="margin:8px 0 0 18px;padding:0">'+rejectionReasons.map(function(reason){ return '<li>'+escapeHtml(reason)+'</li>'; }).join('')+'</ul></div>' : '')
