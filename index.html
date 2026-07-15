@@ -5798,6 +5798,15 @@ function logAutomatedNewsBriefCandidateShape(item) {
   });
 }
 
+function logAutomatedNewsBriefRenderCounts(filter, rows) {
+  if (!shouldLogAutomatedNewsBriefDiagnostics() || !window.console || !console.debug) return;
+  console.debug('[automated-news-brief-render]', {
+    filter: filter || '',
+    loaded: (automatedNewsBriefItems || []).length,
+    rendered: (rows || []).length
+  });
+}
+
 function showAutomatedNewsBriefs() {
   if (!guardStaffScreen()) return;
   hideStaffLandingPanels();
@@ -5854,24 +5863,60 @@ function automatedNewsBriefMatchesFilter(item, filter) {
   return status === filter;
 }
 
+function automatedNewsBriefRowsForFilter(filter) {
+  filter = filter || automatedNewsBriefFilter;
+  return (automatedNewsBriefItems || []).filter(function(item) {
+    return automatedNewsBriefMatchesFilter(item, filter);
+  });
+}
+
+function renderAutomatedNewsBriefCard(item) {
+  item = item || {};
+  var id = String(item.id || item.candidateId || '');
+  var title = item.proposedHeadline || (item.generatedDraft && item.generatedDraft.title) || item.originalHeadline || 'Untitled candidate';
+  var source = (item.publishers && item.publishers[0]) || item.publisher || item.sourceName || item.source || '';
+  return '<button data-candidate-id="'+escapeAttr(id)+'" onclick="selectAutomatedNewsBrief(\''+escapeAttr(id)+'\')" style="text-align:left;background:#fff;border:1px solid var(--bdr);border-radius:8px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px">'
+    + '<strong style="font-size:14px;color:var(--blk);line-height:1.35">'+escapeHtml(title)+'</strong>'
+    + '<span style="font-size:12px;color:var(--g3)">'+escapeHtml(source)+' · Score '+escapeHtml(String(item.qualificationScore || ''))+' · '+escapeHtml(item.recommendedPriority || '')+'</span>'
+    + '<span style="font-size:12px;color:var(--g3)">'+escapeHtml(item.normalizedStatus || automatedNewsBriefStatus(item))+' · Webflow: '+escapeHtml(item.webflowStatus || 'not started')+'</span>'
+    + '</button>';
+}
+
+function clearAutomatedNewsBriefSelection(message) {
+  automatedNewsBriefSelectedId = '';
+  var detail = document.getElementById('automated-news-brief-detail');
+  if (detail) detail.innerHTML = message || 'Select a candidate to review.';
+}
+
 function renderAutomatedNewsBriefList() {
   var list = document.getElementById('automated-news-brief-list');
   if (!list) return;
-  var rows = (automatedNewsBriefItems || []).filter(automatedNewsBriefMatchesFilter);
-  if (!rows.length) { list.innerHTML = '<div class="empty" style="padding:18px">No candidates in this view.</div>'; return; }
+  var rows = automatedNewsBriefRowsForFilter(automatedNewsBriefFilter);
+  logAutomatedNewsBriefRenderCounts(automatedNewsBriefFilter, rows);
+  if (!rows.length) {
+    list.innerHTML = '<div class="empty" style="padding:18px">No candidates in this view.</div>';
+    clearAutomatedNewsBriefSelection('No candidates in this view.');
+    return;
+  }
+  var selected = rows.find(function(item) { return String(item.id || item.candidateId || '') === String(automatedNewsBriefSelectedId || ''); });
+  if (!selected) {
+    selected = rows[0];
+    automatedNewsBriefSelectedId = String(selected.id || selected.candidateId || '');
+  }
   list.innerHTML = rows.map(function(item) {
-    var title = item.proposedHeadline || (item.generatedDraft && item.generatedDraft.title) || item.originalHeadline || 'Untitled candidate';
-    return '<button onclick="selectAutomatedNewsBrief(\''+escapeAttr(item.id)+'\')" style="text-align:left;background:#fff;border:1px solid var(--bdr);border-radius:8px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px">'
-      + '<strong style="font-size:14px;color:var(--blk);line-height:1.35">'+escapeHtml(title)+'</strong>'
-      + '<span style="font-size:12px;color:var(--g3)">'+escapeHtml((item.publishers && item.publishers[0]) || item.publisher || '')+' · Score '+escapeHtml(String(item.qualificationScore || ''))+' · '+escapeHtml(item.recommendedPriority || '')+'</span>'
-      + '<span style="font-size:12px;color:var(--g3)">'+escapeHtml(item.normalizedStatus || automatedNewsBriefStatus(item))+' · Webflow: '+escapeHtml(item.webflowStatus || 'not started')+'</span>'
-      + '</button>';
+    try {
+      return renderAutomatedNewsBriefCard(item);
+    } catch (e) {
+      if (window.console && console.warn) console.warn('[automated-news-brief-render-error]', String((item && item.id) || ''), e.message);
+      return '';
+    }
   }).join('');
+  renderAutomatedNewsBriefDetail(selected);
 }
 
 function selectAutomatedNewsBrief(id) {
-  automatedNewsBriefSelectedId = id;
-  var item = (automatedNewsBriefItems || []).find(function(i){ return i.id === id; });
+  automatedNewsBriefSelectedId = String(id || '');
+  var item = (automatedNewsBriefItems || []).find(function(i){ return String(i.id || i.candidateId || '') === automatedNewsBriefSelectedId; });
   if (item) renderAutomatedNewsBriefDetail(item);
 }
 
@@ -5882,13 +5927,21 @@ function renderAutomatedNewsBriefDetail(item) {
   var sources = [].concat(item.primarySourceUrl ? [item.primarySourceUrl] : []).concat(item.supportingSourceUrls || []);
   var normalizedStatus = item.normalizedStatus || automatedNewsBriefStatus(item);
   var rejected = normalizedStatus === 'rejected_by_filter';
+  var editorialCheck = normalizedStatus === 'needs_editorial_check';
   var rejectionReasons = []
     .concat(item.rejectionReasons || [])
     .concat((item.qualificationResult && item.qualificationResult.rejectionReasons) || [])
     .concat(item.lastError ? [item.lastError] : [])
     .filter(Boolean);
-  var actions = rejected
-    ? '<div style="margin-top:12px;padding:10px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);color:var(--g3)">Rejected items are read-only in this queue.</div>'
+  var qualificationReasons = (item.qualificationResult && item.qualificationResult.qualificationReasons) || [];
+  var cautionReasons = []
+    .concat((item.qualificationResult && item.qualificationResult.missingInformation) || [])
+    .concat((item.qualificationResult && item.qualificationResult.factualRisk && item.qualificationResult.factualRisk !== 'low') ? ['Factual risk: '+item.qualificationResult.factualRisk] : [])
+    .concat((item.qualificationResult && item.qualificationResult.legalRisk && item.qualificationResult.legalRisk !== 'low') ? ['Legal risk: '+item.qualificationResult.legalRisk] : [])
+    .filter(Boolean);
+  var materialFacts = (item.qualificationResult && item.qualificationResult.materialFacts) || item.verifiedFacts || [];
+  var actions = rejected || editorialCheck
+    ? '<div style="margin-top:12px;padding:10px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);color:var(--g3)">'+(rejected ? 'Rejected items are read-only in this queue.' : 'Editorial-check items are read-only until Phase 1 review handling is enabled.')+'</div>'
     : '<div style="margin-top:12px"><label style="font-weight:700;color:var(--blk)">Editable draft JSON</label><textarea id="automated-news-brief-draft-editor" rows="14" style="width:100%;margin-top:6px;border:1px solid var(--bdr);border-radius:8px;padding:10px;font-family:monospace;font-size:12px">'+escapeHtml(JSON.stringify(draft, null, 2))+'</textarea></div>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'
       + '<button class="btn" onclick="saveAutomatedNewsBriefDraft(\''+escapeAttr(item.id)+'\')">Save changes</button>'
@@ -5904,7 +5957,11 @@ function renderAutomatedNewsBriefDetail(item) {
     + '<div class="hint">'+escapeHtml(normalizedStatus)+' · Score '+escapeHtml(String(item.qualificationScore || ''))+' · '+escapeHtml(item.recommendedPriority || '')+'</div>'
     + '<div style="margin-top:14px"><strong>Original headline</strong><br>'+escapeHtml(item.originalHeadline || '')+'</div>'
     + '<div style="margin-top:12px"><strong>Sources</strong><br>'+sources.map(function(u){return '<a href="'+escapeAttr(u)+'" target="_blank" rel="noopener">'+escapeHtml(u)+'</a>';}).join('<br>')+'</div>'
+    + (item.recommendedAngle ? '<div style="margin-top:12px"><strong>Recommended angle</strong><br>'+escapeHtml(item.recommendedAngle)+'</div>' : '')
     + (rejectionReasons.length ? '<div style="margin-top:12px"><strong>Rejection reasons</strong><ul style="margin:8px 0 0 18px;padding:0">'+rejectionReasons.map(function(reason){ return '<li>'+escapeHtml(reason)+'</li>'; }).join('')+'</ul></div>' : '')
+    + (qualificationReasons.length ? '<div style="margin-top:12px"><strong>Qualification reasons</strong><ul style="margin:8px 0 0 18px;padding:0">'+qualificationReasons.map(function(reason){ return '<li>'+escapeHtml(reason)+'</li>'; }).join('')+'</ul></div>' : '')
+    + (cautionReasons.length ? '<div style="margin-top:12px"><strong>Cautions</strong><ul style="margin:8px 0 0 18px;padding:0">'+cautionReasons.map(function(reason){ return '<li>'+escapeHtml(reason)+'</li>'; }).join('')+'</ul></div>' : '')
+    + (materialFacts.length ? '<div style="margin-top:12px"><strong>Material facts</strong><ul style="margin:8px 0 0 18px;padding:0">'+materialFacts.map(function(fact){ return '<li>'+escapeHtml(fact)+'</li>'; }).join('')+'</ul></div>' : '')
     + '<div style="margin-top:12px"><strong>Qualification assessment</strong><pre style="white-space:pre-wrap;background:var(--gray);padding:10px;border-radius:8px;max-height:180px;overflow:auto">'+escapeHtml(JSON.stringify(item.qualificationResult || {}, null, 2))+'</pre></div>'
     + '<div style="margin-top:12px"><strong>Verification</strong><br>'+escapeHtml(item.verificationSummary || item.verificationStatus || '')+'</div>'
     + actions
