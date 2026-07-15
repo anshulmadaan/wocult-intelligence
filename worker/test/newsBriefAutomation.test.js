@@ -20,6 +20,7 @@ import {
   validateQualification,
   verifyApprovalToken,
   verifySources,
+  withCandidateMetadata,
 } from '../src/newsBriefAutomation.js';
 
 const recent = new Date(Date.now() - 3 * 3600000).toISOString();
@@ -112,6 +113,20 @@ function makeRunMocks(items, options = {}) {
     return new Response('<html>source text about Indian workers and jobs</html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
   };
   return { saved, activities, calls, store, fetch };
+}
+
+function assertCandidateMetadata(candidate) {
+  assert.ok(candidate.createdAt, 'createdAt is required');
+  assert.ok(candidate.updatedAt, 'updatedAt is required');
+  assert.ok(candidate.firstSeenRunId, 'firstSeenRunId is required');
+  assert.ok(candidate.lastProcessedRunId, 'lastProcessedRunId is required');
+  assert.equal(candidate.runId, candidate.lastProcessedRunId);
+  assert.ok(candidate.storyFingerprint, 'storyFingerprint is required');
+  assert.ok(candidate.clusterKey, 'clusterKey is required');
+  assert.ok(candidate.status, 'status is required');
+  assert.ok(candidate.sourceType, 'source metadata sourceType is required');
+  assert.ok(candidate.primarySourceUrl, 'source metadata primarySourceUrl is required');
+  assert.ok(candidate.publishers?.length, 'source metadata publishers are required');
 }
 
 test('normalises News Tracker response fields without changing source shape', () => {
@@ -360,6 +375,95 @@ test('run skips first five handled records and processes the next five new track
   assert.deepEqual(mocks.saved.map((c) => c.originalHeadline), normalized.slice(5, 10).map((i) => i.headline));
 });
 
+test('new deterministic rejection gets complete candidate metadata', async () => {
+  const oldItem = trackerItem(1, { dateFound: '2026-01-01T00:00:00.000Z' });
+  const mocks = makeRunMocks([oldItem]);
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsRejected, 1);
+  assert.equal(mocks.calls.anthropic, 0);
+  assert.equal(mocks.saved.length, 1);
+  assert.equal(mocks.saved[0].status, 'rejected_by_filter');
+  assertCandidateMetadata(mocks.saved[0]);
+  assert.match(mocks.saved[0].runId, /^run_/);
+});
+
+test('new qualification rejection gets complete candidate metadata without raw model response', async () => {
+  const mocks = makeRunMocks([baseItem], {
+    qualificationFor: () => ({ ...goodQualification, qualifies: false, overallScore: 45, rejectionReasons: ['Insufficient Wocult angle'], recommendedPriority: null }),
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsRejected, 1);
+  assert.equal(mocks.saved.length, 1);
+  assert.equal(mocks.saved[0].status, 'rejected_by_filter');
+  assertCandidateMetadata(mocks.saved[0]);
+  assert.equal(JSON.stringify(mocks.saved[0]).includes('rawModelResponse'), false);
+});
+
+test('new needs_editorial_check candidate gets complete candidate metadata', async () => {
+  const mocks = makeRunMocks([baseItem], {
+    qualificationFor: () => ({ ...goodQualification, overallScore: 65, rejectionReasons: ['Needs editor judgement'] }),
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsNeedingEditorialCheck, 1);
+  assert.equal(mocks.saved.length, 1);
+  assert.equal(mocks.saved[0].status, 'needs_editorial_check');
+  assertCandidateMetadata(mocks.saved[0]);
+  assert.equal(mocks.saved[0].generatedDraft, null);
+});
+
+test('candidate metadata updates preserve first-seen fields and backfill missing createdAt safely', () => {
+  const existing = {
+    candidateId: 'nt_existing',
+    status: 'needs_editorial_check',
+    discoveredTimestamp: '2026-07-10T08:00:00.000Z',
+    updatedAt: '2026-07-11T08:00:00.000Z',
+    firstSeenRunId: 'run_first',
+    lastProcessedRunId: 'run_old',
+    runId: 'run_old',
+  };
+  const updated = withCandidateMetadata({ ...existing, status: 'held' }, existing, {
+    runId: 'run_new',
+    now: '2026-07-12T08:00:00.000Z',
+  });
+  assert.equal(updated.createdAt, '2026-07-10T08:00:00.000Z');
+  assert.equal(updated.firstSeenRunId, 'run_first');
+  assert.equal(updated.updatedAt, '2026-07-12T08:00:00.000Z');
+  assert.equal(updated.lastProcessedRunId, 'run_new');
+  assert.equal(updated.runId, 'run_new');
+  assert.equal(updated.metadataBackfilled, true);
+});
+
+test('candidate metadata never overwrites existing createdAt', () => {
+  const existing = {
+    candidateId: 'nt_existing',
+    createdAt: '2026-07-09T08:00:00.000Z',
+    updatedAt: '2026-07-10T08:00:00.000Z',
+    firstSeenRunId: 'run_first',
+  };
+  const updated = withCandidateMetadata({ ...existing, createdAt: '2026-07-12T08:00:00.000Z', status: 'approved' }, existing, {
+    runId: 'run_new',
+    now: '2026-07-13T08:00:00.000Z',
+  });
+  assert.equal(updated.createdAt, '2026-07-09T08:00:00.000Z');
+  assert.equal(updated.firstSeenRunId, 'run_first');
+  assert.equal(updated.updatedAt, '2026-07-13T08:00:00.000Z');
+});
+
 test('skipped records do not consume processing slots before five new items are attempted', async () => {
   const items = Array.from({ length: 8 }, (_, i) => trackerItem(i + 1));
   const normalized = normalizeNewsTrackerResponse({ items }).items;
@@ -452,7 +556,9 @@ test('failure among new records does not stop remaining allowed new records', as
   assert.equal(result.summary.failures, 1);
   assert.equal(result.summary.itemsRejected, 4);
   assert.equal(mocks.calls.anthropic, 5);
-  assert.equal(mocks.saved.length, 4);
+  assert.equal(mocks.saved.length, 5);
+  assert.equal(mocks.saved[0].status, 'qualification_failed');
+  assertCandidateMetadata(mocks.saved[0]);
 });
 
 test('deduplication and declined-cluster suppression still skip without consuming new-item slots', async () => {
@@ -537,15 +643,20 @@ test('malformed qualification JSON fails one item without stopping remaining can
   }, { dryRun: true }, { fetch, store });
   assert.equal(result.summary.failures, 1);
   assert.equal(result.summary.itemsRejected, 1);
-  assert.equal(saved.length, 1);
-  assert.equal(saved[0].status, 'rejected_by_filter');
-  assert.equal(saved[0].qualificationResult.qualifies, false);
-  assert.equal(saved[0].qualificationResult.recommendedPriority, null);
-  assert.equal(saved[0].recommendedPriority, null);
+  assert.equal(saved.length, 2);
+  assert.equal(saved[0].status, 'qualification_failed');
   assert.equal(saved[0].generatedDraft, null);
+  assertCandidateMetadata(saved[0]);
+  assert.equal(saved[1].status, 'rejected_by_filter');
+  assert.equal(saved[1].qualificationResult.qualifies, false);
+  assert.equal(saved[1].qualificationResult.recommendedPriority, null);
+  assert.equal(saved[1].recommendedPriority, null);
+  assert.equal(saved[1].generatedDraft, null);
+  assertCandidateMetadata(saved[1]);
   assert.equal(result.summary.draftsGenerated, 0);
-  assert.equal(Object.prototype.hasOwnProperty.call(saved[0].qualificationResult, 'rawModelResponse'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(saved[1].qualificationResult, 'rawModelResponse'), false);
   assert.equal(JSON.stringify(saved[0]).includes('rawModelResponse'), false);
+  assert.equal(JSON.stringify(saved[1]).includes('rawModelResponse'), false);
   assert.match(result.summary.errorSummary[0].qualificationDiagnostic, /\{not valid json/);
 });
 
@@ -580,7 +691,11 @@ test('unsupported qualification enum failure stores only a truncated diagnostic'
   assert.equal(result.summary.failures, 1);
   assert.equal(result.summary.errorSummary[0].error, 'Invalid qualification JSON: recommendedPriority_invalid');
   assert.equal(result.summary.errorSummary[0].qualificationDiagnostic.length, 4000);
-  assert.equal(saved.length, 0);
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].status, 'qualification_failed');
+  assert.equal(saved[0].qualificationDiagnostic.length, 4000);
+  assertCandidateMetadata(saved[0]);
+  assert.equal(JSON.stringify(saved[0]).includes('rawModelResponse'), false);
 });
 
 test('test-email route is protected and cannot create approval actions or Webflow items when email is disabled', async () => {
@@ -738,6 +853,52 @@ test('approval dashboard action in dry-run mode cannot create Firebase article o
   assert.equal(response.status, 200);
   assert.equal(data.ok, true);
   assert.equal(createdArticles, 0);
+  assert.equal(savedCandidate.webflowStatus, 'dry_run_skipped');
+});
+
+test('retry path updates lastProcessedRunId without replacing firstSeenRunId', async () => {
+  const existing = {
+    candidateId: 'c1',
+    status: 'approved',
+    firstSeenRunId: 'run_first',
+    lastProcessedRunId: 'run_previous',
+    runId: 'run_previous',
+    createdAt: '2026-07-10T08:00:00.000Z',
+    updatedAt: '2026-07-10T09:00:00.000Z',
+    generatedDraft: goodDraft,
+    originalHeadline: baseItem.headline,
+    storyFingerprint: 'fp1',
+    clusterKey: 'cluster1',
+    primarySourceUrl: baseItem.link,
+    publishers: [baseItem.source],
+  };
+  let savedCandidate = null;
+  const adminAuth = 'Bearer ' + 'admin';
+  const headers = new Headers();
+  headers.set('Authorization', adminAuth);
+  headers.set('Content-Type', 'application/json');
+  const response = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/retry', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ candidateId: 'c1' }),
+  }), {
+    WORKER_ADMIN_TOKEN: 'admin',
+    NEWS_BRIEF_DRY_RUN: 'true',
+  }, null, {}, {
+    store: {
+      getCandidate: async () => existing,
+      saveCandidate: async (candidate) => { savedCandidate = candidate; return candidate; },
+    },
+  });
+  const data = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(data.ok, true);
+  assert.equal(savedCandidate.firstSeenRunId, 'run_first');
+  assert.equal(savedCandidate.createdAt, '2026-07-10T08:00:00.000Z');
+  assert.match(savedCandidate.lastProcessedRunId, /^retry_/);
+  assert.equal(savedCandidate.runId, savedCandidate.lastProcessedRunId);
+  assert.notEqual(savedCandidate.lastProcessedRunId, 'run_previous');
+  assert.notEqual(savedCandidate.updatedAt, existing.updatedAt);
   assert.equal(savedCandidate.webflowStatus, 'dry_run_skipped');
 });
 
