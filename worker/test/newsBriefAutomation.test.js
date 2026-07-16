@@ -16,6 +16,7 @@ import {
   renderApprovalEmail,
   runNewsBriefAutomation,
   signApprovalToken,
+  sortNewsTrackerItemsNewestFirst,
   validateDraft,
   validateQualification,
   verifyApprovalToken,
@@ -136,6 +137,90 @@ test('normalises News Tracker response fields without changing source shape', ()
   assert.equal(data.items[0].headline, baseItem.headline);
   assert.equal(data.items[0].sourceUrl, baseItem.link);
   assert.equal(data.items[0].suggestedFormat, 'Listicle maybe');
+});
+
+test('News Tracker ordering processes 15 July records before 13 July records', () => {
+  const items = normalizeNewsTrackerResponse({ items: [
+    trackerItem(13, { headline: '13 July workforce policy update for Indian employees', dateFound: '2026-07-13T09:00:00.000Z' }),
+    trackerItem(15, { headline: '15 July workforce policy update for Indian employees', dateFound: '2026-07-15T09:00:00.000Z' }),
+  ] }).items;
+  const ordered = sortNewsTrackerItemsNewestFirst(items);
+  assert.equal(ordered[0].headline, '15 July workforce policy update for Indian employees');
+  assert.equal(ordered[1].headline, '13 July workforce policy update for Indian employees');
+});
+
+test('News Tracker ordering prefers valid publication dates before discovery dates', () => {
+  const items = normalizeNewsTrackerResponse({ items: [
+    trackerItem(1, {
+      headline: 'Newer discovery but older publication date for Indian employees',
+      publicationDate: '2026-07-13T10:00:00.000Z',
+      dateFound: '2026-07-16T10:00:00.000Z',
+    }),
+    trackerItem(2, {
+      headline: 'Older discovery but newer publication date for Indian employees',
+      publicationDate: '2026-07-15T10:00:00.000Z',
+      dateFound: '2026-07-14T10:00:00.000Z',
+    }),
+  ] }).items;
+  assert.equal(sortNewsTrackerItemsNewestFirst(items)[0].headline, 'Older discovery but newer publication date for Indian employees');
+});
+
+test('News Tracker ordering uses discovery date when publication date is absent', () => {
+  const items = normalizeNewsTrackerResponse({ items: [
+    trackerItem(1, { headline: 'Older discovered workplace update', publicationDate: '', dateFound: '2026-07-13T10:00:00.000Z' }),
+    trackerItem(2, { headline: 'Newer discovered workplace update', publicationDate: '', dateFound: '2026-07-15T10:00:00.000Z' }),
+  ] }).items;
+  assert.equal(sortNewsTrackerItemsNewestFirst(items)[0].headline, 'Newer discovered workplace update');
+});
+
+test('News Tracker ordering sends invalid and missing dates to the end', () => {
+  const items = normalizeNewsTrackerResponse({ items: [
+    trackerItem(1, { headline: 'Missing date workplace update', publicationDate: '', dateFound: '' }),
+    trackerItem(2, { headline: 'Invalid date workplace update', publicationDate: 'not-a-date', dateFound: 'still-not-a-date' }),
+    trackerItem(3, { headline: 'Valid date workplace update', publicationDate: '', dateFound: '2026-07-15T10:00:00.000Z' }),
+  ] }).items;
+  assert.deepEqual(sortNewsTrackerItemsNewestFirst(items).map((i) => i.headline), [
+    'Valid date workplace update',
+    'Missing date workplace update',
+    'Invalid date workplace update',
+  ]);
+});
+
+test('News Tracker ordering preserves source order for equal timestamps', () => {
+  const items = normalizeNewsTrackerResponse({ items: [
+    trackerItem(1, { headline: 'First equal timestamp workplace update', dateFound: '2026-07-15T10:00:00.000Z', rowNumber: 20 }),
+    trackerItem(2, { headline: 'Second equal timestamp workplace update', dateFound: '2026-07-15T10:00:00.000Z', rowNumber: 30 }),
+  ] }).items;
+  assert.deepEqual(sortNewsTrackerItemsNewestFirst(items).map((i) => i.headline), [
+    'First equal timestamp workplace update',
+    'Second equal timestamp workplace update',
+  ]);
+});
+
+test('News Tracker ordering parses mixed supported date formats', () => {
+  const items = normalizeNewsTrackerResponse({ items: [
+    trackerItem(1, { headline: 'ISO dated workplace update', dateFound: '2026-07-15T09:30:00.000Z' }),
+    trackerItem(2, { headline: 'Sheet dated workplace update', dateFound: '15/07/2026 20:00' }),
+    trackerItem(3, { headline: 'Text dated workplace update', dateFound: 'Wed, 15 Jul 2026 10:00:00 GMT' }),
+  ] }).items;
+  assert.deepEqual(sortNewsTrackerItemsNewestFirst(items).map((i) => i.headline), [
+    'Sheet dated workplace update',
+    'Text dated workplace update',
+    'ISO dated workplace update',
+  ]);
+});
+
+test('News Tracker ordering uses row order only when dates are absent', () => {
+  const items = normalizeNewsTrackerResponse({ items: [
+    trackerItem(1, { headline: 'Older row workplace update', dateFound: '', rowNumber: 10 }),
+    trackerItem(2, { headline: 'Newer row workplace update', dateFound: '', rowNumber: 12 }),
+    trackerItem(3, { headline: 'No row workplace update', dateFound: '' }),
+  ] }).items;
+  assert.deepEqual(sortNewsTrackerItemsNewestFirst(items).map((i) => i.headline), [
+    'Newer row workplace update',
+    'Older row workplace update',
+    'No row workplace update',
+  ]);
 });
 
 test('deterministic filter accepts recent relevant items with usable source URLs', () => {
@@ -481,6 +566,72 @@ test('skipped records do not consume processing slots before five new items are 
   assert.equal(result.summary.itemsRejected, 5);
   assert.equal(mocks.calls.anthropic, 5);
   assert.equal(mocks.saved.length, 5);
+});
+
+test('run processes newest unhandled News Tracker items before older items', async () => {
+  const hoursAgo = (hours) => new Date(Date.now() - hours * 3600000).toISOString();
+  const items = [
+    trackerItem(1, { dateFound: hoursAgo(7) }),
+    trackerItem(2, { dateFound: hoursAgo(6) }),
+    trackerItem(3, { dateFound: hoursAgo(5) }),
+    trackerItem(4, { dateFound: hoursAgo(4) }),
+    trackerItem(5, { dateFound: hoursAgo(3) }),
+    trackerItem(6, { dateFound: hoursAgo(2) }),
+    trackerItem(7, { dateFound: hoursAgo(1) }),
+  ];
+  const ordered = sortNewsTrackerItemsNewestFirst(normalizeNewsTrackerResponse({ items }).items);
+  const mocks = makeRunMocks(items);
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsRejected, 5);
+  assert.equal(mocks.saved.length, 5);
+  assert.deepEqual(mocks.saved.map((c) => c.originalHeadline), ordered.slice(0, 5).map((i) => i.headline));
+});
+
+test('newest-first skipped records do not consume processing slots', async () => {
+  const hoursAgo = (hours) => new Date(Date.now() - hours * 3600000).toISOString();
+  const items = Array.from({ length: 8 }, (_, i) => trackerItem(i + 1, { dateFound: hoursAgo(8 - i) }));
+  const ordered = sortNewsTrackerItemsNewestFirst(normalizeNewsTrackerResponse({ items }).items);
+  const existingLinks = ordered.slice(0, 3).map(createStoryFingerprint);
+  const mocks = makeRunMocks(items, { existingLinks });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_EMAIL_ENABLED: 'false',
+    NEWS_BRIEF_WEBFLOW_ENABLED: 'false',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsSkipped, 3);
+  assert.equal(result.summary.itemsRejected, 5);
+  assert.equal(mocks.saved.length, 5);
+  assert.deepEqual(mocks.saved.map((c) => c.originalHeadline), ordered.slice(3, 8).map((i) => i.headline));
+});
+
+test('older News Tracker records are eventually processed after newer records are exhausted', async () => {
+  const hoursAgo = (hours) => new Date(Date.now() - hours * 3600000).toISOString();
+  const items = [
+    trackerItem(1, { headline: 'Older workforce update still eventually processed', dateFound: hoursAgo(12) }),
+    trackerItem(2, { headline: 'Newest workforce update already handled', dateFound: hoursAgo(1) }),
+    trackerItem(3, { headline: 'Second newest workforce update already handled', dateFound: hoursAgo(2) }),
+  ];
+  const ordered = sortNewsTrackerItemsNewestFirst(normalizeNewsTrackerResponse({ items }).items);
+  const existingLinks = ordered.slice(0, 2).map(createStoryFingerprint);
+  const mocks = makeRunMocks(items, { existingLinks });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsSkipped, 2);
+  assert.equal(result.summary.itemsRejected, 1);
+  assert.equal(mocks.saved.length, 1);
+  assert.equal(mocks.saved[0].originalHeadline, 'Older workforce update still eventually processed');
 });
 
 test('run attempts all remaining new records when fewer than max remain', async () => {
