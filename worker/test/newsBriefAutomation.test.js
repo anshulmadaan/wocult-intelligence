@@ -21,6 +21,7 @@ import {
   renderApprovalEmail,
   runNewsBriefAutomation,
   signApprovalToken,
+  startNewsBriefAutomationWorkflow,
   sortNewsTrackerItemsNewestFirst,
   applyPrimarySourceDiscovery,
   buildDraftPrompt,
@@ -801,6 +802,140 @@ test('run accepts valid client runId, rejects invalid and reused runId', async (
     NEWS_BRIEF_DRY_RUN: 'true',
   }, { dryRun: true, requestRunId: 'run_client_abc12345' }, makeRunMocks([], { existingRuns: [['run_client_abc12345', { runId: 'run_client_abc12345' }]] }));
   assert.equal(reused.status, 409);
+});
+
+test('workflow start returns 202, creates one instance and does not await processing', async () => {
+  const mocks = makeRunMocks([trackerItem(1)]);
+  let created = 0;
+  const workflow = {
+    create: async ({ id, params }) => {
+      created += 1;
+      return { id, params };
+    },
+  };
+  const request = new Request('https://worker.test/automation/news-briefs/run', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer admin', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      triggerType: 'dashboard_dry_run',
+      dryRun: true,
+      requestRunId: 'run_workflow_start_12345678',
+    }),
+  });
+  const response = await handleAutomationRequest(request, {
+    WORKER_ADMIN_TOKEN: 'admin',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_WORKFLOW: workflow,
+  }, null, {}, mocks);
+  const data = await response.json();
+  assert.equal(response.status, 202);
+  assert.equal(data.accepted, true);
+  assert.equal(data.runId, 'run_workflow_start_12345678');
+  assert.equal(data.workflowInstanceId, 'run_workflow_start_12345678');
+  assert.equal(data.state, 'queued');
+  assert.equal(created, 1);
+  assert.equal(mocks.calls.webflowArchive, 0);
+  assert.equal(mocks.calls.anthropic, 0);
+  assert.equal(mocks.runs.some((run) => run.workflowState === 'queued'), true);
+});
+
+test('workflow start rejects duplicate runId and active conflict without creating another instance', async () => {
+  let created = 0;
+  const workflow = { create: async () => { created += 1; return { id: 'unexpected' }; } };
+  const duplicate = await startNewsBriefAutomationWorkflow({
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_WORKFLOW: workflow,
+  }, { dryRun: true, requestRunId: 'run_duplicate_workflow_12345678' }, makeRunMocks([], {
+    existingRuns: [['run_duplicate_workflow_12345678', { runId: 'run_duplicate_workflow_12345678' }]],
+  }));
+  assert.equal(duplicate.status, 409);
+  assert.equal(created, 0);
+
+  const active = {
+    runId: 'run_active_workflow_12345678',
+    state: 'running',
+    phase: 'primary_source_discovery',
+    workflowState: 'running',
+    workflowInstanceId: 'run_active_workflow_12345678',
+    heartbeatAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  };
+  const conflict = await startNewsBriefAutomationWorkflow({
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_WORKFLOW: {
+      ...workflow,
+      get: async () => ({ status: async () => ({ status: 'running' }) }),
+    },
+  }, { dryRun: true, requestRunId: 'run_new_workflow_12345678' }, makeRunMocks([], { activeRun: active }));
+  assert.equal(conflict.status, 409);
+  assert.equal(conflict.workflowState, 'running');
+  assert.equal(created, 0);
+});
+
+test('workflow execution records durable steps and workflow terminal state', async () => {
+  const items = [trackerItem(1), trackerItem(2)];
+  const stepNames = [];
+  const mocks = makeRunMocks(items);
+  const workflowStep = {
+    do: async (name, config, fn) => {
+      stepNames.push({ name, config });
+      return fn({ attempt: 1, step: { name, count: 1 }, config });
+    },
+  };
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '2',
+  }, {
+    dryRun: true,
+    requestRunId: 'run_workflow_exec_12345678',
+    workflowInstanceId: 'run_workflow_exec_12345678',
+    fromWorkflow: true,
+  }, { ...mocks, workflowStep });
+  assert.equal(result.summary.workflowState, 'completed');
+  assert.equal(result.summary.currentWorkflowStep, 'completed');
+  assert.ok(stepNames.some((entry) => entry.name === 'fetch-news-tracker'));
+  assert.ok(stepNames.some((entry) => entry.name === 'fetch-webflow-news-archive'));
+  assert.ok(stepNames.some((entry) => entry.name === 'build-wocult-duplicate-index'));
+  assert.ok(stepNames.some((entry) => entry.name === 'select-candidates'));
+  assert.ok(stepNames.some((entry) => entry.name === 'candidate-1-qualification'));
+  assert.ok(stepNames.every((entry) => entry.config?.timeout));
+});
+
+test('status endpoint returns durable Workflow state without marking stale running workflow failed', async () => {
+  const staleWorkflowRun = {
+    runId: 'run_workflow_status_12345678',
+    state: 'running',
+    phase: 'primary_source_discovery',
+    workflowState: 'running',
+    workflowInstanceId: 'run_workflow_status_12345678',
+    currentWorkflowStep: 'candidate-2-primary-source-discovery',
+    heartbeatAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    completedItems: 1,
+    targetItems: 5,
+    percentComplete: 20,
+  };
+  let saved = null;
+  const response = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/status?runId=run_workflow_status_12345678', {
+    headers: { Authorization: 'Bearer admin' },
+  }), {
+    WORKER_ADMIN_TOKEN: 'admin',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_WORKFLOW: {
+      get: async () => ({ status: async () => ({ status: 'running' }) }),
+    },
+  }, null, {}, {
+    store: {
+      getRun: async () => staleWorkflowRun,
+      saveRun: async (run) => { saved = run; },
+    },
+  });
+  const data = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(data.run.state, 'running');
+  assert.equal(data.run.workflowState, 'running');
+  assert.equal(data.run.percentComplete, 20);
+  assert.equal(saved, null);
 });
 
 test('active run lock rejects concurrent runs and allows stale recovery', async () => {

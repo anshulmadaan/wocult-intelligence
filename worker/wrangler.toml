@@ -1,3 +1,8 @@
 name = "wocult-news-proxy"
 main = "src/index.js"
 compatibility_date = "2026-04-26"
+
+[[workflows]]
+name = "wocult-news-brief-automation"
+binding = "NEWS_BRIEF_WORKFLOW"
+class_name = "NewsBriefAutomationWorkflow"

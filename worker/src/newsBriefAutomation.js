@@ -1153,7 +1153,9 @@ export async function handleAutomationRequest(request, env, ctx, shared = {}, de
 
   if (url.pathname === '/automation/news-briefs/run' && request.method === 'POST') {
     const body = await safeJson(request);
-    const result = await runNewsBriefAutomation(env, { triggerType: body.triggerType || 'manual', dryRun: body.dryRun, requestRunId: body.requestRunId || '' }, deps);
+    const result = env[NEWS_BRIEF_WORKFLOW_BINDING] && !deps.disableWorkflow
+      ? await startNewsBriefAutomationWorkflow(env, { triggerType: body.triggerType || 'manual', dryRun: body.dryRun, requestRunId: body.requestRunId || '' }, deps)
+      : await runNewsBriefAutomation(env, { triggerType: body.triggerType || 'manual', dryRun: body.dryRun, requestRunId: body.requestRunId || '' }, deps);
     return json(result, result.status || (result.ok ? 200 : 500));
   }
   if (url.pathname === '/automation/news-briefs/status' && request.method === 'GET') {
@@ -1186,6 +1188,13 @@ const MAX_SEARCH_CONTEXT_CHARS = 1800;
 const MAX_PRIOR_RESPONSE_CHARS = 1200;
 const MAX_TOTAL_SOURCE_CONTEXT_CHARS = 6000;
 const DEFAULT_WEB_SEARCH_MAX_USES_PER_CALL = 2;
+const NEWS_BRIEF_WORKFLOW_BINDING = 'NEWS_BRIEF_WORKFLOW';
+const WORKFLOW_STATES = ['queued', 'running', 'retrying', 'completed', 'failed'];
+const NEWS_BRIEF_WORKFLOW_STEP_CONFIG = {
+  default: { retries: { limit: 1, delay: '10 seconds', backoff: 'exponential' }, timeout: '3 minutes' },
+  anthropic: { retries: { limit: 1, delay: '15 seconds', backoff: 'exponential' }, timeout: '3 minutes' },
+  noRetry: { retries: { limit: 0, delay: '1 second', backoff: 'constant' }, timeout: '2 minutes' },
+};
 
 function createEmptyUsage() {
   return {
@@ -1252,6 +1261,14 @@ function activeRunIsStale(run, now = Date.now()) {
   return !!run && ['preparing', 'running'].includes(run.state) && !activeRunIsRecent(run, now);
 }
 
+function workflowStateIsActive(state) {
+  return ['queued', 'running', 'retrying'].includes(normalizeWorkflowState(state));
+}
+
+function workflowStateIsTerminal(state) {
+  return ['completed', 'failed'].includes(normalizeWorkflowState(state));
+}
+
 function staleRunMessage(run) {
   const count = Number(run?.completedItems || 0);
   const target = Number(run?.targetItems || 0);
@@ -1267,6 +1284,181 @@ function staleFailureStage(run = {}) {
         || run.lastSuccessfulStage
         || 'unknown'
   );
+}
+
+export async function startNewsBriefAutomationWorkflow(env, options = {}, deps = {}) {
+  const config = getAutomationConfig(env);
+  const dryRun = options.dryRun !== undefined ? !!options.dryRun : config.dryRun;
+  const requested = options.requestRunId || '';
+  if (!requested || !safeRunId(requested)) return { ok: false, status: 400, error: 'invalid_requestRunId' };
+  const runId = requested;
+  const workflowInstanceId = workflowInstanceIdForRun(runId);
+  const store = getStore(env, deps);
+  if (!env[NEWS_BRIEF_WORKFLOW_BINDING] || typeof env[NEWS_BRIEF_WORKFLOW_BINDING].create !== 'function') {
+    return { ok: false, status: 500, error: 'workflow_binding_unavailable' };
+  }
+  if (store.getRun && await store.getRun(runId)) return { ok: false, status: 409, error: 'runId_already_exists', runId };
+  let activeRun = store.activeRun ? await store.activeRun() : null;
+  activeRun = await reconcileWorkflowRunState(env, store, activeRun, dryRun);
+  if (workflowStateIsActive(activeRun?.workflowState)) {
+    return { ok: false, status: 409, error: 'active_run_exists', activeRunId: activeRun.runId, state: activeRun.state, phase: activeRun.phase, workflowInstanceId: activeRun.workflowInstanceId || '', workflowState: activeRun.workflowState || '' };
+  }
+  if (activeRunIsStale(activeRun)) activeRun = await recoverStaleRun(store, activeRun, dryRun);
+  if (activeRunIsRecent(activeRun)) {
+    return { ok: false, status: 409, error: 'active_run_exists', activeRunId: activeRun.runId, state: activeRun.state, phase: activeRun.phase, workflowInstanceId: activeRun.workflowInstanceId || '', workflowState: activeRun.workflowState || '' };
+  }
+  const summary = createInitialRunSummary(runId, options, config, workflowInstanceId);
+  await store.saveRun(summary, { dryRun, createOnly: true });
+  let instance;
+  try {
+    instance = await env[NEWS_BRIEF_WORKFLOW_BINDING].create({
+      id: workflowInstanceId,
+      params: { runId, triggerType: options.triggerType || 'manual', dryRun },
+    });
+  } catch (e) {
+    const failure = createFailureMetadata(e, 'unknown', runId);
+    await store.saveRun({
+      ...summary,
+      state: 'failed',
+      workflowState: 'failed',
+      activeRun: false,
+      endTime: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      failureStage: failure.failureStage,
+      failureCode: 'workflow_create_failed',
+      failureMessage: safeShortText(e.message, 1000),
+      errorSummary: [{ run: 'Workflow instance could not be created.', failureStage: failure.failureStage, failureCode: 'workflow_create_failed' }],
+    }, { dryRun }).catch(() => {});
+    return { ok: false, status: 500, error: 'workflow_create_failed', runId, workflowInstanceId, failureStage: failure.failureStage, failureCode: 'workflow_create_failed' };
+  }
+  const instanceId = instance?.id || workflowInstanceId;
+  await store.saveRun({
+    ...summary,
+    workflowInstanceId: instanceId,
+    workflowState: 'queued',
+    workflowCreatedAt: summary.workflowCreatedAt,
+    updatedAt: new Date().toISOString(),
+  }, { dryRun }).catch(() => {});
+  return {
+    ok: true,
+    accepted: true,
+    status: 202,
+    runId,
+    workflowInstanceId: instanceId,
+    state: 'queued',
+  };
+}
+
+function workflowInstanceIdForRun(runId) {
+  return safeRunId(runId) ? runId.slice(0, 100) : '';
+}
+
+function normalizeWorkflowState(value) {
+  const raw = typeof value === 'object' && value ? (value.status || value.state || value.workflowState || value.name) : value;
+  const state = String(raw || '').toLowerCase();
+  if (['running', 'paused', 'waiting'].includes(state)) return 'running';
+  if (['queued'].includes(state)) return 'queued';
+  if (['retrying'].includes(state)) return 'retrying';
+  if (['complete', 'completed', 'success', 'succeeded'].includes(state)) return 'completed';
+  if (['failed', 'failure', 'errored', 'terminated'].includes(state)) return 'failed';
+  return WORKFLOW_STATES.includes(state) ? state : '';
+}
+
+async function getWorkflowInstanceState(env, workflowInstanceId) {
+  if (!workflowInstanceId || !env?.[NEWS_BRIEF_WORKFLOW_BINDING]?.get) return '';
+  try {
+    const instance = await env[NEWS_BRIEF_WORKFLOW_BINDING].get(workflowInstanceId);
+    if (!instance?.status) return '';
+    return normalizeWorkflowState(await instance.status());
+  } catch {
+    return '';
+  }
+}
+
+async function reconcileWorkflowRunState(env, store, run, dryRun = true) {
+  if (!run?.workflowInstanceId) return run;
+  const workflowState = await getWorkflowInstanceState(env, run.workflowInstanceId);
+  if (!workflowState || workflowState === run.workflowState) return run;
+  const now = new Date().toISOString();
+  const patch = {
+    ...run,
+    workflowState,
+    updatedAt: now,
+  };
+  if (workflowState === 'completed' && ['preparing', 'running'].includes(run.state)) {
+    patch.state = run.failures ? 'completed_with_failures' : 'completed';
+    patch.phase = 'completed';
+    patch.percentComplete = 100;
+    patch.endTime = run.endTime || now;
+    patch.activeRun = false;
+  } else if (workflowState === 'failed' && ['preparing', 'running'].includes(run.state)) {
+    const failureStage = staleFailureStage(run);
+    const target = run.targetItems === null || run.targetItems === undefined ? null : run.targetItems;
+    patch.state = 'failed';
+    patch.percentComplete = target ? progressPercent(Number(run.completedItems || 0), target) : run.percentComplete ?? null;
+    patch.endTime = run.endTime || now;
+    patch.activeRun = false;
+    patch.failureStage = run.failureStage && run.failureStage !== 'unknown' ? run.failureStage : failureStage;
+    patch.failureCode = run.failureCode || 'workflow_failed';
+    patch.failureMessage = run.failureMessage || 'Cloudflare Workflow reported a failed terminal state.';
+    patch.errorSummary = [
+      ...(Array.isArray(run.errorSummary) ? run.errorSummary : []),
+      { run: patch.failureMessage, failureStage: patch.failureStage, failureCode: patch.failureCode },
+    ];
+  }
+  if (store?.saveRun) await store.saveRun(patch, { dryRun }).catch(() => {});
+  return patch;
+}
+
+function createInitialRunSummary(runId, options, config, workflowInstanceId = '') {
+  const now = new Date().toISOString();
+  return {
+    runId,
+    triggerType: options.triggerType || 'manual',
+    workflowInstanceId,
+    workflowState: workflowInstanceId ? 'queued' : '',
+    workflowCreatedAt: workflowInstanceId ? now : '',
+    currentWorkflowStep: 'initialise-run',
+    state: 'preparing',
+    phase: 'fetching_tracker',
+    startTime: now,
+    updatedAt: now,
+    heartbeatAt: now,
+    itemsReceived: 0,
+    itemsSkipped: 0,
+    targetItems: null,
+    completedItems: 0,
+    currentItemIndex: 0,
+    currentCandidateId: '',
+    currentHeadline: '',
+    percentComplete: null,
+    itemsRejected: 0,
+    itemsNeedingEditorialCheck: 0,
+    itemsVerified: 0,
+    draftsGenerated: 0,
+    emailsSent: 0,
+    failures: 0,
+    dryRun: options.dryRun !== undefined ? !!options.dryRun : config.dryRun,
+    errorSummary: [],
+    attemptedItems: [],
+    preflightSkippedItems: [],
+    anthropicCallLog: [],
+    currentAnthropicCallId: '',
+    currentAnthropicStage: '',
+    currentAnthropicCandidateId: '',
+    lastCompletedAnthropicCallId: '',
+    usage: createEmptyUsage(),
+    itemsAlreadyPublishedOnWocult: 0,
+    itemsAlreadyInWebflowDraft: 0,
+    itemsPossibleWocultDuplicates: 0,
+    itemsSkippedBeforeClaude: 0,
+    candidatesEligibleForClaude: 0,
+    webflowItemsChecked: 0,
+    wocultDuplicateCheckCompleted: false,
+    wocultDuplicateCheckAt: '',
+    wocultDuplicateCheckError: '',
+    activeRun: true,
+  };
 }
 
 async function recoverStaleRun(store, run, dryRun = true) {
@@ -1594,72 +1786,53 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
   if (requested && !safeRunId(requested)) return { ok: false, status: 400, error: 'invalid_requestRunId' };
   const runId = requested || `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const startedAt = Date.now();
-  const summary = {
-    runId,
-    triggerType: options.triggerType || 'manual',
-    state: 'preparing',
-    phase: 'fetching_tracker',
-    startTime: new Date(startedAt).toISOString(),
-    updatedAt: new Date(startedAt).toISOString(),
-    heartbeatAt: new Date(startedAt).toISOString(),
-    itemsReceived: 0,
-    itemsSkipped: 0,
-    targetItems: null,
-    completedItems: 0,
-    currentItemIndex: 0,
-    currentCandidateId: '',
-    currentHeadline: '',
-    percentComplete: null,
-    itemsRejected: 0,
-    itemsNeedingEditorialCheck: 0,
-    itemsVerified: 0,
-    draftsGenerated: 0,
-    emailsSent: 0,
-    failures: 0,
-    dryRun,
-    errorSummary: [],
-    attemptedItems: [],
-    preflightSkippedItems: [],
-    anthropicCallLog: [],
-    currentAnthropicCallId: '',
-    currentAnthropicStage: '',
-    currentAnthropicCandidateId: '',
-    lastCompletedAnthropicCallId: '',
-    usage: createEmptyUsage(),
-    itemsAlreadyPublishedOnWocult: 0,
-    itemsAlreadyInWebflowDraft: 0,
-    itemsPossibleWocultDuplicates: 0,
-    itemsSkippedBeforeClaude: 0,
-    candidatesEligibleForClaude: 0,
-    webflowItemsChecked: 0,
-    wocultDuplicateCheckCompleted: false,
-    wocultDuplicateCheckAt: '',
-    wocultDuplicateCheckError: '',
-  };
+  const summary = createInitialRunSummary(runId, { ...options, dryRun }, config, options.workflowInstanceId || '');
+  if (options.workflowInstanceId) summary.workflowState = 'running';
   const store = getStore(env, deps);
   const updateRun = async (patch = {}) => {
     Object.assign(summary, patch, { updatedAt: new Date().toISOString() });
     if (patch.phase || patch.state || patch.currentCandidateId !== undefined || patch.completedItems !== undefined) summary.heartbeatAt = new Date().toISOString();
     await store.saveRun(summary, { dryRun }).catch(() => {});
   };
+  let currentWorkflowAttempt = 1;
+  const runStep = async (name, configName, fn) => {
+    const stepConfig = NEWS_BRIEF_WORKFLOW_STEP_CONFIG[configName] || NEWS_BRIEF_WORKFLOW_STEP_CONFIG.default;
+    await updateRun({ currentWorkflowStep: name, workflowState: deps.workflowStep ? 'running' : summary.workflowState || '' });
+    if (deps.workflowStep?.do) {
+      return deps.workflowStep.do(name, stepConfig, async (ctx) => {
+        currentWorkflowAttempt = Number(ctx?.attempt || ctx?.step?.count || 1);
+        await updateRun({ currentWorkflowStep: name, workflowState: ctx?.attempt > 1 ? 'retrying' : 'running' });
+        return fn(ctx || { attempt: 1, step: { name, count: 1 }, config: stepConfig });
+      });
+    }
+    currentWorkflowAttempt = 1;
+    return fn({ attempt: 1, step: { name, count: 1 }, config: stepConfig });
+  };
   try {
     if (!config.automationEnabled && !dryRun) throw new Error('NEWS_BRIEF_AUTOMATION_ENABLED is not enabled');
-    if (requested && store.getRun && await store.getRun(runId)) return { ok: false, status: 409, error: 'runId_already_exists', runId };
-    let activeRun = store.activeRun ? await store.activeRun() : null;
-    if (activeRunIsStale(activeRun, startedAt)) {
-      activeRun = await recoverStaleRun(store, activeRun, dryRun);
+    if (!options.fromWorkflow) {
+      if (requested && store.getRun && await store.getRun(runId)) return { ok: false, status: 409, error: 'runId_already_exists', runId };
+      let activeRun = store.activeRun ? await store.activeRun() : null;
+      if (activeRunIsStale(activeRun, startedAt)) {
+        activeRun = await recoverStaleRun(store, activeRun, dryRun);
+      }
+      if (activeRunIsRecent(activeRun, startedAt)) {
+        return { ok: false, status: 409, error: 'active_run_exists', activeRunId: activeRun.runId, state: activeRun.state, phase: activeRun.phase };
+      }
+      await store.saveRun(summary, { dryRun, createOnly: !!requested });
     }
-    if (activeRunIsRecent(activeRun, startedAt)) {
-      return { ok: false, status: 409, error: 'active_run_exists', activeRunId: activeRun.runId, state: activeRun.state, phase: activeRun.phase };
-    }
-    await store.saveRun(summary, { dryRun, createOnly: !!requested });
-    const tracker = await fetchNewsTracker(config, deps);
+    await runStep('initialise-run', 'noRetry', async () => {
+      await updateRun({ state: 'running', workflowState: options.workflowInstanceId ? 'running' : summary.workflowState || '', phase: 'fetching_tracker' });
+      return { runId };
+    });
+    const tracker = await runStep('fetch-news-tracker', 'default', async () => fetchNewsTracker(config, deps));
     await updateRun({ state: 'running', phase: 'sorting_items', itemsReceived: tracker.items.length });
+    await runStep('sort-tracker-items', 'noRetry', async () => ({ itemsReceived: tracker.items.length }));
     await updateRun({ phase: 'checking_wocult_archive' });
     let duplicateIndex = [];
     try {
-      const webflowItems = await fetchWebflowNewsArchive(env, deps);
-      duplicateIndex = buildWocultDuplicateIndex(webflowItems);
+      const webflowItems = await runStep('fetch-webflow-news-archive', 'default', async () => fetchWebflowNewsArchive(env, deps));
+      duplicateIndex = await runStep('build-wocult-duplicate-index', 'noRetry', async () => buildWocultDuplicateIndex(webflowItems));
       await updateRun({
         webflowItemsChecked: duplicateIndex.length,
         wocultDuplicateCheckCompleted: true,
@@ -1693,49 +1866,52 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
     const seenClusters = new Set();
     const selectedItems = [];
 
-    for (const item of tracker.items) {
-      if (selectedItems.length >= config.maxItemsPerRun) break;
-      const fingerprint = createStoryFingerprint(item);
-      const cKey = clusterKey(item);
-      if (seenClusters.has(cKey) || await store.existsByFingerprint(fingerprint) || await store.isDeclinedSuppressed(cKey)) {
-        summary.itemsSkipped += 1;
-        continue;
-      }
-      const duplicateCheck = checkWocultDuplicate(item, duplicateIndex);
-      if (duplicateCheck.status !== 'no_wocult_match') {
-        const duplicateCandidate = withCandidateMetadata({
-          ...candidateFromTrackerItem(item),
-          candidateId: `nt_${fingerprint}`,
-          status: duplicateCheck.status === 'possible_wocult_duplicate' ? 'needs_editorial_check' : duplicateCheck.status,
-          dryRun,
-          duplicateCheck,
-          rejectionReasons: [],
-          qualificationResult: duplicateCheck.status === 'possible_wocult_duplicate' ? {
-            qualifies: false,
-            qualificationReasons: ['Possible match with an existing Wocult News story.'],
+    await runStep('select-candidates', 'default', async () => {
+      for (const item of tracker.items) {
+        if (selectedItems.length >= config.maxItemsPerRun) break;
+        const fingerprint = createStoryFingerprint(item);
+        const cKey = clusterKey(item);
+        if (seenClusters.has(cKey) || await store.existsByFingerprint(fingerprint) || await store.isDeclinedSuppressed(cKey)) {
+          summary.itemsSkipped += 1;
+          continue;
+        }
+        const duplicateCheck = checkWocultDuplicate(item, duplicateIndex);
+        if (duplicateCheck.status !== 'no_wocult_match') {
+          const duplicateCandidate = withCandidateMetadata({
+            ...candidateFromTrackerItem(item),
+            candidateId: `nt_${fingerprint}`,
+            status: duplicateCheck.status === 'possible_wocult_duplicate' ? 'needs_editorial_check' : duplicateCheck.status,
+            dryRun,
+            duplicateCheck,
             rejectionReasons: [],
-          } : {},
-          usage: createEmptyUsage(),
-        }, null, { runId });
-        await store.saveCandidate(duplicateCandidate, { dryRun, runId });
-        await store.addActivity(duplicateCandidate.candidateId, 'wocult_duplicate_check', { status: duplicateCheck.status, confidence: duplicateCheck.confidence, matchReason: duplicateCheck.matchReason }, { dryRun });
-        summary.itemsSkippedBeforeClaude += 1;
-        if (duplicateCheck.status === 'already_published_on_wocult') summary.itemsAlreadyPublishedOnWocult += 1;
-        if (duplicateCheck.status === 'already_in_webflow_draft') summary.itemsAlreadyInWebflowDraft += 1;
-        if (duplicateCheck.status === 'possible_wocult_duplicate') summary.itemsPossibleWocultDuplicates += 1;
-        summary.preflightSkippedItems.push(preflightSkippedItemFrom(item, duplicateCheck));
-        await updateRun({
-          itemsSkippedBeforeClaude: summary.itemsSkippedBeforeClaude,
-          itemsAlreadyPublishedOnWocult: summary.itemsAlreadyPublishedOnWocult,
-          itemsAlreadyInWebflowDraft: summary.itemsAlreadyInWebflowDraft,
-          itemsPossibleWocultDuplicates: summary.itemsPossibleWocultDuplicates,
-          preflightSkippedItems: summary.preflightSkippedItems,
-        });
-        continue;
+            qualificationResult: duplicateCheck.status === 'possible_wocult_duplicate' ? {
+              qualifies: false,
+              qualificationReasons: ['Possible match with an existing Wocult News story.'],
+              rejectionReasons: [],
+            } : {},
+            usage: createEmptyUsage(),
+          }, null, { runId });
+          await store.saveCandidate(duplicateCandidate, { dryRun, runId });
+          await store.addActivity(duplicateCandidate.candidateId, 'wocult_duplicate_check', { status: duplicateCheck.status, confidence: duplicateCheck.confidence, matchReason: duplicateCheck.matchReason }, { dryRun });
+          summary.itemsSkippedBeforeClaude += 1;
+          if (duplicateCheck.status === 'already_published_on_wocult') summary.itemsAlreadyPublishedOnWocult += 1;
+          if (duplicateCheck.status === 'already_in_webflow_draft') summary.itemsAlreadyInWebflowDraft += 1;
+          if (duplicateCheck.status === 'possible_wocult_duplicate') summary.itemsPossibleWocultDuplicates += 1;
+          summary.preflightSkippedItems.push(preflightSkippedItemFrom(item, duplicateCheck));
+          await updateRun({
+            itemsSkippedBeforeClaude: summary.itemsSkippedBeforeClaude,
+            itemsAlreadyPublishedOnWocult: summary.itemsAlreadyPublishedOnWocult,
+            itemsAlreadyInWebflowDraft: summary.itemsAlreadyInWebflowDraft,
+            itemsPossibleWocultDuplicates: summary.itemsPossibleWocultDuplicates,
+            preflightSkippedItems: summary.preflightSkippedItems,
+          });
+          continue;
+        }
+        seenClusters.add(cKey);
+        selectedItems.push(item);
       }
-      seenClusters.add(cKey);
-      selectedItems.push(item);
-    }
+      return { targetItems: selectedItems.length, skippedBeforeClaude: summary.itemsSkippedBeforeClaude };
+    });
     summary.candidatesEligibleForClaude = selectedItems.length;
     await updateRun({
       phase: 'selecting_candidates',
@@ -1769,6 +1945,7 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
             startedAt,
             completedAt: '',
             status: 'started',
+            attempt: currentWorkflowAttempt,
             inputTokens: 0,
             outputTokens: 0,
             cacheCreationInputTokens: 0,
@@ -1832,14 +2009,20 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
       try {
         const fingerprint = createStoryFingerprint(item);
         await updateRun({ phase: 'qualifying', currentItemIndex: i + 1, currentCandidateId: `nt_${fingerprint}`, currentHeadline: item.headline });
-        const deterministic = deterministicEligibility(item);
-        if (!deterministic.eligible) {
+        const qualificationStepResult = await runStep(`candidate-${i + 1}-qualification`, 'anthropic', async () => {
+          const deterministic = deterministicEligibility(item);
+          if (!deterministic.eligible) return { deterministic };
+          processingStage = 'qualification';
+          candidateDeps.failureStage = processingStage;
+          return { qualification: normalizeQualificationResponse(await callClaudeJson(env, buildQualificationPrompt(item), 1400, candidateDeps)) };
+        });
+        if (qualificationStepResult.deterministic && !qualificationStepResult.deterministic.eligible) {
           summary.itemsRejected += 1;
           const rejectedCandidate = withCandidateMetadata({
             ...candidateFromTrackerItem(item),
             candidateId: `nt_${fingerprint}`,
             status: 'rejected_by_filter',
-            rejectionReasons: deterministic.reasons,
+            rejectionReasons: qualificationStepResult.deterministic.reasons,
             dryRun,
             usage: candidateUsage,
           }, null, { runId });
@@ -1850,9 +2033,7 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
           await updateRun({ completedItems: summary.completedItems, percentComplete: progressPercent(summary.completedItems, summary.targetItems), itemsRejected: summary.itemsRejected, attemptedItems: summary.attemptedItems, usage: summary.usage });
           continue;
         }
-        processingStage = 'qualification';
-        candidateDeps.failureStage = processingStage;
-        qualification = normalizeQualificationResponse(await callClaudeJson(env, buildQualificationPrompt(item), 1400, candidateDeps));
+        qualification = qualificationStepResult.qualification;
         const qValid = validateQualification(qualification);
         if (!qValid.ok) {
           const err = new Error(`Invalid qualification JSON: ${qValid.errors.join(',')}`);
@@ -1872,7 +2053,7 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
           processingStage = 'primary_source_discovery';
           candidateDeps.failureStage = processingStage;
           await updateRun({ phase: 'primary_source_discovery' });
-          primaryDiscovery = await discoverPrimarySources(item, qualification, env, candidateDeps, { runId });
+          primaryDiscovery = await runStep(`candidate-${i + 1}-primary-source-discovery`, 'anthropic', async () => discoverPrimarySources(item, qualification, env, candidateDeps, { runId }));
           if (primaryDiscovery.status === 'failed') {
             status = 'needs_editorial_check';
             if (nextStatus !== 'needs_editorial_check') summary.itemsNeedingEditorialCheck += 1;
@@ -1886,7 +2067,7 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
             processingStage = 'verification';
             candidateDeps.failureStage = processingStage;
             await updateRun({ phase: 'verifying' });
-            verification = await verifyCandidateSources(item, candidateDeps, primaryDiscovery);
+            verification = await runStep(`candidate-${i + 1}-verification`, 'default', async () => verifyCandidateSources(item, candidateDeps, primaryDiscovery));
             if (!verification.ok) status = 'verification_failed';
             else {
               summary.itemsVerified += 1;
@@ -1894,7 +2075,7 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
               candidateDeps.failureStage = processingStage;
               await updateRun({ phase: 'drafting' });
               status = 'drafting';
-              draft = await callClaudeJson(env, buildDraftPrompt({ item, qualification, verification, primarySources: primaryDiscovery?.primarySources || [] }), 1800, candidateDeps);
+              draft = await runStep(`candidate-${i + 1}-drafting`, 'anthropic', async () => callClaudeJson(env, buildDraftPrompt({ item, qualification, verification, primarySources: primaryDiscovery?.primarySources || [] }), 1800, candidateDeps));
               const dValid = validateDraft(draft);
               if (!dValid.ok) {
                 const err = new Error(`Invalid draft JSON: ${dValid.errors.join(',')}`);
@@ -1909,12 +2090,15 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
           }
         }
         await updateRun({ phase: 'saving_results' });
-        const candidateBase = { ...candidateFromTrackerItem(item, qualification, verification, draft), status, dryRun, usage: candidateUsage };
-        const candidate = withCandidateMetadata(primaryDiscovery ? applyPrimarySourceDiscovery(candidateBase, primaryDiscovery) : candidateBase, null, { runId });
+        const candidate = await runStep(`candidate-${i + 1}-save-result`, 'default', async () => {
+          const candidateBase = { ...candidateFromTrackerItem(item, qualification, verification, draft), status, dryRun, usage: candidateUsage };
+          const savedCandidate = withCandidateMetadata(primaryDiscovery ? applyPrimarySourceDiscovery(candidateBase, primaryDiscovery) : candidateBase, null, { runId });
+          await store.saveCandidate(savedCandidate, { dryRun, runId });
+          await store.addActivity(savedCandidate.candidateId, 'qualification', { status, score: qualification.overallScore }, { dryRun });
+          if (primaryDiscovery) await store.addActivity(savedCandidate.candidateId, 'primary_source_discovery', { status: primaryDiscovery.status, count: primaryDiscovery.primarySources.length }, { dryRun });
+          return savedCandidate;
+        });
         candidateForAttempt = candidate;
-        await store.saveCandidate(candidate, { dryRun, runId });
-        await store.addActivity(candidate.candidateId, 'qualification', { status, score: qualification.overallScore }, { dryRun });
-        if (primaryDiscovery) await store.addActivity(candidate.candidateId, 'primary_source_discovery', { status: primaryDiscovery.status, count: primaryDiscovery.primarySources.length }, { dryRun });
         if (status === 'awaiting_approval') awaiting.push(candidate);
         summary.completedItems += 1;
         summary.attemptedItems.push(attemptedItemFrom(item, candidate, candidateUsage, status));
@@ -1965,6 +2149,8 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
     const failed = summary.state === 'failed';
     if (!failed) summary.phase = 'completed';
     if (!failed) summary.state = summary.failures ? 'completed_with_failures' : 'completed';
+    if (options.workflowInstanceId) summary.workflowState = failed ? 'failed' : 'completed';
+    if (options.workflowInstanceId) summary.currentWorkflowStep = failed ? summary.currentWorkflowStep : 'completed';
     summary.completedItems = Number(summary.completedItems || 0);
     summary.targetItems = summary.targetItems === null ? summary.completedItems : summary.targetItems;
     summary.percentComplete = failed ? progressPercent(summary.completedItems, summary.targetItems) : 100;
@@ -2209,12 +2395,16 @@ async function getAutomationStatus(env, deps = {}, runId = '') {
   const config = getAutomationConfig(env);
   if (runId) {
     let run = await store.getRun(runId);
-    if (activeRunIsStale(run)) run = await recoverStaleRun(store, run, config.dryRun);
+    run = await reconcileWorkflowRunState(env, store, run, config.dryRun);
+    if (activeRunIsStale(run) && !workflowStateIsActive(run?.workflowState)) run = await recoverStaleRun(store, run, config.dryRun);
     return { ok: !!run, run: run || null };
   }
   let activeRun = store.activeRun ? await store.activeRun() : null;
-  if (activeRunIsStale(activeRun)) {
+  activeRun = await reconcileWorkflowRunState(env, store, activeRun, config.dryRun);
+  if (activeRunIsStale(activeRun) && !workflowStateIsActive(activeRun?.workflowState)) {
     await recoverStaleRun(store, activeRun, config.dryRun);
+    activeRun = null;
+  } else if (workflowStateIsTerminal(activeRun?.workflowState) && !['preparing', 'running'].includes(activeRun?.state)) {
     activeRun = null;
   }
   return {

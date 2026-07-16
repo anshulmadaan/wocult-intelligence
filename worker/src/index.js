@@ -1,8 +1,26 @@
 import {
   handleAutomationRequest,
+  runNewsBriefAutomation,
   requireProtectedRoute,
   scheduledNewsBriefAutomation,
 } from './newsBriefAutomation.js';
+
+const { WorkflowEntrypoint: CloudflareWorkflowEntrypoint = class {} } =
+  await import('cloudflare:workers').catch(() => ({}));
+
+export class NewsBriefAutomationWorkflow extends CloudflareWorkflowEntrypoint {
+  async run(event, step) {
+    const payload = event?.payload || {};
+    const runId = payload.runId || '';
+    return runNewsBriefAutomation(this.env, {
+      triggerType: payload.triggerType || 'dashboard_dry_run',
+      dryRun: payload.dryRun,
+      requestRunId: runId,
+      workflowInstanceId: event?.instanceId || runId,
+      fromWorkflow: true,
+    }, { workflowStep: step });
+  }
+}
 
 export default {
   async scheduled(event, env, ctx) {
