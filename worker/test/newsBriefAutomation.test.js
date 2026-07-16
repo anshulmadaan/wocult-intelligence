@@ -23,6 +23,10 @@ import {
   signApprovalToken,
   sortNewsTrackerItemsNewestFirst,
   applyPrimarySourceDiscovery,
+  buildDraftPrompt,
+  buildPrimarySourceDiscoveryPrompt,
+  buildPrimarySourceSearchQueries,
+  prepareSourceContext,
   validateDraft,
   validateQualification,
   verifyApprovalToken,
@@ -922,6 +926,63 @@ test('usage accumulates input, output, cache and web-search fields across calls 
   assert.equal(result.summary.attemptedItems[0].usage.anthropicCalls, 2);
 });
 
+test('anthropic call log writes started entry before request and updates same entry on completion', async () => {
+  let sawStartedBeforeRequest = false;
+  const mocks = makeRunMocks([trackerItem(1)], {
+    qualificationFor: () => ({ ...goodQualification, qualifies: false, overallScore: 45, rejectionReasons: ['No Wocult angle'], recommendedPriority: null }),
+    usageFor: () => ({ input_tokens: 11, output_tokens: 7, server_tool_use: { web_search_requests: 1 } }),
+    responseForUrl: (href) => {
+      if (href.includes('api.anthropic.com')) {
+        sawStartedBeforeRequest = mocks.runs.some((run) => (run.anthropicCallLog || []).some((entry) => entry.status === 'started'));
+      }
+      return null;
+    },
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+  }, { dryRun: true }, mocks);
+  assert.equal(sawStartedBeforeRequest, true);
+  assert.equal(result.summary.anthropicCallLog.length, 1);
+  const entry = result.summary.anthropicCallLog[0];
+  assert.match(entry.callId, /^anthropic_/);
+  assert.equal(entry.status, 'completed');
+  assert.equal(entry.stage, 'qualification');
+  assert.equal(entry.inputTokens, 11);
+  assert.equal(entry.outputTokens, 7);
+  assert.equal(entry.webSearchRequests, 1);
+  assert.equal(result.summary.currentAnthropicCallId, '');
+  assert.equal(result.summary.lastCompletedAnthropicCallId, entry.callId);
+});
+
+test('per-call usage sums to run usage across multiple candidates', async () => {
+  const mocks = makeRunMocks([trackerItem(1), trackerItem(2)], {
+    qualificationFor: () => ({ ...goodQualification, qualifies: false, overallScore: 45, rejectionReasons: ['No Wocult angle'], recommendedPriority: null }),
+    usageFor: (call) => ({ input_tokens: call * 10, output_tokens: call, cache_read_input_tokens: 2, server_tool_use: { web_search_requests: 1 } }),
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '2',
+  }, { dryRun: true }, mocks);
+  const totals = result.summary.anthropicCallLog.reduce((acc, entry) => {
+    acc.inputTokens += entry.inputTokens;
+    acc.outputTokens += entry.outputTokens;
+    acc.cacheReadInputTokens += entry.cacheReadInputTokens;
+    acc.webSearchRequests += entry.webSearchRequests;
+    return acc;
+  }, { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, webSearchRequests: 0 });
+  assert.deepEqual(totals, {
+    inputTokens: result.summary.usage.inputTokens,
+    outputTokens: result.summary.usage.outputTokens,
+    cacheReadInputTokens: result.summary.usage.cacheReadInputTokens,
+    webSearchRequests: result.summary.usage.webSearchRequests,
+  });
+});
+
 test('deterministic rejection contributes zero usage and historical missing usage remains safe', async () => {
   const oldItem = trackerItem(1, { dateFound: '2026-01-01T00:00:00.000Z' });
   const mocks = makeRunMocks([oldItem]);
@@ -934,6 +995,58 @@ test('deterministic rejection contributes zero usage and historical missing usag
   assert.equal(result.summary.usage.anthropicCalls, 0);
   assert.equal(result.summary.attemptedItems[0].usage.inputTokens, 0);
   assert.doesNotThrow(() => JSON.stringify({ runId: 'run_old', state: 'completed' }));
+});
+
+test('prompt context limits deduplicate repeated article content and record truncation', () => {
+  const repeated = '<nav>Share Subscribe Login</nav>' + Array.from({ length: 80 }, () => '<p>Central claim says the Ministry report found 42 percent of workers need reskilling in India.</p>').join('');
+  const prepared = prepareSourceContext(repeated, 600);
+  assert.equal(prepared.truncated, false);
+  assert.ok(prepared.text.length < 180);
+  assert.equal((prepared.text.match(/Central claim/g) || []).length, 1);
+  const longPrepared = prepareSourceContext(Array.from({ length: 50 }, (_, i) => `Paragraph ${i} has a distinct official claim about workers and organisations in India`).join('. '), 500);
+  assert.equal(longPrepared.truncated, true);
+  assert.ok(longPrepared.text.length <= 500);
+});
+
+test('primary-source prompt excludes Webflow archive, full tracker dataset and raw search pages', () => {
+  const archiveMarker = 'FULL_WEBFLOW_ARCHIVE_SHOULD_NOT_APPEAR';
+  const trackerDatasetMarker = 'FULL_NEWS_TRACKER_DATASET_SHOULD_NOT_APPEAR';
+  const item = trackerItem(1, {
+    headline: 'Ministry survey says 42 percent of workers need AI training',
+    extraArchive: archiveMarker,
+    allTrackerItems: [{ headline: trackerDatasetMarker }],
+  });
+  const prompt = buildPrimarySourceDiscoveryPrompt(item, goodQualification, '<script>RAW_SEARCH_CONTENT_SHOULD_NOT_APPEAR</script> Official survey paragraph about workers and organisations in India.');
+  assert.doesNotMatch(prompt, new RegExp(archiveMarker));
+  assert.doesNotMatch(prompt, new RegExp(trackerDatasetMarker));
+  assert.doesNotMatch(prompt, /<script>|RAW_SEARCH_CONTENT_SHOULD_NOT_APPEAR/);
+  assert.match(prompt, /Article text was deduplicated/);
+});
+
+test('draft prompt uses bounded editorial fields instead of raw candidate object', () => {
+  const prompt = buildDraftPrompt({
+    item: baseItem,
+    qualification: goodQualification,
+    verification: {
+      status: 'verified',
+      summary: 'Verified.',
+      excerpts: ['Repeated verified sentence about workers. '.repeat(100)],
+      confirmedFacts: ['Fact'],
+    },
+    primarySources: [{ title: 'Official report', url: 'https://gov.in/report.pdf', publisherOrIssuer: 'Ministry', sourceType: 'government_report', verified: true }],
+    rawModelResponse: 'RAW_MODEL_RESPONSE_SHOULD_NOT_APPEAR',
+    firestoreRunRecord: { prompt: 'FIRESTORE_RUN_SHOULD_NOT_APPEAR' },
+  });
+  assert.doesNotMatch(prompt, /RAW_MODEL_RESPONSE_SHOULD_NOT_APPEAR|FIRESTORE_RUN_SHOULD_NOT_APPEAR/);
+  assert.ok(prompt.length < 9000);
+});
+
+test('duplicate primary-source search queries are suppressed after normalisation', () => {
+  const queries = buildPrimarySourceSearchQueries(trackerItem(1, { headline: 'EPFO report report', theme: 'EPFO report' }), {
+    recommendedAngle: 'EPFO report',
+    materialFacts: ['EPFO report'],
+  });
+  assert.equal(new Set(queries.map((q) => q.toLowerCase().replace(/\s+/g, ' '))).size, queries.length);
 });
 
 test('later technical failure preserves qualification data and stores safe failure metadata', async () => {
@@ -984,12 +1097,65 @@ test('anthropic timeout fails only the affected candidate and continues with hea
   assert.equal(mocks.saved[0].status, 'qualification_failed');
   assert.equal(mocks.saved[0].failureStage, 'qualification');
   assert.equal(mocks.saved[0].failureCode, 'anthropic_timeout');
+  assert.equal(result.summary.anthropicCallLog[0].status, 'timed_out');
+  assert.equal(result.summary.anthropicCallLog[0].failureCode, 'anthropic_timeout');
   assert.equal(mocks.saved[1].status, 'rejected_by_filter');
   assert.equal(result.summary.attemptedItems.length, 2);
   assert.equal(result.summary.attemptedItems[0].failureCode, 'anthropic_timeout');
   assert.equal(beforeCalls, 2);
   assert.equal(afterCalls, 2);
   assert.ok(mocks.runs.filter((run) => run.heartbeatAt).length >= 4);
+});
+
+test('stale recovery uses current Anthropic stage and preserves interrupted call fields', async () => {
+  const stale = {
+    runId: 'run_stale_call_12345678',
+    state: 'running',
+    phase: 'unknown',
+    startTime: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    heartbeatAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+    completedItems: 3,
+    targetItems: 5,
+    percentComplete: 60,
+    currentCandidateId: 'nt_current',
+    currentHeadline: 'Current stuck candidate',
+    currentAnthropicCallId: 'anthropic_interrupted',
+    currentAnthropicStage: 'primary_source_discovery',
+    currentAnthropicCandidateId: 'nt_current',
+    lastCompletedAnthropicCallId: 'anthropic_3',
+    anthropicCallLog: [
+      { callId: 'anthropic_3', status: 'completed', stage: 'qualification', inputTokens: 10, outputTokens: 2 },
+      { callId: 'anthropic_interrupted', status: 'started', stage: 'primary_source_discovery', inputTokens: 0, outputTokens: 0 },
+    ],
+  };
+  const mocks = makeRunMocks([], { activeRun: stale });
+  await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_DRY_RUN: 'true',
+  }, { dryRun: true, requestRunId: 'run_after_stale_call_12345678' }, mocks);
+  const recovered = mocks.runs.find((run) => run.runId === stale.runId && run.state === 'failed');
+  assert.equal(recovered.failureStage, 'primary_source_discovery');
+  assert.equal(recovered.currentAnthropicCallId, 'anthropic_interrupted');
+  assert.equal(recovered.lastCompletedAnthropicCallId, 'anthropic_3');
+  assert.equal(recovered.anthropicCallLog.length, 2);
+});
+
+test('four calls with three completed candidates remain diagnosable from call log', async () => {
+  const run = {
+    anthropicCallLog: [
+      { callId: 'c1', candidateId: 'a', stage: 'qualification', status: 'completed' },
+      { callId: 'c2', candidateId: 'b', stage: 'qualification', status: 'completed' },
+      { callId: 'c3', candidateId: 'c', stage: 'qualification', status: 'completed' },
+      { callId: 'c4', candidateId: 'd', stage: 'primary_source_discovery', status: 'started' },
+    ],
+    completedItems: 3,
+    targetItems: 5,
+  };
+  const completedCalls = run.anthropicCallLog.filter((entry) => entry.status === 'completed');
+  const interrupted = run.anthropicCallLog.find((entry) => entry.status === 'started');
+  assert.equal(completedCalls.length, 3);
+  assert.equal(interrupted.candidateId, 'd');
+  assert.equal(interrupted.stage, 'primary_source_discovery');
 });
 
 test('run skips first five handled records and processes the next five new tracker records', async () => {
