@@ -8,6 +8,7 @@ import {
   clusterKey,
   createStoryFingerprint,
   deterministicEligibility,
+  discoverPrimarySources,
   getAutomationConfig,
   handleAutomationRequest,
   normalizeNewsTrackerResponse,
@@ -17,6 +18,7 @@ import {
   runNewsBriefAutomation,
   signApprovalToken,
   sortNewsTrackerItemsNewestFirst,
+  applyPrimarySourceDiscovery,
   validateDraft,
   validateQualification,
   verifyApprovalToken,
@@ -101,6 +103,10 @@ function makeRunMocks(items, options = {}) {
     if (href.includes('tracker.example.test')) {
       return new Response(JSON.stringify({ ok: true, items }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
+    if (options.responseForUrl) {
+      const response = options.responseForUrl(href, init);
+      if (response) return response;
+    }
     if (href.includes('api.anthropic.com')) {
       calls.anthropic += 1;
       const body = JSON.parse(init.body || '{}');
@@ -113,7 +119,7 @@ function makeRunMocks(items, options = {}) {
     calls.source += 1;
     return new Response('<html>source text about Indian workers and jobs</html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
   };
-  return { saved, activities, calls, store, fetch };
+  return { saved, activities, calls, store, fetch, primarySourceSearch: options.primarySourceSearch };
 }
 
 function assertCandidateMetadata(candidate) {
@@ -126,7 +132,8 @@ function assertCandidateMetadata(candidate) {
   assert.ok(candidate.clusterKey, 'clusterKey is required');
   assert.ok(candidate.status, 'status is required');
   assert.ok(candidate.sourceType, 'source metadata sourceType is required');
-  assert.ok(candidate.primarySourceUrl, 'source metadata primarySourceUrl is required');
+  assert.ok(candidate.articleSourceUrl, 'articleSourceUrl is required');
+  assert.ok(candidate.articleSourceName, 'articleSourceName is required');
   assert.ok(candidate.publishers?.length, 'source metadata publishers are required');
 }
 
@@ -340,6 +347,146 @@ test('source verification supports primary-source, two-secondary-source and conf
   assert.equal(conflict.ok, false);
 });
 
+test('primary-source discovery accepts an official report directly linked by the article', async () => {
+  const item = trackerItem(1, { headline: 'Ministry report says AI hiring is rising for Indian workers', whyItMatters: 'The story cites a government report on jobs.' });
+  const discovery = await discoverPrimarySources(item, goodQualification, {}, {
+    fetch: async (url) => {
+      if (String(url).includes('company-1-hiring')) {
+        return new Response('<a href="https://labour.gov.in/reports/ai-hiring-report.pdf">Ministry report PDF</a>', { status: 200 });
+      }
+      return new Response('Ministry report AI hiring Indian workers jobs', { status: 200 });
+    },
+  }, { runId: 'run_primary' });
+  assert.equal(discovery.status, 'found');
+  assert.equal(discovery.primarySources.length, 1);
+  assert.equal(discovery.primarySources[0].url, 'https://labour.gov.in/reports/ai-hiring-report.pdf');
+  assert.equal(discovery.primarySources[0].verified, true);
+});
+
+test('primary-source discovery finds an official source through web search when the article only names it', async () => {
+  const item = trackerItem(1, { headline: 'EPFO report points to new payroll additions for Indian employees', whyItMatters: 'The article names an EPFO payroll report but does not link it.' });
+  const discovery = await discoverPrimarySources(item, goodQualification, {}, {
+    fetch: async (url) => {
+      if (String(url).includes('company-1-hiring')) return new Response('The article cites the EPFO payroll report for Indian employees.', { status: 200 });
+      return new Response('EPFO payroll report Indian employees payroll additions', { status: 200 });
+    },
+    primarySourceSearch: async () => ({
+      primarySources: [{
+        title: 'EPFO payroll report',
+        url: 'https://www.epfindia.gov.in/site_docs/PDFs/payroll_report.pdf',
+        publisherOrIssuer: 'EPFO',
+        sourceType: 'government_report',
+        relationship: 'reports_findings_from',
+        discoveryMethod: 'official_site_search',
+        confidence: 'high',
+      }],
+      searchesAttempted: ['EPFO payroll report official PDF'],
+      organisationsChecked: ['EPFO'],
+      notes: 'Official EPFO PDF located.',
+    }),
+  }, { runId: 'run_search' });
+  assert.equal(discovery.status, 'found');
+  assert.equal(discovery.primarySources[0].publisherOrIssuer, 'EPFO');
+  assert.equal(JSON.stringify(discovery).includes('raw search'), false);
+});
+
+test('primary-source discovery records ambiguous and not-found outcomes without inventing URLs', async () => {
+  const item = trackerItem(1, { headline: 'Survey report changes hiring plans for Indian workers', whyItMatters: 'The article names a survey report.' });
+  const noSource = await discoverPrimarySources(item, goodQualification, {}, {
+    fetch: async () => new Response('Article says unnamed survey report affected Indian workers.', { status: 200 }),
+    primarySourceSearch: async () => ({ primarySources: [], searchesAttempted: ['survey report official'], organisationsChecked: ['unknown'], notes: 'No authoritative source found.' }),
+  }, { runId: 'run_none' });
+  assert.equal(noSource.status, 'not_found');
+  assert.equal(noSource.primarySources.length, 0);
+
+  const ambiguous = await discoverPrimarySources(item, goodQualification, {}, {
+    fetch: async (url) => new Response(String(url).includes('report-a') ? 'unrelated report' : 'Article names survey report.', { status: 200 }),
+    primarySourceSearch: async () => ({
+      primarySources: [
+        { title: 'Survey report A', url: 'https://example.org/report-a', sourceType: 'survey_report', discoveryMethod: 'web_search', confidence: 'low' },
+        { title: 'Survey report B', url: 'https://example.org/report-b', sourceType: 'survey_report', discoveryMethod: 'web_search', confidence: 'low' },
+      ],
+      notes: 'Several possible documents, none verified.',
+    }),
+  }, { runId: 'run_ambiguous' });
+  assert.equal(ambiguous.status, 'ambiguous');
+  assert.equal(ambiguous.primarySources.length, 0);
+});
+
+test('primary-source discovery rejects unsupported, unrelated and secondary-media URLs', async () => {
+  const item = trackerItem(1, { headline: 'RBI circular affects employee banking benefits', whyItMatters: 'The article cites an RBI circular.' });
+  const discovery = await discoverPrimarySources(item, goodQualification, {}, {
+    fetch: async (url) => {
+      if (String(url).includes('company-1-hiring')) return new Response('Article cites an RBI circular.', { status: 200 });
+      if (String(url).includes('rbi.org.in')) return new Response('Unrelated monetary policy document', { status: 200 });
+      return new Response('Another publisher article about RBI circular', { status: 200 });
+    },
+    primarySourceSearch: async () => ({
+      primarySources: [
+        { title: 'RBI circular', url: 'https://economictimes.indiatimes.com/jobs/company-1-hiring', sourceType: 'regulator_circular', discoveryMethod: 'web_search', confidence: 'high' },
+        { title: 'RBI circular', url: 'https://www.rbi.org.in/scripts/unrelated-circular.aspx', sourceType: 'regulator_circular', discoveryMethod: 'web_search', confidence: 'high' },
+      ],
+      notes: 'Candidates did not verify.',
+    }),
+  }, { runId: 'run_reject' });
+  assert.equal(discovery.status, 'ambiguous');
+  assert.equal(discovery.primarySources.length, 0);
+});
+
+test('primary-source discovery stores technical failure safely without raw output', async () => {
+  const item = trackerItem(1, { headline: 'Court order affects workplace policy for Indian employees', whyItMatters: 'The story cites a court order.' });
+  const discovery = await discoverPrimarySources(item, goodQualification, {}, {
+    fetch: async () => new Response('Article cites a court order.', { status: 200 }),
+    primarySourceSearch: async () => { throw new Error('search backend unavailable with raw payload that should be truncated'); },
+  }, { runId: 'run_failed' });
+  assert.equal(discovery.status, 'failed');
+  assert.equal(discovery.failureCode, 'primary_source_verification_failed');
+  assert.equal(JSON.stringify(discovery).includes('rawModelResponse'), false);
+});
+
+test('primary-source metadata keeps article source separate and persists multiple sources', () => {
+  const item = normalizeNewsTrackerResponse({ items: [baseItem] }).items[0];
+  const candidate = candidateFromTrackerItem(item, goodQualification);
+  const updated = applyPrimarySourceDiscovery(candidate, {
+    status: 'multiple_found',
+    primarySources: [
+      { title: 'Government notification', url: 'https://labour.gov.in/notification.pdf', publisherOrIssuer: 'Labour Ministry', sourceType: 'government_notification', relationship: 'based_on', discoveryMethod: 'official_site_search', confidence: 'high', verified: true },
+      { title: 'Company filing', url: 'https://www.bseindia.com/xml-data/corpfiling/filing.pdf', publisherOrIssuer: 'BSE', sourceType: 'stock_exchange_disclosure', relationship: 'cites', discoveryMethod: 'official_site_search', confidence: 'high', verified: true },
+    ],
+    discoveredAt: recent,
+    runId: 'run_sources',
+    notes: 'Two primary sources support the source chain.',
+  });
+  assert.equal(updated.articleSourceUrl, candidate.canonicalUrl);
+  assert.notEqual(updated.primarySourceUrl, updated.articleSourceUrl);
+  assert.equal(updated.primarySources.length, 2);
+  assert.equal(updated.sourceChain.primarySources.length, 2);
+});
+
+test('manual primary-source entries are preserved when automation runs again', () => {
+  const item = normalizeNewsTrackerResponse({ items: [baseItem] }).items[0];
+  const candidate = candidateFromTrackerItem(item, goodQualification);
+  const existing = {
+    ...candidate,
+    primarySources: [{
+      title: 'Manual ministry PDF',
+      url: 'https://labour.gov.in/manual.pdf',
+      publisherOrIssuer: 'Labour Ministry',
+      sourceType: 'government_report',
+      relationship: 'based_on',
+      discoveryMethod: 'manual_staff_entry',
+      confidence: 'high',
+      verified: true,
+    }],
+  };
+  const updated = applyPrimarySourceDiscovery(candidate, {
+    status: 'found',
+    primarySources: [{ title: 'Automated source', url: 'https://labour.gov.in/auto.pdf', sourceType: 'government_report', relationship: 'based_on', discoveryMethod: 'official_site_search', confidence: 'medium', verified: true }],
+  }, existing);
+  assert.equal(updated.primarySources.length, 2);
+  assert.equal(updated.primarySources[0].url, 'https://labour.gov.in/manual.pdf');
+});
+
 test('canonical URL deduplication and same-event clustering are stable', () => {
   const a = normalizeNewsTrackerResponse({ items: [baseItem] }).items[0];
   const b = normalizeNewsTrackerResponse({ items: [{ ...baseItem, link: 'https://economictimes.indiatimes.com/jobs/infosys-hiring?utm_medium=y' }] }).items[0];
@@ -508,6 +655,56 @@ test('new needs_editorial_check candidate gets complete candidate metadata', asy
   assert.equal(mocks.saved.length, 1);
   assert.equal(mocks.saved[0].status, 'needs_editorial_check');
   assertCandidateMetadata(mocks.saved[0]);
+  assert.equal(mocks.saved[0].generatedDraft, null);
+});
+
+test('paywalled article can still discover and persist an official primary source', async () => {
+  const item = trackerItem(1, { headline: 'Government report says AI hiring affects Indian workers', whyItMatters: 'The article relies on a government report.' });
+  const mocks = makeRunMocks([item], {
+    qualificationFor: () => ({ ...goodQualification, overallScore: 65, qualificationReasons: ['Needs editorial check on government report'], materialFacts: ['Government report on AI hiring'] }),
+    responseForUrl: (url) => {
+      if (url.includes('company-1-hiring')) return new Response('Subscribe to continue. Government report says AI hiring affects Indian workers.', { status: 200 });
+      if (url.includes('labour.gov.in')) return new Response('Government report AI hiring Indian workers', { status: 200 });
+      return null;
+    },
+    primarySourceSearch: async () => ({
+      primarySources: [{ title: 'Government report on AI hiring', url: 'https://labour.gov.in/reports/ai-hiring.pdf', publisherOrIssuer: 'Labour Ministry', sourceType: 'government_report', relationship: 'reports_findings_from', discoveryMethod: 'official_site_search', confidence: 'high' }],
+      searchesAttempted: ['Government report on AI hiring official PDF'],
+      organisationsChecked: ['Labour Ministry'],
+    }),
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsNeedingEditorialCheck, 1);
+  assert.equal(mocks.saved[0].primarySourceDiscoveryStatus, 'found');
+  assert.equal(mocks.saved[0].primarySources[0].url, 'https://labour.gov.in/reports/ai-hiring.pdf');
+});
+
+test('missing required primary source sends otherwise qualified candidate to editorial check without drafting', async () => {
+  const item = trackerItem(1, { headline: 'Survey report says layoffs affect Indian workers', whyItMatters: 'The article relies on a survey report.' });
+  const mocks = makeRunMocks([item], {
+    qualificationFor: () => ({ ...goodQualification, overallScore: 88, materialFacts: ['Survey report about layoffs'] }),
+    responseForUrl: (url) => {
+      if (url.includes('company-1-hiring')) return new Response('Article cites a survey report but does not link it.', { status: 200 });
+      return null;
+    },
+    primarySourceSearch: async () => ({ primarySources: [], searchesAttempted: ['survey report official'], organisationsChecked: ['unknown'], notes: 'No authoritative source found.' }),
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsNeedingEditorialCheck, 1);
+  assert.equal(result.summary.draftsGenerated, 0);
+  assert.equal(mocks.calls.draft, 0);
+  assert.equal(mocks.saved[0].status, 'needs_editorial_check');
+  assert.equal(mocks.saved[0].primarySourceDiscoveryStatus, 'not_found');
   assert.equal(mocks.saved[0].generatedDraft, null);
 });
 
