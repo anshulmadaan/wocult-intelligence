@@ -5772,6 +5772,7 @@ var AUTOMATED_NEWS_BRIEF_STATUS_ALIASES = {
 var AUTOMATED_NEWS_BRIEF_PHASE_LABELS = {
   fetching_tracker: 'Fetching News Tracker',
   sorting_items: 'Sorting newest stories',
+  checking_wocult_archive: 'Checking stories already on Wocult',
   selecting_candidates: 'Finding unprocessed candidates',
   qualifying: 'Assessing candidate',
   primary_source_discovery: 'Finding primary sources',
@@ -5888,6 +5889,51 @@ function automatedNewsBriefUsageHtml(usage) {
     + '</div>';
 }
 
+function automatedNewsBriefDuplicateStatusLabel(status) {
+  if (status === 'already_published_on_wocult') return 'Already published on Wocult';
+  if (status === 'already_in_webflow_draft') return 'Already present as a Webflow draft';
+  if (status === 'possible_wocult_duplicate') return 'Possible existing Wocult story';
+  return status || 'No duplicate result';
+}
+
+function automatedNewsBriefDuplicateExplanation(status) {
+  if (status === 'already_published_on_wocult') return 'A matching story is already live on Wocult.';
+  if (status === 'already_in_webflow_draft') return 'A matching News item already exists as a draft.';
+  if (status === 'possible_wocult_duplicate') return 'The system found a likely related Wocult story and needs editorial confirmation.';
+  return '';
+}
+
+function automatedNewsBriefPreflightCardHtml(item) {
+  item = item || {};
+  var url = item.matchedWocultUrl || '';
+  var possible = item.duplicateStatus === 'possible_wocult_duplicate';
+  return '<div style="background:#fff;border:1px solid var(--bdr);border-radius:8px;padding:12px">'
+    + '<strong style="font-size:14px;color:var(--blk);line-height:1.35">'+escapeHtml(item.headline || 'Untitled tracker item')+'</strong>'
+    + '<div class="hint" style="margin-top:6px">'+escapeHtml(item.source || 'Source unavailable')+' · '+escapeHtml(formatAutomatedNewsBriefDate(item.dateFound))+'</div>'
+    + '<div style="margin-top:8px"><strong>'+escapeHtml(automatedNewsBriefDuplicateStatusLabel(item.duplicateStatus))+'</strong></div>'
+    + '<div class="hint">'+escapeHtml(automatedNewsBriefDuplicateExplanation(item.duplicateStatus))+'</div>'
+    + '<div class="hint">Reason: '+escapeHtml(item.matchReason || 'not recorded')+' · Confidence: '+escapeHtml(item.duplicateConfidence || 'not recorded')+' · State: '+escapeHtml(item.matchedItemState || 'unknown')+'</div>'
+    + '<div style="margin-top:6px">Match: '+escapeHtml(item.matchedWocultHeadline || 'No matching headline stored')+'</div>'
+    + (url ? '<div style="margin-top:6px"><a href="'+escapeAttr(url)+'" target="_blank" rel="noopener">'+escapeHtml(url)+'</a></div>' : '<div class="hint" style="margin-top:6px">Matching Wocult URL unavailable.</div>')
+    + '<div class="hint" style="margin-top:8px">No Claude tokens were used for this item.</div>'
+    + (possible ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
+      + (url ? '<a class="btn" href="'+escapeAttr(url)+'" target="_blank" rel="noopener">Open Wocult story</a>' : '')
+      + '<button class="btn" onclick="confirmAutomatedNewsBriefWocultDuplicate(\''+escapeAttr(item.candidateId || '')+'\')">Confirm duplicate</button>'
+      + '<button class="btn" onclick="markAutomatedNewsBriefNotDuplicate(\''+escapeAttr(item.candidateId || '')+'\')">Mark not duplicate</button>'
+      + '<button class="btn" onclick="requestAutomatedNewsBriefAssessmentLater(\''+escapeAttr(item.candidateId || '')+'\')">Send for assessment later</button>'
+      + '</div>' : '')
+    + '</div>';
+}
+
+function automatedNewsBriefPreflightSectionHtml(run) {
+  var skipped = run && run.preflightSkippedItems || [];
+  if (!skipped.length) return '<div style="margin-top:14px"><strong>Skipped before AI assessment</strong><div class="hint" style="margin-top:6px">No duplicate preflight skips were recorded for this run.</div></div>';
+  return '<div style="margin-top:14px"><strong>Skipped before AI assessment</strong>'
+    + '<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">'
+    + skipped.map(automatedNewsBriefPreflightCardHtml).join('')
+    + '</div></div>';
+}
+
 function setAutomatedNewsBriefDryRunButton(disabled, label) {
   var btn = document.getElementById('automated-news-brief-dry-run-btn');
   if (!btn) return;
@@ -5938,6 +5984,12 @@ function automatedNewsBriefRunSummaryHtml(run) {
     + '<div><strong>'+escapeHtml(String(run.itemsReceived || 0))+'</strong><br><span class="hint">Received</span></div>'
     + '<div><strong>'+escapeHtml(String(run.itemsSkipped || 0))+'</strong><br><span class="hint">Skipped</span></div>'
     + '<div><strong>'+escapeHtml(String(attempted))+'</strong><br><span class="hint">Attempted</span></div>'
+    + '<div><strong>'+escapeHtml(String(run.webflowItemsChecked || 0))+'</strong><br><span class="hint">Webflow News checked</span></div>'
+    + '<div><strong>'+escapeHtml(String(run.itemsAlreadyPublishedOnWocult || 0))+'</strong><br><span class="hint">Already published</span></div>'
+    + '<div><strong>'+escapeHtml(String(run.itemsAlreadyInWebflowDraft || 0))+'</strong><br><span class="hint">Webflow drafts</span></div>'
+    + '<div><strong>'+escapeHtml(String(run.itemsPossibleWocultDuplicates || 0))+'</strong><br><span class="hint">Possible duplicates</span></div>'
+    + '<div><strong>'+escapeHtml(String(run.itemsSkippedBeforeClaude || 0))+'</strong><br><span class="hint">Skipped before Claude</span></div>'
+    + '<div><strong>'+escapeHtml(String(run.candidatesEligibleForClaude || 0))+'</strong><br><span class="hint">Sent to Claude</span></div>'
     + '<div><strong>'+escapeHtml(String(run.itemsRejected || 0))+'</strong><br><span class="hint">Rejected</span></div>'
     + '<div><strong>'+escapeHtml(String(run.itemsNeedingEditorialCheck || 0))+'</strong><br><span class="hint">Needs editorial check</span></div>'
     + '<div><strong>'+escapeHtml(String(run.itemsVerified || 0))+'</strong><br><span class="hint">Verified</span></div>'
@@ -5945,6 +5997,7 @@ function automatedNewsBriefRunSummaryHtml(run) {
     + '<div><strong>'+escapeHtml(String(run.failures || 0))+'</strong><br><span class="hint">Failures</span></div>'
     + '</div>'
     + '<div style="margin-top:14px"><strong>Usage</strong>'+automatedNewsBriefUsageHtml(run.usage)+'</div>'
+    + automatedNewsBriefPreflightSectionHtml(run)
     + '</div>';
 }
 
@@ -6197,6 +6250,8 @@ function renderAutomatedNewsBriefDetail(item) {
   var rejected = normalizedStatus === 'rejected_by_filter';
   var editorialCheck = normalizedStatus === 'needs_editorial_check';
   var failed = normalizedStatus === 'failed' || /failed$/.test(item.status || '');
+  var duplicateCheck = item.duplicateCheck || {};
+  var possibleWocultDuplicate = duplicateCheck.status === 'possible_wocult_duplicate';
   var rejectionReasons = []
     .concat(item.rejectionReasons || [])
     .concat((item.qualificationResult && item.qualificationResult.rejectionReasons) || [])
@@ -6218,6 +6273,22 @@ function renderAutomatedNewsBriefDetail(item) {
       + '<div>Processed: '+escapeHtml(formatAutomatedNewsBriefDate(item.failureAt || item.updatedAt))+' · Run: '+escapeHtml(item.failureRunId || item.lastProcessedRunId || item.runId || '')+'</div>'
       + '<div>Retryable: '+escapeHtml(item.retryable ? 'yes' : 'no')+'</div>'
       + '<details style="margin-top:8px"><summary>Technical details</summary><div class="hint">Code: '+escapeHtml(item.failureCode || 'unknown')+'</div></details>'
+      + '</div>'
+    : '';
+  var duplicateHtml = duplicateCheck.checked
+    ? '<div style="margin-top:12px;padding:12px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
+      + '<strong>'+escapeHtml(automatedNewsBriefDuplicateStatusLabel(duplicateCheck.status))+'</strong>'
+      + '<div class="hint" style="margin-top:4px">'+escapeHtml(automatedNewsBriefDuplicateExplanation(duplicateCheck.status))+'</div>'
+      + '<div class="hint">Reason: '+escapeHtml(duplicateCheck.matchReason || 'not recorded')+' · Confidence: '+escapeHtml(duplicateCheck.confidence || 'not recorded')+' · State: '+escapeHtml(duplicateCheck.matchedItemState || 'unknown')+'</div>'
+      + '<div style="margin-top:6px">Match: '+escapeHtml(duplicateCheck.matchedWocultHeadline || 'No matching headline stored')+'</div>'
+      + (duplicateCheck.matchedWocultUrl ? '<div style="margin-top:6px"><a href="'+escapeAttr(duplicateCheck.matchedWocultUrl)+'" target="_blank" rel="noopener">'+escapeHtml(duplicateCheck.matchedWocultUrl)+'</a></div>' : '<div class="hint" style="margin-top:6px">Matching Wocult URL unavailable.</div>')
+      + '<div class="hint" style="margin-top:8px">No Claude tokens were used for this item.</div>'
+      + (possibleWocultDuplicate ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
+        + (duplicateCheck.matchedWocultUrl ? '<a class="btn" href="'+escapeAttr(duplicateCheck.matchedWocultUrl)+'" target="_blank" rel="noopener">Open Wocult story</a>' : '')
+        + '<button class="btn" onclick="confirmAutomatedNewsBriefWocultDuplicate(\''+escapeAttr(item.id || item.candidateId)+'\')">Confirm duplicate</button>'
+        + '<button class="btn" onclick="markAutomatedNewsBriefNotDuplicate(\''+escapeAttr(item.id || item.candidateId)+'\')">Mark not duplicate</button>'
+        + '<button class="btn" onclick="requestAutomatedNewsBriefAssessmentLater(\''+escapeAttr(item.id || item.candidateId)+'\')">Send for assessment later</button>'
+        + '</div>' : '')
       + '</div>'
     : '';
   var actions = rejected
@@ -6246,6 +6317,7 @@ function renderAutomatedNewsBriefDetail(item) {
     + '<div style="margin-top:14px"><strong>Original headline</strong><br>'+escapeHtml(item.originalHeadline || '')+'</div>'
     + automatedNewsBriefArticleSourceHtml(item)
     + automatedNewsBriefPrimarySourcesHtml(item)
+    + duplicateHtml
     + (item.recommendedAngle ? '<div style="margin-top:12px"><strong>Recommended angle</strong><br>'+escapeHtml(item.recommendedAngle)+'</div>' : '')
     + (rejectionReasons.length ? '<div style="margin-top:12px"><strong>Rejection reasons</strong><ul style="margin:8px 0 0 18px;padding:0">'+rejectionReasons.map(function(reason){ return '<li>'+escapeHtml(reason)+'</li>'; }).join('')+'</ul></div>' : '')
     + (qualificationReasons.length ? '<div style="margin-top:12px"><strong>Qualification reasons</strong><ul style="margin:8px 0 0 18px;padding:0">'+qualificationReasons.map(function(reason){ return '<li>'+escapeHtml(reason)+'</li>'; }).join('')+'</ul></div>' : '')
@@ -6407,6 +6479,54 @@ function requestAutomatedNewsBriefPrimarySourceSearch(id) {
       primarySourceSearchRequestedAt: new Date().toISOString()
     };
   }, 'primary source search requested');
+}
+
+function updateAutomatedNewsBriefDuplicateReview(id, patch, activityType) {
+  var status = document.getElementById('automated-news-brief-action-status');
+  if (!id || !db) return Promise.resolve();
+  patch = Object.assign({}, patch || {}, {
+    updatedBy: currentUser ? currentUser.email : '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  if (status) status.textContent = 'Updating duplicate review...';
+  return db.collection('news_brief_automation').doc(id).set(patch, {merge:true}).then(function() {
+    return db.collection('news_brief_automation').doc(id).collection('activity').add({
+      type: activityType || 'wocult duplicate review',
+      updatedBy: currentUser ? currentUser.email : '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }).then(function() {
+    if (status) status.textContent = 'Duplicate review updated.';
+    return loadAutomatedNewsBriefs(true);
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not update duplicate review: ' + err.message;
+  });
+}
+
+function confirmAutomatedNewsBriefWocultDuplicate(id) {
+  return updateAutomatedNewsBriefDuplicateReview(id, {
+    duplicateReviewStatus: 'confirmed_duplicate',
+    status: 'already_published_on_wocult',
+    decisionStatus: 'already_published_on_wocult',
+    duplicateReviewedAt: new Date().toISOString(),
+    duplicateReviewNote: 'Confirmed by staff as an existing Wocult News story.'
+  }, 'wocult duplicate confirmed');
+}
+
+function markAutomatedNewsBriefNotDuplicate(id) {
+  return updateAutomatedNewsBriefDuplicateReview(id, {
+    duplicateReviewStatus: 'not_duplicate',
+    duplicateReviewedAt: new Date().toISOString(),
+    duplicateReviewNote: 'Marked by staff as not a duplicate. It will require an explicit later assessment action.'
+  }, 'wocult duplicate dismissed');
+}
+
+function requestAutomatedNewsBriefAssessmentLater(id) {
+  return updateAutomatedNewsBriefDuplicateReview(id, {
+    duplicateReviewStatus: 'assessment_requested',
+    assessmentRequestedAt: new Date().toISOString(),
+    duplicateReviewNote: 'Staff requested assessment in a later explicit action.'
+  }, 'wocult duplicate assessment requested');
 }
 
 function dashboardAutomatedNewsBriefAction(id, action) {

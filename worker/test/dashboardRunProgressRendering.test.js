@@ -101,6 +101,12 @@ function completedRun(overrides = {}) {
       itemsVerified: 2,
       draftsGenerated: 0,
       failures: 1,
+      webflowItemsChecked: 123,
+      itemsAlreadyPublishedOnWocult: 2,
+      itemsAlreadyInWebflowDraft: 1,
+      itemsPossibleWocultDuplicates: 1,
+      itemsSkippedBeforeClaude: 4,
+      candidatesEligibleForClaude: 5,
       attemptedItems: Array.from({ length: 5 }, (_, index) => ({
         candidateId: `candidate_${index + 1}`,
         headline: `Story ${index + 1}`,
@@ -123,6 +129,32 @@ function completedRun(overrides = {}) {
         webSearchRequests: 3,
         models: ['claude-test'],
       },
+      preflightSkippedItems: [
+        {
+          candidateId: 'nt_published',
+          headline: 'Published duplicate <script>',
+          source: 'Tracker Source',
+          dateFound: '2026-07-16T04:00:00.000Z',
+          duplicateStatus: 'already_published_on_wocult',
+          duplicateConfidence: 'exact',
+          matchReason: 'article_source_url_exact',
+          matchedWocultHeadline: 'Existing Wocult story',
+          matchedWocultUrl: 'https://www.wocult.com/news/existing-story',
+          matchedItemState: 'published',
+        },
+        {
+          candidateId: 'nt_possible',
+          headline: 'Possible duplicate story',
+          source: 'Tracker Source',
+          dateFound: '2026-07-16T03:00:00.000Z',
+          duplicateStatus: 'possible_wocult_duplicate',
+          duplicateConfidence: 'possible',
+          matchReason: 'story_fingerprint_possible',
+          matchedWocultHeadline: 'Related Wocult story',
+          matchedWocultUrl: '',
+          matchedItemState: 'published',
+        },
+      ],
     }),
     ...overrides,
   };
@@ -165,6 +197,8 @@ test('progress is indeterminate before targetItems and failed candidates still a
   const { ctx, elements } = loadDashboardHarness();
   ctx.renderAutomatedNewsBriefProgress(activeRun({ targetItems: null, completedItems: 0, percentComplete: null, phase: 'fetching_tracker' }));
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /Progress percentage will appear/);
+  ctx.renderAutomatedNewsBriefProgress(activeRun({ targetItems: null, completedItems: 0, percentComplete: null, phase: 'checking_wocult_archive' }));
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Checking stories already on Wocult/);
   ctx.renderAutomatedNewsBriefProgress(activeRun({ completedItems: 2, targetItems: 5, percentComplete: 40, phase: 'drafting' }));
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /2 \/ 5 candidates/);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /40% complete/);
@@ -193,6 +227,56 @@ test('latest run renders five attempted items in newest-first order with token t
   assert.match(detailHtml, /Input tokens/);
   assert.match(detailHtml, /Web-search requests/);
   assert.match(detailHtml, /claude-test/);
+  assert.match(detailHtml, /Webflow News checked/);
+  assert.match(detailHtml, /Already published/);
+  assert.match(detailHtml, /Webflow drafts/);
+  assert.match(detailHtml, /Possible duplicates/);
+  assert.match(detailHtml, /Skipped before Claude/);
+  assert.match(detailHtml, /Sent to Claude/);
+});
+
+test('latest run renders preflight-skipped Wocult duplicate items separately with zero Claude usage', () => {
+  const { ctx, elements } = loadDashboardHarness();
+  ctx.automatedNewsBriefLatestRun = completedRun();
+  ctx.automatedNewsBriefFilter = 'latest_run';
+  ctx.renderAutomatedNewsBriefList();
+  const detailHtml = elements.get('automated-news-brief-detail').innerHTML;
+  assert.match(detailHtml, /Skipped before AI assessment/);
+  assert.match(detailHtml, /Already published on Wocult/);
+  assert.match(detailHtml, /Possible existing Wocult story/);
+  assert.match(detailHtml, /https:\/\/www\.wocult\.com\/news\/existing-story/);
+  assert.match(detailHtml, /No Claude tokens were used for this item/);
+  assert.doesNotMatch(detailHtml, /Published duplicate <script>/);
+  assert.match(detailHtml, /Published duplicate &lt;script&gt;/);
+  assert.match(detailHtml, /Matching Wocult URL unavailable/);
+});
+
+test('possible duplicate controls render for possible matches but not confirmed published matches', () => {
+  const { ctx } = loadDashboardHarness();
+  const possible = ctx.automatedNewsBriefPreflightCardHtml({
+    candidateId: 'nt_possible',
+    headline: 'Possible duplicate',
+    duplicateStatus: 'possible_wocult_duplicate',
+    duplicateConfidence: 'possible',
+    matchReason: 'story_fingerprint_possible',
+    matchedWocultHeadline: 'Related story',
+    matchedWocultUrl: 'https://www.wocult.com/news/related',
+    matchedItemState: 'published',
+  });
+  assert.match(possible, /Confirm duplicate/);
+  assert.match(possible, /Mark not duplicate/);
+  assert.match(possible, /Send for assessment later/);
+  const published = ctx.automatedNewsBriefPreflightCardHtml({
+    candidateId: 'nt_published',
+    headline: 'Published duplicate',
+    duplicateStatus: 'already_published_on_wocult',
+    duplicateConfidence: 'exact',
+    matchReason: 'article_source_url_exact',
+    matchedWocultHeadline: 'Existing story',
+    matchedWocultUrl: 'https://www.wocult.com/news/existing',
+    matchedItemState: 'published',
+  });
+  assert.doesNotMatch(published, /Confirm duplicate|Mark not duplicate|Send for assessment later/);
 });
 
 test('historical missing usage renders safely', () => {
@@ -223,6 +307,30 @@ test('failed candidate detail shows failure stage and preserves qualification sc
   assert.match(html, /Failed stage: drafting_parse/);
   assert.match(html, /drafting_json_invalid/);
   assert.doesNotMatch(html, /Retry Webflow submission/);
+});
+
+test('candidate detail renders Wocult duplicate language separately from rejected and failed states', () => {
+  const { ctx, elements } = loadDashboardHarness();
+  ctx.renderAutomatedNewsBriefDetail({
+    id: 'possible_1',
+    status: 'needs_editorial_check',
+    normalizedStatus: 'needs_editorial_check',
+    originalHeadline: 'Possible duplicate candidate',
+    duplicateCheck: {
+      checked: true,
+      status: 'possible_wocult_duplicate',
+      confidence: 'possible',
+      matchReason: 'story_fingerprint_possible',
+      matchedWocultHeadline: 'Related Wocult story',
+      matchedWocultUrl: 'https://www.wocult.com/news/related',
+      matchedItemState: 'published',
+    },
+  });
+  const html = elements.get('automated-news-brief-detail').innerHTML;
+  assert.match(html, /Possible existing Wocult story/);
+  assert.match(html, /The system found a likely related Wocult story/);
+  assert.match(html, /No Claude tokens were used for this item/);
+  assert.doesNotMatch(html, /Rejected items are read-only|Failed items are diagnostic-only/);
 });
 
 test('missing candidate dates do not break card rendering', () => {
