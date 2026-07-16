@@ -857,6 +857,7 @@ export async function fetchNewsTracker(config, deps = {}) {
 
 export async function callClaudeJson(env, prompt, maxTokens = 1200, deps = {}) {
   const fetchImpl = deps.fetch || fetch;
+  const model = env.NEWS_BRIEF_CLAUDE_MODEL || 'claude-sonnet-4-6';
   const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -866,13 +867,14 @@ export async function callClaudeJson(env, prompt, maxTokens = 1200, deps = {}) {
       'anthropic-beta': 'web-search-2025-03-05',
     },
     body: JSON.stringify({
-      model: env.NEWS_BRIEF_CLAUDE_MODEL || 'claude-sonnet-4-6',
+      model,
       max_tokens: maxTokens,
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
       messages: [{ role: 'user', content: prompt }],
     }),
   }, 45000, fetchImpl);
   const data = await res.json();
+  if (deps.recordAnthropicUsage) deps.recordAnthropicUsage(normalizeAnthropicUsage(data, model));
   if (!res.ok || data.error) throw new Error(data.error?.message || `Anthropic returned ${res.status}`);
   const txt = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
   try {
@@ -1062,10 +1064,11 @@ export async function handleAutomationRequest(request, env, ctx, shared = {}, de
 
   if (url.pathname === '/automation/news-briefs/run' && request.method === 'POST') {
     const body = await safeJson(request);
-    return json(await runNewsBriefAutomation(env, { triggerType: body.triggerType || 'manual', dryRun: body.dryRun }, deps));
+    const result = await runNewsBriefAutomation(env, { triggerType: body.triggerType || 'manual', dryRun: body.dryRun, requestRunId: body.requestRunId || '' }, deps);
+    return json(result, result.status || (result.ok ? 200 : 500));
   }
   if (url.pathname === '/automation/news-briefs/status' && request.method === 'GET') {
-    return json(await getAutomationStatus(env, deps));
+    return json(await getAutomationStatus(env, deps, url.searchParams.get('runId') || ''));
   }
   if (url.pathname === '/automation/news-briefs/retry' && request.method === 'POST') {
     const body = await safeJson(request);
@@ -1084,17 +1087,145 @@ export async function scheduledNewsBriefAutomation(env, ctx, deps = {}) {
   return runNewsBriefAutomation(env, { triggerType: 'scheduled' }, deps);
 }
 
+const RUN_ID_PATTERN = /^run_[A-Za-z0-9_-]{8,96}$/;
+const ACTIVE_RUN_STALE_MS = 20 * 60 * 1000;
+
+function createEmptyUsage() {
+  return {
+    anthropicCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+    webSearchRequests: 0,
+    models: [],
+  };
+}
+
+function normalizeAnthropicUsage(data = {}, fallbackModel = '') {
+  const usage = data.usage || {};
+  return {
+    anthropicCalls: 1,
+    inputTokens: Number(usage.input_tokens || 0),
+    outputTokens: Number(usage.output_tokens || 0),
+    cacheCreationInputTokens: Number(usage.cache_creation_input_tokens || 0),
+    cacheReadInputTokens: Number(usage.cache_read_input_tokens || 0),
+    webSearchRequests: Number(usage.server_tool_use?.web_search_requests || data.server_tool_use?.web_search_requests || 0),
+    models: [data.model || fallbackModel].filter(Boolean),
+  };
+}
+
+function addUsage(target, increment = {}) {
+  target.anthropicCalls += Number(increment.anthropicCalls || 0);
+  target.inputTokens += Number(increment.inputTokens || 0);
+  target.outputTokens += Number(increment.outputTokens || 0);
+  target.cacheCreationInputTokens += Number(increment.cacheCreationInputTokens || 0);
+  target.cacheReadInputTokens += Number(increment.cacheReadInputTokens || 0);
+  target.webSearchRequests += Number(increment.webSearchRequests || 0);
+  target.models = [...new Set([...(target.models || []), ...(increment.models || [])].filter(Boolean))];
+  return target;
+}
+
+function progressPercent(completed, target) {
+  if (!target) return null;
+  return Math.min(100, Math.round((Number(completed || 0) / Number(target)) * 100));
+}
+
+function activeRunIsRecent(run, now = Date.now()) {
+  if (!run || !['preparing', 'running'].includes(run.state)) return false;
+  const heartbeat = Date.parse(run.heartbeatAt || run.updatedAt || run.startTime || '');
+  return Number.isFinite(heartbeat) && now - heartbeat < ACTIVE_RUN_STALE_MS;
+}
+
+function safeRunId(value) {
+  return RUN_ID_PATTERN.test(String(value || '')) ? String(value) : '';
+}
+
+function createFailureMetadata(error, stage, runId) {
+  const message = safeShortText(error?.message || String(error || 'Unknown processing error'), 1000);
+  const failureStage = normalizeFailureStage(error?.failureStage || stage);
+  return {
+    failureStage,
+    failureCode: error?.failureCode || failureCodeForError(error, failureStage),
+    failureMessage: message,
+    failureAt: new Date().toISOString(),
+    failureRunId: runId,
+    retryable: retryableFailure(failureStage, error?.failureCode),
+    lastSuccessfulStage: error?.lastSuccessfulStage || lastSuccessfulStageBefore(failureStage),
+    lastSuccessfulAt: new Date().toISOString(),
+  };
+}
+
+function normalizeFailureStage(stage) {
+  const allowed = new Set(['qualification', 'primary_source_discovery', 'primary_source_fetch', 'primary_source_verification', 'source_fetch', 'verification', 'verification_parse', 'drafting', 'drafting_parse', 'firestore_write', 'webflow', 'unknown']);
+  return allowed.has(stage) ? stage : stage === 'drafting_failed' ? 'drafting_parse' : stage === 'qualification_failed' ? 'qualification' : 'unknown';
+}
+
+function failureCodeForError(error, stage) {
+  const message = String(error?.message || '').toLowerCase();
+  if (message.includes('rate')) return 'anthropic_rate_limited';
+  if (message.includes('timeout')) return stage.includes('source') ? 'source_timeout' : 'anthropic_timeout';
+  if (stage === 'qualification') return 'qualification_json_invalid';
+  if (stage === 'drafting_parse') return 'drafting_json_invalid';
+  if (stage === 'verification_parse') return 'verification_json_invalid';
+  if (stage === 'firestore_write') return 'firestore_write_failed';
+  if (stage === 'primary_source_discovery') return error?.failureCode || 'primary_source_verification_failed';
+  if (message.includes('anthropic')) return 'anthropic_api_error';
+  return 'unknown_processing_error';
+}
+
+function retryableFailure(stage, code) {
+  return /timeout|rate_limited|unreachable|api_error|firestore/.test(`${stage} ${code || ''}`);
+}
+
+function lastSuccessfulStageBefore(stage) {
+  if (['primary_source_discovery', 'primary_source_fetch', 'primary_source_verification'].includes(stage)) return 'qualification';
+  if (['verification', 'verification_parse', 'source_fetch'].includes(stage)) return 'primary_source_discovery';
+  if (['drafting', 'drafting_parse'].includes(stage)) return 'verification';
+  return '';
+}
+
+function attemptedItemFrom(item, candidate, usage, outcome, failure = null) {
+  return stripEmptyOptionalFields({
+    candidateId: candidate?.candidateId || `nt_${createStoryFingerprint(item)}`,
+    headline: item.headline,
+    source: item.source,
+    sourceUrl: item.sourceUrl,
+    dateFound: item.dateFound,
+    processedAt: new Date().toISOString(),
+    status: candidate?.status || outcome,
+    outcome,
+    primarySourceDiscoveryStatus: candidate?.primarySourceDiscoveryStatus || '',
+    failureStage: failure?.failureStage || '',
+    failureCode: failure?.failureCode || '',
+    failureMessage: safeShortText(failure?.failureMessage || '', 1000),
+    usage,
+  });
+}
+
 export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
   const config = getAutomationConfig(env);
   const dryRun = options.dryRun !== undefined ? !!options.dryRun : config.dryRun;
-  const runId = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const requested = options.requestRunId || '';
+  if (requested && !safeRunId(requested)) return { ok: false, status: 400, error: 'invalid_requestRunId' };
+  const runId = requested || `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const startedAt = Date.now();
   const summary = {
     runId,
     triggerType: options.triggerType || 'manual',
+    state: 'preparing',
+    phase: 'fetching_tracker',
     startTime: new Date(startedAt).toISOString(),
+    updatedAt: new Date(startedAt).toISOString(),
+    heartbeatAt: new Date(startedAt).toISOString(),
     itemsReceived: 0,
     itemsSkipped: 0,
+    targetItems: null,
+    completedItems: 0,
+    currentItemIndex: 0,
+    currentCandidateId: '',
+    currentHeadline: '',
+    percentComplete: null,
     itemsRejected: 0,
     itemsNeedingEditorialCheck: 0,
     itemsVerified: 0,
@@ -1103,47 +1234,93 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
     failures: 0,
     dryRun,
     errorSummary: [],
+    attemptedItems: [],
+    usage: createEmptyUsage(),
   };
   const store = getStore(env, deps);
+  const updateRun = async (patch = {}) => {
+    Object.assign(summary, patch, { updatedAt: new Date().toISOString() });
+    if (patch.phase || patch.state || patch.currentCandidateId !== undefined || patch.completedItems !== undefined) summary.heartbeatAt = new Date().toISOString();
+    await store.saveRun(summary, { dryRun }).catch(() => {});
+  };
   try {
     if (!config.automationEnabled && !dryRun) throw new Error('NEWS_BRIEF_AUTOMATION_ENABLED is not enabled');
+    if (requested && store.getRun && await store.getRun(runId)) return { ok: false, status: 409, error: 'runId_already_exists', runId };
+    const activeRun = store.activeRun ? await store.activeRun() : null;
+    if (activeRunIsRecent(activeRun, startedAt)) {
+      return { ok: false, status: 409, error: 'active_run_exists', activeRunId: activeRun.runId, state: activeRun.state, phase: activeRun.phase };
+    }
+    await store.saveRun(summary, { dryRun, createOnly: !!requested });
     const tracker = await fetchNewsTracker(config, deps);
-    summary.itemsReceived = tracker.items.length;
+    await updateRun({ state: 'running', phase: 'sorting_items', itemsReceived: tracker.items.length });
     const awaiting = [];
     const seenClusters = new Set();
-    let attemptedItems = 0;
+    const selectedItems = [];
 
     for (const item of tracker.items) {
+      if (selectedItems.length >= config.maxItemsPerRun) break;
+      const fingerprint = createStoryFingerprint(item);
+      const cKey = clusterKey(item);
+      if (seenClusters.has(cKey) || await store.existsByFingerprint(fingerprint) || await store.isDeclinedSuppressed(cKey)) {
+        summary.itemsSkipped += 1;
+        continue;
+      }
+      seenClusters.add(cKey);
+      selectedItems.push(item);
+    }
+    await updateRun({
+      phase: 'selecting_candidates',
+      itemsSkipped: summary.itemsSkipped,
+      targetItems: selectedItems.length,
+      completedItems: 0,
+      percentComplete: selectedItems.length ? 0 : 100,
+    });
+
+    for (let i = 0; i < selectedItems.length; i += 1) {
+      const item = selectedItems[i];
       let processingStage = 'qualification';
+      let qualification = null;
+      let primaryDiscovery = null;
+      let candidateForAttempt = null;
+      const candidateUsage = createEmptyUsage();
+      const candidateDeps = {
+        ...deps,
+        recordAnthropicUsage: (usage) => {
+          addUsage(candidateUsage, usage);
+          addUsage(summary.usage, usage);
+          if (deps.recordAnthropicUsage) deps.recordAnthropicUsage(usage);
+        },
+      };
       try {
         const fingerprint = createStoryFingerprint(item);
-        const cKey = clusterKey(item);
-        if (seenClusters.has(cKey) || await store.existsByFingerprint(fingerprint) || await store.isDeclinedSuppressed(cKey)) {
-          summary.itemsSkipped += 1;
-          continue;
-        }
-        seenClusters.add(cKey);
-        if (attemptedItems >= config.maxItemsPerRun) break;
-        attemptedItems += 1;
+        await updateRun({ phase: 'qualifying', currentItemIndex: i + 1, currentCandidateId: `nt_${fingerprint}`, currentHeadline: item.headline });
         const deterministic = deterministicEligibility(item);
         if (!deterministic.eligible) {
           summary.itemsRejected += 1;
-          await store.saveCandidate(withCandidateMetadata({
+          const rejectedCandidate = withCandidateMetadata({
             ...candidateFromTrackerItem(item),
             candidateId: `nt_${fingerprint}`,
             status: 'rejected_by_filter',
             rejectionReasons: deterministic.reasons,
             dryRun,
-          }, null, { runId }), { dryRun, runId });
+            usage: candidateUsage,
+          }, null, { runId });
+          candidateForAttempt = rejectedCandidate;
+          await store.saveCandidate(rejectedCandidate, { dryRun, runId });
+          summary.completedItems += 1;
+          summary.attemptedItems.push(attemptedItemFrom(item, rejectedCandidate, candidateUsage, 'rejected_by_filter'));
+          await updateRun({ completedItems: summary.completedItems, percentComplete: progressPercent(summary.completedItems, summary.targetItems), itemsRejected: summary.itemsRejected, attemptedItems: summary.attemptedItems, usage: summary.usage });
           continue;
         }
         processingStage = 'qualification';
-        const qualification = normalizeQualificationResponse(await callClaudeJson(env, buildQualificationPrompt(item), 1400, deps));
+        qualification = normalizeQualificationResponse(await callClaudeJson(env, buildQualificationPrompt(item), 1400, candidateDeps));
         const qValid = validateQualification(qualification);
         if (!qValid.ok) {
           const err = new Error(`Invalid qualification JSON: ${qValid.errors.join(',')}`);
           err.qualificationDiagnostic = safeModelDiagnostic(qualification?.rawModelResponse || JSON.stringify(qualification || {}));
           err.failureStatus = 'qualification_failed';
+          err.failureStage = 'qualification';
+          err.failureCode = 'qualification_json_invalid';
           throw err;
         }
         const nextStatus = qualificationStatus(qualification, config.minScore);
@@ -1152,10 +1329,10 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
         let verification = null;
         let draft = null;
         let status = nextStatus;
-        let primaryDiscovery = null;
         if (nextStatus !== 'rejected_by_filter') {
           processingStage = 'primary_source_discovery';
-          primaryDiscovery = await discoverPrimarySources(item, qualification, env, deps, { runId });
+          await updateRun({ phase: 'primary_source_discovery' });
+          primaryDiscovery = await discoverPrimarySources(item, qualification, env, candidateDeps, { runId });
           if (primaryDiscovery.status === 'failed') {
             status = 'needs_editorial_check';
             if (nextStatus !== 'needs_editorial_check') summary.itemsNeedingEditorialCheck += 1;
@@ -1167,17 +1344,21 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
         if (nextStatus === 'verifying') {
           if (status === 'verifying') {
             processingStage = 'verification';
-            verification = await verifyCandidateSources(item, deps, primaryDiscovery);
+            await updateRun({ phase: 'verifying' });
+            verification = await verifyCandidateSources(item, candidateDeps, primaryDiscovery);
             if (!verification.ok) status = 'verification_failed';
             else {
               summary.itemsVerified += 1;
               processingStage = 'drafting';
+              await updateRun({ phase: 'drafting' });
               status = 'drafting';
-              draft = await callClaudeJson(env, buildDraftPrompt({ item, qualification, verification, primarySources: primaryDiscovery?.primarySources || [] }), 1800, deps);
+              draft = await callClaudeJson(env, buildDraftPrompt({ item, qualification, verification, primarySources: primaryDiscovery?.primarySources || [] }), 1800, candidateDeps);
               const dValid = validateDraft(draft);
               if (!dValid.ok) {
                 const err = new Error(`Invalid draft JSON: ${dValid.errors.join(',')}`);
                 err.failureStatus = 'drafting_failed';
+                err.failureStage = 'drafting_parse';
+                err.failureCode = 'drafting_json_invalid';
                 throw err;
               }
               status = 'awaiting_approval';
@@ -1185,28 +1366,43 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
             }
           }
         }
-        const candidateBase = { ...candidateFromTrackerItem(item, qualification, verification, draft), status, dryRun };
+        await updateRun({ phase: 'saving_results' });
+        const candidateBase = { ...candidateFromTrackerItem(item, qualification, verification, draft), status, dryRun, usage: candidateUsage };
         const candidate = withCandidateMetadata(primaryDiscovery ? applyPrimarySourceDiscovery(candidateBase, primaryDiscovery) : candidateBase, null, { runId });
+        candidateForAttempt = candidate;
         await store.saveCandidate(candidate, { dryRun, runId });
         await store.addActivity(candidate.candidateId, 'qualification', { status, score: qualification.overallScore }, { dryRun });
         if (primaryDiscovery) await store.addActivity(candidate.candidateId, 'primary_source_discovery', { status: primaryDiscovery.status, count: primaryDiscovery.primarySources.length }, { dryRun });
         if (status === 'awaiting_approval') awaiting.push(candidate);
+        summary.completedItems += 1;
+        summary.attemptedItems.push(attemptedItemFrom(item, candidate, candidateUsage, status));
+        await updateRun({ completedItems: summary.completedItems, percentComplete: progressPercent(summary.completedItems, summary.targetItems), attemptedItems: summary.attemptedItems, usage: summary.usage, itemsRejected: summary.itemsRejected, itemsNeedingEditorialCheck: summary.itemsNeedingEditorialCheck, itemsVerified: summary.itemsVerified, draftsGenerated: summary.draftsGenerated, failures: summary.failures });
       } catch (e) {
         summary.failures += 1;
+        const failure = createFailureMetadata(e, processingStage, runId);
         summary.errorSummary.push(stripEmptyOptionalFields({
           headline: item.headline,
           error: e.message,
+          failureStage: failure.failureStage,
+          failureCode: failure.failureCode,
           qualificationDiagnostic: e.qualificationDiagnostic || e.modelDiagnostic,
         }));
         const failedStatus = e.failureStatus || `${processingStage}_failed`;
-        const failedCandidate = withCandidateMetadata({
-          ...candidateFromTrackerItem(item),
+        const failedBase = {
+          ...candidateFromTrackerItem(item, qualification),
           status: failedStatus,
           dryRun,
           lastError: e.message,
           qualificationDiagnostic: e.qualificationDiagnostic || e.modelDiagnostic || '',
-        }, null, { runId });
+          usage: candidateUsage,
+          ...failure,
+        };
+        const failedCandidate = withCandidateMetadata(primaryDiscovery ? applyPrimarySourceDiscovery(failedBase, primaryDiscovery) : failedBase, null, { runId });
+        candidateForAttempt = failedCandidate;
         await store.saveCandidate(failedCandidate, { dryRun, runId }).catch(() => {});
+        summary.completedItems += 1;
+        summary.attemptedItems.push(attemptedItemFrom(item, candidateForAttempt, candidateUsage, 'failed', failure));
+        await updateRun({ completedItems: summary.completedItems, percentComplete: progressPercent(summary.completedItems, summary.targetItems), attemptedItems: summary.attemptedItems, failures: summary.failures, errorSummary: summary.errorSummary, usage: summary.usage });
       }
     }
 
@@ -1215,10 +1411,18 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
     }
   } catch (e) {
     summary.failures += 1;
+    summary.state = 'failed';
     summary.errorSummary.push({ run: e.message });
   } finally {
+    summary.phase = 'completed';
+    if (summary.state !== 'failed') summary.state = summary.failures ? 'completed_with_failures' : 'completed';
+    summary.completedItems = Number(summary.completedItems || 0);
+    summary.targetItems = summary.targetItems === null ? summary.completedItems : summary.targetItems;
+    summary.percentComplete = 100;
     summary.endTime = new Date().toISOString();
     summary.duration = Date.now() - startedAt;
+    summary.updatedAt = summary.endTime;
+    summary.heartbeatAt = summary.endTime;
     await store.saveRun(summary, { dryRun }).catch(() => {});
   }
   return { ok: summary.failures === 0, summary };
@@ -1448,12 +1652,18 @@ export async function createWebflowNewsDraft(draft, env, deps = {}) {
   return data;
 }
 
-async function getAutomationStatus(env, deps = {}) {
+async function getAutomationStatus(env, deps = {}, runId = '') {
   const store = getStore(env, deps);
+  if (runId) {
+    const run = await store.getRun(runId);
+    return { ok: !!run, run: run || null };
+  }
   return {
     ok: true,
     config: redactConfig(getAutomationConfig(env)),
     counts: await store.statusCounts(),
+    activeRun: store.activeRun ? await store.activeRun() : null,
+    latestCompletedRun: store.latestCompletedRun ? await store.latestCompletedRun() : null,
     latestRuns: await store.latestRuns(10),
   };
 }
@@ -1572,8 +1782,15 @@ function createFirestoreStore(env, deps = {}) {
         body: JSON.stringify({ fields: toFirestoreFields({ type, ...data, createdAt: new Date().toISOString() }) }),
       });
     },
-    async saveRun(summary) {
-      await firestoreFetch(`${root}/news_brief_automation_runs/${encodeURIComponent(summary.runId)}`, env, fetchImpl, {
+    async getRun(id) {
+      const res = await firestoreFetch(`${root}/news_brief_automation_runs/${encodeURIComponent(id)}`, env, fetchImpl);
+      if (res.status === 404) return null;
+      return fromFirestoreDoc(await res.json());
+    },
+    async saveRun(summary, options = {}) {
+      const target = new URL(`${root}/news_brief_automation_runs/${encodeURIComponent(summary.runId)}`);
+      if (options.createOnly) target.searchParams.set('currentDocument.exists', 'false');
+      await firestoreFetch(target.toString(), env, fetchImpl, {
         method: 'PATCH',
         body: JSON.stringify({ fields: toFirestoreFields(summary) }),
       });
@@ -1633,6 +1850,18 @@ function createFirestoreStore(env, deps = {}) {
       const res = await firestoreFetch(`${root}:runQuery`, env, fetchImpl, { method: 'POST', body: JSON.stringify(body) });
       const rows = await res.json();
       return rows.filter((r) => r.document).map((r) => fromFirestoreDoc(r.document));
+    },
+    async activeRun() {
+      const body = structuredQuery('news_brief_automation_runs', [{ field: 'state', op: 'IN', value: ['preparing', 'running'] }], 10);
+      const res = await firestoreFetch(`${root}:runQuery`, env, fetchImpl, { method: 'POST', body: JSON.stringify(body) });
+      const rows = await res.json();
+      const runs = rows.filter((r) => r.document).map((r) => fromFirestoreDoc(r.document))
+        .sort((a, b) => Date.parse(b.heartbeatAt || b.updatedAt || b.startTime || 0) - Date.parse(a.heartbeatAt || a.updatedAt || a.startTime || 0));
+      return runs.find((run) => activeRunIsRecent(run)) || null;
+    },
+    async latestCompletedRun() {
+      const runs = await this.latestRuns(10);
+      return runs.find((run) => ['completed', 'completed_with_failures', 'failed'].includes(run.state)) || null;
     },
   };
 }
