@@ -161,15 +161,21 @@ function completedRun(overrides = {}) {
 }
 
 test('dry run disables immediately, sends generated requestRunId and blocks double-clicks', async () => {
+  let statusCalls = 0;
   const { ctx, elements, requests } = loadDashboardHarness({
     workerFetch: async (path, options) => {
       if (path.startsWith('/automation/news-briefs/status?runId=')) {
-        return { ok: true, json: async () => ({ ok: true, run: activeRun() }) };
+        statusCalls += 1;
+        return { ok: true, json: async () => ({ ok: true, run: statusCalls === 1 ? activeRun() : completedRun() }) };
+      }
+      if (path === '/automation/news-briefs/status') {
+        return { ok: true, json: async () => ({ ok: true, activeRun: null, latestCompletedRun: completedRun() }) };
       }
       return { ok: true, json: async () => ({ ok: true, summary: completedRun() }) };
     },
   });
   await Promise.all([ctx.runAutomatedNewsBriefDryRun(), ctx.runAutomatedNewsBriefDryRun()]);
+  await ctx.confirmAutomatedNewsBriefNoActiveLock();
   const runRequests = requests.filter((request) => request.path === '/automation/news-briefs/run');
   assert.equal(runRequests.length, 1);
   const body = JSON.parse(runRequests[0].options.body);
@@ -191,6 +197,21 @@ test('active progress resumes after reload and renders determinate percentage', 
   assert.equal(elements.get('automated-news-brief-dry-run-btn').disabled, true);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /40% complete/);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /Newest story first/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Last update/);
+});
+
+test('elapsed time updates locally while running', () => {
+  const { ctx, elements } = loadDashboardHarness();
+  ctx.renderAutomatedNewsBriefProgress(activeRun({
+    startTime: new Date(Date.now() - 5000).toISOString(),
+    updatedAt: new Date(Date.now() - 4000).toISOString(),
+    heartbeatAt: new Date(Date.now() - 4000).toISOString(),
+  }));
+  const first = elements.get('automated-news-brief-progress').innerHTML;
+  assert.match(first, /Elapsed:/);
+  assert.equal(typeof ctx.lastInterval, 'function');
+  ctx.lastInterval();
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Last update/);
 });
 
 test('progress is indeterminate before targetItems and failed candidates still advance progress', () => {
@@ -212,6 +233,68 @@ test('completion reaches 100, reloads candidates and opens Latest run', async ()
   assert.equal(ctx.loadCount, 1);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /100% complete/);
   assert.match(elements.get('automated-news-brief-detail').innerHTML, /Latest run/);
+});
+
+test('recovered failed run renders stopped state, actual progress and failure metadata', async () => {
+  const { ctx, elements } = loadDashboardHarness();
+  const failed = completedRun({
+    state: 'failed',
+    phase: 'primary_source_discovery',
+    completedItems: 3,
+    targetItems: 5,
+    percentComplete: 60,
+    failureStage: 'primary_source_discovery',
+    failureCode: 'stale_run_timeout',
+    failureMessage: 'Run heartbeat became stale before finalisation.',
+    usage: { anthropicCalls: 3, inputTokens: 72931, outputTokens: 3279, webSearchRequests: 7, models: ['claude-test'] },
+  });
+  ctx.handleAutomatedNewsBriefRunStatus(failed);
+  await new Promise((resolve) => setImmediate(resolve));
+  const html = elements.get('automated-news-brief-progress').innerHTML;
+  assert.match(html, /Dry run stopped/);
+  assert.match(html, /Stopped after 3 of 5 candidates/);
+  assert.match(html, /60% complete/);
+  assert.match(html, /Failure stage: primary_source_discovery/);
+  assert.match(html, /stale_run_timeout/);
+  assert.match(html, /Input tokens/);
+  assert.doesNotMatch(html, /Assessing candidate/);
+});
+
+test('POST failure checks server status and does not show failed while run is still running', async () => {
+  const { ctx, elements } = loadDashboardHarness({
+    workerFetch: async (path) => {
+      if (path === '/automation/news-briefs/run') throw new Error('network interrupted');
+      if (path.startsWith('/automation/news-briefs/status?runId=')) {
+        return { ok: true, json: async () => ({ ok: true, run: activeRun({ state: 'running', phase: 'drafting' }) }) };
+      }
+      return { ok: true, json: async () => ({ ok: true, activeRun: activeRun({ state: 'running' }) }) };
+    },
+  });
+  await ctx.runAutomatedNewsBriefDryRun();
+  assert.match(elements.get('automated-news-briefs-status').textContent, /Connection interrupted\. Checking run status/);
+  assert.equal(elements.get('automated-news-brief-dry-run-btn').disabled, true);
+  assert.doesNotMatch(elements.get('automated-news-briefs-status').textContent, /Dry run failed/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Drafting News Brief|Assessing candidate/);
+});
+
+test('Dry run remains disabled while a server lock exists and re-enables after release', async () => {
+  let activeLock = true;
+  const { ctx, elements } = loadDashboardHarness({
+    workerFetch: async (path) => {
+      if (path === '/automation/news-briefs/status') {
+        return { ok: true, json: async () => ({ ok: true, activeRun: activeLock ? activeRun({ runId: 'run_lock_070707070707070707070707' }) : null }) };
+      }
+      if (path.startsWith('/automation/news-briefs/status?runId=')) {
+        return { ok: true, json: async () => ({ ok: true, run: activeLock ? activeRun({ runId: 'run_lock_070707070707070707070707' }) : completedRun() }) };
+      }
+      return { ok: true, json: async () => ({ ok: true, run: completedRun() }) };
+    },
+  });
+  await ctx.confirmAutomatedNewsBriefNoActiveLock();
+  assert.equal(elements.get('automated-news-brief-dry-run-btn').disabled, true);
+  activeLock = false;
+  await ctx.confirmAutomatedNewsBriefNoActiveLock();
+  assert.equal(elements.get('automated-news-brief-dry-run-btn').disabled, false);
 });
 
 test('latest run renders five attempted items in newest-first order with token totals', () => {

@@ -5709,9 +5709,13 @@ var automatedNewsBriefFilter = 'awaiting_approval';
 var automatedNewsBriefItems = [];
 var automatedNewsBriefSelectedId = '';
 var automatedNewsBriefRunPollingTimer = null;
+var automatedNewsBriefElapsedTimer = null;
 var automatedNewsBriefActiveRunId = '';
 var automatedNewsBriefRunInFlight = false;
 var automatedNewsBriefLatestRun = null;
+var automatedNewsBriefRenderedRun = null;
+var automatedNewsBriefRunPollDelayMs = 2000;
+var automatedNewsBriefRunPollErrors = 0;
 var AUTOMATED_NEWS_BRIEF_TABS = [
   ['latest_run','Latest run'],
   ['awaiting_approval','Awaiting approval'],
@@ -5864,7 +5868,9 @@ function formatAutomatedNewsBriefDate(value) {
 
 function automatedNewsBriefElapsed(run) {
   var start = automatedNewsBriefDateValue(run && run.startTime);
-  var end = automatedNewsBriefDateValue(run && (run.endTime || run.updatedAt)) || new Date();
+  var end = automatedNewsBriefRunIsActive(run)
+    ? new Date()
+    : automatedNewsBriefDateValue(run && (run.endTime || run.updatedAt)) || new Date();
   if (!start) return 'Elapsed time unavailable';
   var total = Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000));
   var mins = Math.floor(total / 60);
@@ -5945,6 +5951,22 @@ function automatedNewsBriefRunIsActive(run) {
   return run && (run.state === 'preparing' || run.state === 'running');
 }
 
+function stopAutomatedNewsBriefElapsedTimer() {
+  if (automatedNewsBriefElapsedTimer) clearInterval(automatedNewsBriefElapsedTimer);
+  automatedNewsBriefElapsedTimer = null;
+}
+
+function startAutomatedNewsBriefElapsedTimer() {
+  stopAutomatedNewsBriefElapsedTimer();
+  automatedNewsBriefElapsedTimer = setInterval(function() {
+    if (automatedNewsBriefRenderedRun && automatedNewsBriefRunIsActive(automatedNewsBriefRenderedRun)) {
+      renderAutomatedNewsBriefProgress(automatedNewsBriefRenderedRun);
+    } else {
+      stopAutomatedNewsBriefElapsedTimer();
+    }
+  }, 1000);
+}
+
 function renderAutomatedNewsBriefProgress(run, message) {
   var el = document.getElementById('automated-news-brief-progress');
   if (!el) return;
@@ -5958,17 +5980,29 @@ function renderAutomatedNewsBriefProgress(run, message) {
     el.innerHTML = '<div class="hint">'+escapeHtml(message || 'Working...')+'</div>';
     return;
   }
+  automatedNewsBriefRenderedRun = run;
   var targetKnown = run.targetItems !== null && run.targetItems !== undefined;
   var percent = targetKnown ? Math.max(0, Math.min(100, Number(run.percentComplete || 0))) : null;
-  var phase = automatedNewsBriefPhaseLabel(run.phase);
+  var terminalFailed = run.state === 'failed';
+  var phase = terminalFailed ? 'Dry run stopped' : automatedNewsBriefPhaseLabel(run.phase);
   var headline = run.currentHeadline ? '<div class="hint" style="margin-top:6px">'+escapeHtml(run.currentHeadline)+'</div>' : '';
+  var lastUpdate = run.heartbeatAt || run.updatedAt || '';
+  var unprocessed = targetKnown ? Math.max(0, Number(run.targetItems || 0) - Number(run.completedItems || 0)) : null;
   var bar = targetKnown
     ? '<div style="height:10px;background:var(--gray);border-radius:999px;overflow:hidden;margin-top:10px"><div style="height:100%;width:'+escapeAttr(String(percent))+'%;background:var(--y);transition:width .25s"></div></div>'
     : '<div style="height:10px;background:var(--gray);border-radius:999px;overflow:hidden;margin-top:10px"><div style="height:100%;width:38%;background:var(--y);border-radius:999px;animation:newsBriefIndeterminate 1.2s ease-in-out infinite"></div></div>';
   var countLine = targetKnown
-    ? escapeHtml(String(run.completedItems || 0)) + ' / ' + escapeHtml(String(run.targetItems || 0)) + ' candidates · ' + escapeHtml(String(percent)) + '% complete'
+    ? (terminalFailed
+      ? 'Stopped after ' + escapeHtml(String(run.completedItems || 0)) + ' of ' + escapeHtml(String(run.targetItems || 0)) + ' candidates · ' + escapeHtml(String(percent)) + '% complete'
+      : escapeHtml(String(run.completedItems || 0)) + ' / ' + escapeHtml(String(run.targetItems || 0)) + ' candidates · ' + escapeHtml(String(percent)) + '% complete')
     : 'Working. Progress percentage will appear after candidate selection.';
-  el.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><strong>'+escapeHtml(phase)+'</strong><div class="hint" style="margin-top:4px">'+countLine+'</div>'+headline+'</div><div class="hint">Elapsed: '+escapeHtml(automatedNewsBriefElapsed(run))+'</div></div>' + bar;
+  var failure = terminalFailed
+    ? '<div class="hint" style="margin-top:8px;color:var(--red)">Failure stage: '+escapeHtml(run.failureStage || run.phase || 'unknown')+'<br>Reason: '+escapeHtml(run.failureMessage || (run.errorSummary && run.errorSummary[0] && (run.errorSummary[0].run || run.errorSummary[0].error)) || 'Run stopped before finalisation.')+'</div>'
+      + '<details style="margin-top:8px"><summary style="cursor:pointer">Technical details</summary><div class="hint">Failure code: '+escapeHtml(run.failureCode || 'unknown')+'<br>Unprocessed candidates: '+escapeHtml(String(unprocessed === null ? 'unknown' : unprocessed))+'</div></details>'
+    : '';
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><strong>'+escapeHtml(phase)+'</strong><div class="hint" style="margin-top:4px">'+countLine+'</div>'+headline+failure+'</div><div class="hint">Elapsed: '+escapeHtml(automatedNewsBriefElapsed(run))+'<br>Last update: '+escapeHtml(formatAutomatedNewsBriefDate(lastUpdate))+'</div></div>' + bar + (terminalFailed ? '<div style="margin-top:10px"><strong>Accumulated usage</strong>'+automatedNewsBriefUsageHtml(run.usage)+'</div>' : '');
+  if (automatedNewsBriefRunIsActive(run)) startAutomatedNewsBriefElapsedTimer();
+  else stopAutomatedNewsBriefElapsedTimer();
 }
 
 function automatedNewsBriefRunSummaryHtml(run) {
@@ -6571,6 +6605,28 @@ function fetchAutomatedNewsBriefRunStatus(runId) {
 function stopAutomatedNewsBriefRunPolling() {
   if (automatedNewsBriefRunPollingTimer) clearInterval(automatedNewsBriefRunPollingTimer);
   automatedNewsBriefRunPollingTimer = null;
+  automatedNewsBriefRunPollDelayMs = 2000;
+  automatedNewsBriefRunPollErrors = 0;
+}
+
+function confirmAutomatedNewsBriefNoActiveLock() {
+  return fetchAutomatedNewsBriefRunStatus('').then(function(res) {
+    var active = res.ok && res.data ? res.data.activeRun : null;
+    if (active && automatedNewsBriefRunIsActive(active)) {
+      automatedNewsBriefActiveRunId = active.runId || automatedNewsBriefActiveRunId;
+      automatedNewsBriefRunInFlight = true;
+      setAutomatedNewsBriefDryRunButton(true, 'Running...');
+      pollAutomatedNewsBriefRun(automatedNewsBriefActiveRunId);
+      return false;
+    }
+    automatedNewsBriefRunInFlight = false;
+    automatedNewsBriefActiveRunId = '';
+    setAutomatedNewsBriefDryRunButton(false, 'Dry run');
+    return true;
+  }).catch(function() {
+    setAutomatedNewsBriefDryRunButton(true, 'Checking...');
+    return false;
+  });
 }
 
 function handleAutomatedNewsBriefRunStatus(run) {
@@ -6584,14 +6640,12 @@ function handleAutomatedNewsBriefRunStatus(run) {
     return;
   }
   stopAutomatedNewsBriefRunPolling();
-  automatedNewsBriefActiveRunId = '';
-  automatedNewsBriefRunInFlight = false;
-  setAutomatedNewsBriefDryRunButton(false, 'Dry run');
-  renderAutomatedNewsBriefProgress(Object.assign({}, run, { percentComplete: 100 }));
+  renderAutomatedNewsBriefProgress(run);
   loadAutomatedNewsBriefs(true).then(function() {
     automatedNewsBriefFilter = 'latest_run';
     renderAutomatedNewsBriefTabs();
     renderAutomatedNewsBriefList();
+    return confirmAutomatedNewsBriefNoActiveLock();
   });
 }
 
@@ -6602,10 +6656,18 @@ function pollAutomatedNewsBriefRun(runId) {
   var tick = function() {
     return fetchAutomatedNewsBriefRunStatus(runId).then(function(res) {
       if (!res.ok || !res.data.run) throw new Error((res.data && res.data.error) || 'Run status unavailable');
+      automatedNewsBriefRunPollErrors = 0;
+      automatedNewsBriefRunPollDelayMs = 2000;
       handleAutomatedNewsBriefRunStatus(res.data.run);
     }).catch(function(err) {
       var status = document.getElementById('automated-news-briefs-status');
-      if (status) status.textContent = 'Could not refresh run progress: ' + err.message;
+      automatedNewsBriefRunPollErrors += 1;
+      automatedNewsBriefRunPollDelayMs = Math.min(10000, 2000 + automatedNewsBriefRunPollErrors * 2000);
+      if (status) status.textContent = 'Connection interrupted. Checking run status...';
+      if (automatedNewsBriefRunPollingTimer) {
+        clearInterval(automatedNewsBriefRunPollingTimer);
+        automatedNewsBriefRunPollingTimer = setInterval(tick, automatedNewsBriefRunPollDelayMs);
+      }
     });
   };
   stopAutomatedNewsBriefRunPolling();
@@ -6625,6 +6687,8 @@ function loadAutomatedNewsBriefStatusAndResume() {
       renderAutomatedNewsBriefProgress(active);
       pollAutomatedNewsBriefRun(active.runId);
     } else {
+      automatedNewsBriefActiveRunId = '';
+      automatedNewsBriefRunInFlight = false;
       setAutomatedNewsBriefDryRunButton(false, 'Dry run');
       if (latest) renderAutomatedNewsBriefProgress(latest);
     }
@@ -6668,11 +6732,17 @@ function runAutomatedNewsBriefDryRun() {
       throw new Error((res.data && res.data.error) || 'Dry run failed');
     })
     .catch(function(err){
-      stopAutomatedNewsBriefRunPolling();
-      automatedNewsBriefRunInFlight = false;
-      automatedNewsBriefActiveRunId = '';
-      setAutomatedNewsBriefDryRunButton(false, 'Dry run');
-      if (status) status.textContent = 'Dry run failed: ' + err.message;
+      if (status) status.textContent = 'Connection interrupted. Checking run status...';
+      setAutomatedNewsBriefDryRunButton(true, 'Checking...');
+      return fetchAutomatedNewsBriefRunStatus(requestRunId).then(function(res) {
+        if (res.ok && res.data && res.data.run) {
+          handleAutomatedNewsBriefRunStatus(res.data.run);
+          return res.data.run;
+        }
+        return pollAutomatedNewsBriefRun(requestRunId);
+      }).catch(function() {
+        return pollAutomatedNewsBriefRun(requestRunId);
+      });
     });
 }
 
