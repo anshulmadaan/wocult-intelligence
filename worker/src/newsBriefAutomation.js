@@ -84,6 +84,10 @@ const PRIMARY_SOURCE_RELATIONSHIPS = ['based_on', 'reports_findings_from', 'anno
 const PRIMARY_SOURCE_DISCOVERY_METHODS = ['directly_linked_by_article', 'article_text_reference', 'official_site_search', 'web_search', 'document_title_search', 'organisation_search', 'statistic_match', 'manual_staff_entry'];
 const PRIMARY_SOURCE_DISCOVERY_STATUSES = ['not_required', 'pending', 'found', 'multiple_found', 'not_found', 'ambiguous', 'failed'];
 const PRIMARY_SOURCE_FAILURE_CODES = ['primary_source_not_found', 'primary_source_ambiguous', 'primary_source_url_invalid', 'primary_source_unreachable', 'primary_source_content_mismatch', 'primary_source_verification_failed'];
+const WEBFLOW_NEWS_COLLECTION_ID = '6a4d6ad32871d46ed1edc6a4';
+const WOCULT_HEADLINE_EXACT_THRESHOLD = 0.92;
+const WOCULT_HEADLINE_HIGH_THRESHOLD = 0.72;
+const WOCULT_HEADLINE_POSSIBLE_THRESHOLD = 0.5;
 
 export function getAutomationConfig(env = {}) {
   return {
@@ -126,6 +130,8 @@ export function normalizeNewsTrackerItem(item = {}, index = 0) {
     owner: clean(item.owner || ''),
     publishedLink: clean(item.publishedLink || item.wocultPublishedLink || ''),
     imageUrl: clean(item.imageUrl || item.image || ''),
+    primarySourceUrl: clean(item.primarySourceUrl || item.primarySourceURL || item['primary-source-url'] || ''),
+    primarySourceUrls: Array.isArray(item.primarySourceUrls) ? item.primarySourceUrls.map(clean).filter(Boolean) : csv(item.primarySourceUrls || item['primary-source-urls'] || ''),
     emailSubject: clean(item.emailSubject || ''),
     parsedFrom: clean(item.parsedFrom || ''),
     raw: item,
@@ -1157,7 +1163,7 @@ function createFailureMetadata(error, stage, runId) {
 }
 
 function normalizeFailureStage(stage) {
-  const allowed = new Set(['qualification', 'primary_source_discovery', 'primary_source_fetch', 'primary_source_verification', 'source_fetch', 'verification', 'verification_parse', 'drafting', 'drafting_parse', 'firestore_write', 'webflow', 'unknown']);
+  const allowed = new Set(['wocult_duplicate_check', 'qualification', 'primary_source_discovery', 'primary_source_fetch', 'primary_source_verification', 'source_fetch', 'verification', 'verification_parse', 'drafting', 'drafting_parse', 'firestore_write', 'webflow', 'unknown']);
   return allowed.has(stage) ? stage : stage === 'drafting_failed' ? 'drafting_parse' : stage === 'qualification_failed' ? 'qualification' : 'unknown';
 }
 
@@ -1169,6 +1175,7 @@ function failureCodeForError(error, stage) {
   if (stage === 'drafting_parse') return 'drafting_json_invalid';
   if (stage === 'verification_parse') return 'verification_json_invalid';
   if (stage === 'firestore_write') return 'firestore_write_failed';
+  if (stage === 'wocult_duplicate_check') return error?.failureCode || 'webflow_news_duplicate_index_failed';
   if (stage === 'primary_source_discovery') return error?.failureCode || 'primary_source_verification_failed';
   if (message.includes('anthropic')) return 'anthropic_api_error';
   return 'unknown_processing_error';
@@ -1179,10 +1186,229 @@ function retryableFailure(stage, code) {
 }
 
 function lastSuccessfulStageBefore(stage) {
+  if (stage === 'wocult_duplicate_check') return 'sorting_items';
   if (['primary_source_discovery', 'primary_source_fetch', 'primary_source_verification'].includes(stage)) return 'qualification';
   if (['verification', 'verification_parse', 'source_fetch'].includes(stage)) return 'primary_source_discovery';
   if (['drafting', 'drafting_parse'].includes(stage)) return 'verification';
   return '';
+}
+
+export function normalizeDuplicateUrl(url = '') {
+  if (!url) return '';
+  try {
+    const u = new URL(String(url).trim());
+    u.hash = '';
+    u.hostname = u.hostname.toLowerCase().replace(/^www\./, '');
+    if ((u.protocol === 'https:' && u.port === '443') || (u.protocol === 'http:' && u.port === '80')) u.port = '';
+    u.pathname = u.pathname
+      .replace(/\/amp\/?$/i, '')
+      .replace(/\/amp(?=\/)/i, '')
+      .replace(/\/+$/g, '');
+    const tracking = new Set(['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'fbclid', 'mc_cid', 'mc_eid']);
+    const params = [...u.searchParams.entries()].filter(([key]) => !tracking.has(key.toLowerCase())).sort(([a], [b]) => a.localeCompare(b));
+    u.search = '';
+    for (const [key, value] of params) u.searchParams.append(key, value);
+    return u.toString().replace(/\/$/g, '');
+  } catch {
+    return '';
+  }
+}
+
+function normalizeHeadlineText(value = '') {
+  return String(value || '').toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9%₹$.\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function headlineFromSlug(slug = '') {
+  return normalizeHeadlineText(String(slug || '').replace(/-/g, ' '));
+}
+
+function tokenSet(value = '') {
+  const stop = new Set(['the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'over', 'under', 'after', 'before', 'news', 'india', 'indian', 'workers', 'workforce', 'employees']);
+  return new Set(normalizeHeadlineText(value).split(/\s+/).filter((t) => t.length > 2 && !stop.has(t)));
+}
+
+function jaccard(a, b) {
+  const left = tokenSet(a);
+  const right = tokenSet(b);
+  if (!left.size || !right.size) return 0;
+  const intersection = [...left].filter((t) => right.has(t)).length;
+  return intersection / new Set([...left, ...right]).size;
+}
+
+function factSignalsFromText(...parts) {
+  const text = parts.filter(Boolean).join(' ');
+  const signals = new Set();
+  for (const m of text.matchAll(/\b(?:\d+(?:\.\d+)?%|₹\s?\d+(?:\.\d+)?\s?(?:crore|lakh|million|billion)?|\$\s?\d+(?:\.\d+)?\s?(?:million|billion)?|\d{4}|\d+(?:,\d{3})+|\d+(?:\.\d+)?)\b/gi)) signals.add(m[0].toLowerCase().replace(/\s+/g, ''));
+  for (const m of text.matchAll(/\b[A-Z][A-Za-z&.-]*(?:\s+[A-Z][A-Za-z&.-]*){0,4}\b/g)) {
+    const phrase = m[0].trim();
+    if (phrase.length > 3) signals.add(phrase.toLowerCase());
+  }
+  for (const m of text.matchAll(/\b[A-Z]{2,}\b/g)) signals.add(m[0].toLowerCase());
+  return [...signals].slice(0, 40);
+}
+
+function itemFieldData(item = {}) {
+  return item.fieldData || item.fieldDataDraft || item.fields || item || {};
+}
+
+function webflowItemState(item = {}) {
+  return item.isDraft || item.draft ? 'draft' : 'published';
+}
+
+function wocultUrlForItem(item = {}, fields = {}) {
+  const slug = fields.slug || item.slug || '';
+  return slug ? `https://www.wocult.com/news/${slug}` : '';
+}
+
+function primaryUrlsFromFields(fields = {}) {
+  return [
+    fields['primary-source-url'],
+    fields.primarySourceUrl,
+    fields['primary-source-urls'],
+    fields.primarySourceUrls,
+  ].flatMap((value) => Array.isArray(value) ? value : String(value || '').split(/[\s,]+/)).filter(isUsableUrl);
+}
+
+export function buildWocultDuplicateIndex(items = []) {
+  return items.filter((item) => !item.isArchived).map((item) => {
+    const fields = itemFieldData(item);
+    const headline = clean(fields.name || fields.title || item.name || '');
+    const slug = clean(fields.slug || item.slug || '');
+    const articleSourceUrl = clean(fields['source-url'] || fields.sourceUrl || fields.url || '');
+    const primarySourceUrls = primaryUrlsFromFields(fields);
+    const normalisedHeadline = normalizeHeadlineText(headline);
+    return stripEmptyOptionalFields({
+      webflowItemId: item.id || item._id || '',
+      headline,
+      slug,
+      wocultUrl: wocultUrlForItem(item, fields),
+      isDraft: !!(item.isDraft || item.draft),
+      lastPublished: item.lastPublished || item.publishedOn || '',
+      lastUpdated: item.lastUpdated || item.updatedOn || item.updatedAt || '',
+      articleSourceUrl,
+      primarySourceUrls,
+      normalisedArticleSourceUrl: normalizeDuplicateUrl(articleSourceUrl),
+      normalisedPrimarySourceUrls: primarySourceUrls.map(normalizeDuplicateUrl).filter(Boolean),
+      normalisedHeadline,
+      headlineFingerprint: stableHash(normalisedHeadline),
+      slugHeadline: headlineFromSlug(slug),
+      factSignals: factSignalsFromText(headline, fields.standfirst, fields['seo-description'], fields.body),
+    });
+  });
+}
+
+function candidatePrimaryUrls(item = {}) {
+  return [item.primarySourceUrl, item.primarySourceUrls, item.supportingSourceUrls]
+    .flatMap((value) => Array.isArray(value) ? value : String(value || '').split(/[\s,]+/))
+    .filter(isUsableUrl);
+}
+
+function duplicateResultFor(item, match, status, confidence, matchReason, signals = []) {
+  return {
+    checked: true,
+    checkedAt: new Date().toISOString(),
+    status,
+    confidence,
+    matchReason,
+    matchedWebflowItemId: match?.webflowItemId || '',
+    matchedWocultHeadline: match?.headline || '',
+    matchedWocultUrl: match?.wocultUrl || '',
+    matchedItemState: match?.isDraft ? 'draft' : match ? 'published' : '',
+    signals,
+    anthropicCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    webSearchRequests: 0,
+  };
+}
+
+export function checkWocultDuplicate(item = {}, index = []) {
+  const sourceUrl = normalizeDuplicateUrl(item.sourceUrl || item.link || item.url || '');
+  if (sourceUrl) {
+    const exact = index.find((entry) => entry.normalisedArticleSourceUrl && entry.normalisedArticleSourceUrl === sourceUrl);
+    if (exact) return duplicateResultFor(item, exact, exact.isDraft ? 'already_in_webflow_draft' : 'already_published_on_wocult', 'exact', 'article_source_url_exact', ['article_source_url']);
+  }
+  const primaryUrls = candidatePrimaryUrls(item).map(normalizeDuplicateUrl).filter(Boolean);
+  for (const url of primaryUrls) {
+    const exact = index.find((entry) => (entry.normalisedPrimarySourceUrls || []).includes(url));
+    if (exact) return duplicateResultFor(item, exact, exact.isDraft ? 'already_in_webflow_draft' : 'already_published_on_wocult', 'exact', 'primary_source_url_exact', ['primary_source_url']);
+  }
+  const headline = normalizeHeadlineText(item.headline || item.title || '');
+  if (headline) {
+    const exactHeadline = index.find((entry) => entry.normalisedHeadline && entry.normalisedHeadline === headline);
+    if (exactHeadline) return duplicateResultFor(item, exactHeadline, exactHeadline.isDraft ? 'already_in_webflow_draft' : 'already_published_on_wocult', 'exact', 'headline_exact', ['headline']);
+    const exactSlug = index.find((entry) => entry.slugHeadline && entry.slugHeadline === headline);
+    if (exactSlug) return duplicateResultFor(item, exactSlug, exactSlug.isDraft ? 'already_in_webflow_draft' : 'already_published_on_wocult', 'exact', 'slug_exact', ['slug']);
+  }
+  const candidateSignals = factSignalsFromText(item.headline, item.whyItMatters, item.verification);
+  let best = null;
+  for (const entry of index) {
+    const headlineSimilarity = Math.max(jaccard(headline, entry.normalisedHeadline), jaccard(headline, entry.slugHeadline));
+    const sharedSignals = candidateSignals.filter((s) => (entry.factSignals || []).includes(s));
+    const strongSignals = sharedSignals.filter((s) => /[%₹$\d]|[a-z]{4,}\s+[a-z]{4,}/i.test(s));
+    const independentSignals = (headlineSimilarity >= WOCULT_HEADLINE_HIGH_THRESHOLD ? 1 : 0) + (strongSignals.length ? 1 : 0);
+    const score = headlineSimilarity + Math.min(0.4, strongSignals.length * 0.08);
+    if (!best || score > best.score) best = { entry, headlineSimilarity, sharedSignals: strongSignals, independentSignals, score };
+  }
+  if (best?.independentSignals >= 2 && best.headlineSimilarity >= WOCULT_HEADLINE_HIGH_THRESHOLD) {
+    return duplicateResultFor(item, best.entry, best.entry.isDraft ? 'already_in_webflow_draft' : 'already_published_on_wocult', 'high', 'story_fingerprint_high', best.sharedSignals);
+  }
+  if (best && best.headlineSimilarity >= WOCULT_HEADLINE_POSSIBLE_THRESHOLD && best.sharedSignals.length) {
+    return duplicateResultFor(item, best.entry, 'possible_wocult_duplicate', 'possible', 'story_fingerprint_possible', best.sharedSignals);
+  }
+  return duplicateResultFor(item, null, 'no_wocult_match', 'none', 'none', []);
+}
+
+export async function fetchWebflowNewsArchive(env, deps = {}) {
+  if (deps.fetchWebflowNewsArchive) return deps.fetchWebflowNewsArchive(env);
+  const fetchImpl = deps.fetch || fetch;
+  const token = env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN || '';
+  if (!token) {
+    const err = new Error('The Wocult archive could not be checked. Candidate assessment was not started.');
+    err.failureStage = 'wocult_duplicate_check';
+    err.failureCode = 'webflow_news_collection_unavailable';
+    throw err;
+  }
+  const collectionId = env.WEBFLOW_NEWS_COLLECTION_ID || WEBFLOW_NEWS_COLLECTION_ID;
+  const items = [];
+  for (let offset = 0; offset < 10000; offset += 100) {
+    const res = await fetchWithTimeout(`https://api.webflow.com/v2/collections/${collectionId}/items?limit=100&offset=${offset}`, {
+      headers: { Authorization: `Bearer ${token}`, accept: 'application/json' },
+    }, 20000, fetchImpl);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error('The Wocult archive could not be checked. Candidate assessment was not started.');
+      err.failureStage = 'wocult_duplicate_check';
+      err.failureCode = 'webflow_news_fetch_failed';
+      throw err;
+    }
+    const pageItems = Array.isArray(data.items) ? data.items : [];
+    items.push(...pageItems);
+    const total = Number(data.pagination?.total || data.total || items.length);
+    if (pageItems.length < 100 || items.length >= total) break;
+  }
+  return items;
+}
+
+function preflightSkippedItemFrom(item, duplicateCheck) {
+  return stripEmptyOptionalFields({
+    candidateId: `nt_${createStoryFingerprint(item)}`,
+    headline: item.headline,
+    source: item.source,
+    sourceUrl: item.sourceUrl,
+    dateFound: item.dateFound,
+    duplicateStatus: duplicateCheck.status,
+    duplicateConfidence: duplicateCheck.confidence,
+    matchReason: duplicateCheck.matchReason,
+    matchedWebflowItemId: duplicateCheck.matchedWebflowItemId,
+    matchedWocultHeadline: duplicateCheck.matchedWocultHeadline,
+    matchedWocultUrl: duplicateCheck.matchedWocultUrl,
+    matchedItemState: duplicateCheck.matchedItemState,
+  });
 }
 
 function attemptedItemFrom(item, candidate, usage, outcome, failure = null) {
@@ -1235,7 +1461,17 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
     dryRun,
     errorSummary: [],
     attemptedItems: [],
+    preflightSkippedItems: [],
     usage: createEmptyUsage(),
+    itemsAlreadyPublishedOnWocult: 0,
+    itemsAlreadyInWebflowDraft: 0,
+    itemsPossibleWocultDuplicates: 0,
+    itemsSkippedBeforeClaude: 0,
+    candidatesEligibleForClaude: 0,
+    webflowItemsChecked: 0,
+    wocultDuplicateCheckCompleted: false,
+    wocultDuplicateCheckAt: '',
+    wocultDuplicateCheckError: '',
   };
   const store = getStore(env, deps);
   const updateRun = async (patch = {}) => {
@@ -1253,6 +1489,40 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
     await store.saveRun(summary, { dryRun, createOnly: !!requested });
     const tracker = await fetchNewsTracker(config, deps);
     await updateRun({ state: 'running', phase: 'sorting_items', itemsReceived: tracker.items.length });
+    await updateRun({ phase: 'checking_wocult_archive' });
+    let duplicateIndex = [];
+    try {
+      const webflowItems = await fetchWebflowNewsArchive(env, deps);
+      duplicateIndex = buildWocultDuplicateIndex(webflowItems);
+      await updateRun({
+        webflowItemsChecked: duplicateIndex.length,
+        wocultDuplicateCheckCompleted: true,
+        wocultDuplicateCheckAt: new Date().toISOString(),
+        wocultDuplicateCheckError: '',
+      });
+    } catch (e) {
+      const failure = createFailureMetadata(e, 'wocult_duplicate_check', runId);
+      summary.state = 'failed';
+      summary.failures += 1;
+      summary.wocultDuplicateCheckCompleted = false;
+      summary.wocultDuplicateCheckAt = new Date().toISOString();
+      summary.wocultDuplicateCheckError = 'The Wocult archive could not be checked. Candidate assessment was not started.';
+      summary.errorSummary.push({
+        run: summary.wocultDuplicateCheckError,
+        failureStage: failure.failureStage,
+        failureCode: failure.failureCode,
+      });
+      e.alreadyRecordedInRun = true;
+      await updateRun({
+        state: 'failed',
+        failures: summary.failures,
+        wocultDuplicateCheckCompleted: false,
+        wocultDuplicateCheckAt: summary.wocultDuplicateCheckAt,
+        wocultDuplicateCheckError: summary.wocultDuplicateCheckError,
+        errorSummary: summary.errorSummary,
+      });
+      throw e;
+    }
     const awaiting = [];
     const seenClusters = new Set();
     const selectedItems = [];
@@ -1265,15 +1535,49 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
         summary.itemsSkipped += 1;
         continue;
       }
+      const duplicateCheck = checkWocultDuplicate(item, duplicateIndex);
+      if (duplicateCheck.status !== 'no_wocult_match') {
+        const duplicateCandidate = withCandidateMetadata({
+          ...candidateFromTrackerItem(item),
+          candidateId: `nt_${fingerprint}`,
+          status: duplicateCheck.status === 'possible_wocult_duplicate' ? 'needs_editorial_check' : duplicateCheck.status,
+          dryRun,
+          duplicateCheck,
+          rejectionReasons: [],
+          qualificationResult: duplicateCheck.status === 'possible_wocult_duplicate' ? {
+            qualifies: false,
+            qualificationReasons: ['Possible match with an existing Wocult News story.'],
+            rejectionReasons: [],
+          } : {},
+          usage: createEmptyUsage(),
+        }, null, { runId });
+        await store.saveCandidate(duplicateCandidate, { dryRun, runId });
+        await store.addActivity(duplicateCandidate.candidateId, 'wocult_duplicate_check', { status: duplicateCheck.status, confidence: duplicateCheck.confidence, matchReason: duplicateCheck.matchReason }, { dryRun });
+        summary.itemsSkippedBeforeClaude += 1;
+        if (duplicateCheck.status === 'already_published_on_wocult') summary.itemsAlreadyPublishedOnWocult += 1;
+        if (duplicateCheck.status === 'already_in_webflow_draft') summary.itemsAlreadyInWebflowDraft += 1;
+        if (duplicateCheck.status === 'possible_wocult_duplicate') summary.itemsPossibleWocultDuplicates += 1;
+        summary.preflightSkippedItems.push(preflightSkippedItemFrom(item, duplicateCheck));
+        await updateRun({
+          itemsSkippedBeforeClaude: summary.itemsSkippedBeforeClaude,
+          itemsAlreadyPublishedOnWocult: summary.itemsAlreadyPublishedOnWocult,
+          itemsAlreadyInWebflowDraft: summary.itemsAlreadyInWebflowDraft,
+          itemsPossibleWocultDuplicates: summary.itemsPossibleWocultDuplicates,
+          preflightSkippedItems: summary.preflightSkippedItems,
+        });
+        continue;
+      }
       seenClusters.add(cKey);
       selectedItems.push(item);
     }
+    summary.candidatesEligibleForClaude = selectedItems.length;
     await updateRun({
       phase: 'selecting_candidates',
       itemsSkipped: summary.itemsSkipped,
       targetItems: selectedItems.length,
       completedItems: 0,
       percentComplete: selectedItems.length ? 0 : 100,
+      candidatesEligibleForClaude: summary.candidatesEligibleForClaude,
     });
 
     for (let i = 0; i < selectedItems.length; i += 1) {
@@ -1410,9 +1714,11 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
       summary.emailsSent = await sendApprovalDigest(awaiting, env, deps);
     }
   } catch (e) {
-    summary.failures += 1;
+    if (!e.alreadyRecordedInRun) {
+      summary.failures += 1;
+      summary.errorSummary.push({ run: e.message });
+    }
     summary.state = 'failed';
-    summary.errorSummary.push({ run: e.message });
   } finally {
     summary.phase = 'completed';
     if (summary.state !== 'failed') summary.state = summary.failures ? 'completed_with_failures' : 'completed';
@@ -1636,7 +1942,7 @@ export function buildAutomationNewsFieldData(draft = {}) {
 
 export async function createWebflowNewsDraft(draft, env, deps = {}) {
   const fetchImpl = deps.fetch || fetch;
-  const collectionId = env.WEBFLOW_NEWS_COLLECTION_ID || '6a4d6ad32871d46ed1edc6a4';
+  const collectionId = env.WEBFLOW_NEWS_COLLECTION_ID || WEBFLOW_NEWS_COLLECTION_ID;
   const res = await fetchWithTimeout(`https://api.webflow.com/v2/collections/${collectionId}/items`, {
     method: 'POST',
     headers: {
