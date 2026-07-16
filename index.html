@@ -5940,6 +5940,40 @@ function automatedNewsBriefPreflightSectionHtml(run) {
     + '</div></div>';
 }
 
+function automatedNewsBriefCallStatusLabel(status) {
+  if (status === 'completed') return 'Completed';
+  if (status === 'timed_out') return 'Timed out';
+  if (status === 'failed') return 'Failed';
+  if (status === 'started') return 'Interrupted before completion';
+  return status || 'Unknown';
+}
+
+function automatedNewsBriefDuration(value) {
+  var ms = Number(value || 0);
+  if (!Number.isFinite(ms) || ms <= 0) return 'Duration unavailable';
+  return ms >= 1000 ? (Math.round(ms / 100) / 10) + 's' : ms + 'ms';
+}
+
+function automatedNewsBriefClaudeCallDetailsHtml(run) {
+  var calls = run && Array.isArray(run.anthropicCallLog) ? run.anthropicCallLog : [];
+  if (!calls.length) {
+    return '<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700">Claude call details</summary><div class="hint" style="margin-top:8px">Detailed call records were not captured for this earlier run.</div></details>';
+  }
+  return '<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700">Claude call details</summary>'
+    + '<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">'
+    + calls.map(function(call) {
+      var status = automatedNewsBriefCallStatusLabel(call.status);
+      return '<div style="border:1px solid var(--bdr);border-radius:8px;padding:10px;background:var(--gray)">'
+        + '<strong style="color:var(--blk);font-size:14px">'+escapeHtml(call.headline || 'Candidate headline unavailable')+'</strong>'
+        + '<div class="hint" style="margin-top:6px">Stage: '+escapeHtml(call.stage || 'unknown')+' · Status: '+escapeHtml(status)+'</div>'
+        + '<div class="hint">Input: '+escapeHtml(String(call.inputTokens || 0))+' · Output: '+escapeHtml(String(call.outputTokens || 0))+' · Web searches: '+escapeHtml(String(call.webSearchRequests || 0))+' · Duration: '+escapeHtml(automatedNewsBriefDuration(call.durationMs))+'</div>'
+        + (call.status === 'started' ? '<div class="hint" style="color:var(--red);margin-top:6px">Interrupted before completion</div>' : '')
+        + (call.failureCode ? '<div class="hint" style="margin-top:6px">Failure code: '+escapeHtml(call.failureCode)+'</div>' : '')
+        + '</div>';
+    }).join('')
+    + '</div></details>';
+}
+
 function setAutomatedNewsBriefDryRunButton(disabled, label) {
   var btn = document.getElementById('automated-news-brief-dry-run-btn');
   if (!btn) return;
@@ -6031,6 +6065,7 @@ function automatedNewsBriefRunSummaryHtml(run) {
     + '<div><strong>'+escapeHtml(String(run.failures || 0))+'</strong><br><span class="hint">Failures</span></div>'
     + '</div>'
     + '<div style="margin-top:14px"><strong>Usage</strong>'+automatedNewsBriefUsageHtml(run.usage)+'</div>'
+    + automatedNewsBriefClaudeCallDetailsHtml(run)
     + automatedNewsBriefPreflightSectionHtml(run)
     + '</div>';
 }
