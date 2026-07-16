@@ -52,7 +52,7 @@ function loadDashboardHarness(overrides = {}) {
         return { ok: true, json: async () => ({ ok: true, activeRun: null, latestCompletedRun: null, latestRuns: [] }) };
       }
       if (path === '/automation/news-briefs/run') {
-        return { ok: true, status: 202, json: async () => ({ accepted: true, runId: activeRun().runId, workflowInstanceId: activeRun().workflowInstanceId, state: 'queued' }) };
+        return { ok: true, status: 202, json: async () => ({ accepted: true, runId: activeRun().runId, coordinatorWorkflowInstanceId: activeRun().coordinatorWorkflowInstanceId, state: 'queued' }) };
       }
       return { ok: true, json: async () => ({ ok: true }) };
     },
@@ -75,7 +75,11 @@ function activeRun(overrides = {}) {
   return {
     runId: 'run_07070707070707070707070707070707',
     workflowInstanceId: 'run_07070707070707070707070707070707',
+    coordinatorWorkflowInstanceId: 'run_07070707070707070707070707070707',
     workflowState: 'running',
+    coordinatorWorkflowState: 'running',
+    orchestrationState: 'spawning_candidates',
+    applicationState: 'running',
     currentWorkflowStep: 'candidate-2-qualification',
     state: 'running',
     phase: 'qualifying',
@@ -93,7 +97,10 @@ function completedRun(overrides = {}) {
   return {
     ...activeRun({
       state: 'completed',
+      applicationState: 'completed',
       workflowState: 'completed',
+      coordinatorWorkflowState: 'completed',
+      orchestrationState: 'fanout_completed',
       currentWorkflowStep: 'completed',
       phase: 'completed',
       completedItems: 5,
@@ -114,6 +121,7 @@ function completedRun(overrides = {}) {
       candidatesEligibleForClaude: 5,
       attemptedItems: Array.from({ length: 5 }, (_, index) => ({
         candidateId: `candidate_${index + 1}`,
+        candidateIndex: index + 1,
         headline: `Story ${index + 1}`,
         source: 'News Tracker',
         dateFound: `2026-07-${16 - index}T04:00:00.000Z`,
@@ -134,6 +142,35 @@ function completedRun(overrides = {}) {
         webSearchRequests: 3,
         models: ['claude-test'],
       },
+      childWorkflowSummaries: Array.from({ length: 5 }, (_, index) => ({
+        candidateId: `candidate_${index + 1}`,
+        candidateIndex: index + 1,
+        headline: `Story ${index + 1}`,
+        workflowInstanceId: `nbc-run-0${index + 1}`,
+        workflowState: 'completed',
+        applicationState: 'completed',
+        currentStage: 'completed',
+        finalStatus: index === 4 ? 'failed' : 'needs_editorial_check',
+        finalised: true,
+        usage: {
+          anthropicCalls: index === 0 ? 2 : 1,
+          inputTokens: 20 + index,
+          outputTokens: 10 + index,
+          webSearchRequests: index === 0 ? 1 : 0,
+        },
+        externalRequestUsage: {
+          totalExternalFetches: index === 4 ? 28 : 12,
+          firebaseAuth: 1,
+          firestoreReads: 3,
+          firestoreWrites: 4,
+          anthropic: index === 0 ? 2 : 1,
+          articleFetches: 1,
+          primarySourceFetches: index === 0 ? 2 : 0,
+          softLimit: 32,
+          finalisationReserve: 6,
+          stoppedEarly: index === 4,
+        },
+      })),
       anthropicCallLog: [
         {
           callId: 'call_1',
@@ -219,7 +256,7 @@ test('dry run disables immediately, sends generated requestRunId and blocks doub
         return { ok: true, json: async () => ({ ok: true, activeRun: null, latestCompletedRun: completedRun() }) };
       }
       if (path === '/automation/news-briefs/run') {
-        return { ok: true, status: 202, json: async () => ({ accepted: true, runId: 'run_07070707070707070707070707070707', workflowInstanceId: 'run_07070707070707070707070707070707', state: 'queued' }) };
+        return { ok: true, status: 202, json: async () => ({ accepted: true, runId: 'run_07070707070707070707070707070707', coordinatorWorkflowInstanceId: 'run_07070707070707070707070707070707', state: 'queued' }) };
       }
       return { ok: true, json: async () => ({ ok: true }) };
     },
@@ -238,10 +275,10 @@ test('HTTP 202 accepted run starts background polling without waiting for pipeli
   const { ctx, elements, requests } = loadDashboardHarness({
     workerFetch: async (path) => {
       if (path === '/automation/news-briefs/run') {
-        return { ok: true, status: 202, json: async () => ({ accepted: true, runId: 'run_accepted_070707070707070707', workflowInstanceId: 'wf_accepted', state: 'queued' }) };
+        return { ok: true, status: 202, json: async () => ({ accepted: true, runId: 'run_accepted_070707070707070707', coordinatorWorkflowInstanceId: 'wf_accepted', state: 'queued' }) };
       }
       if (path.startsWith('/automation/news-briefs/status?runId=')) {
-        return { ok: true, json: async () => ({ ok: true, run: activeRun({ runId: 'run_accepted_070707070707070707', workflowInstanceId: 'wf_accepted', workflowState: 'queued', currentWorkflowStep: 'initialise-run', targetItems: null, percentComplete: null }) }) };
+        return { ok: true, json: async () => ({ ok: true, run: activeRun({ runId: 'run_accepted_070707070707070707', workflowInstanceId: 'wf_accepted', coordinatorWorkflowInstanceId: 'wf_accepted', workflowState: 'queued', coordinatorWorkflowState: 'queued', currentWorkflowStep: 'initialise-run', targetItems: null, percentComplete: null }) }) };
       }
       return { ok: true, json: async () => ({ ok: true, activeRun: null }) };
     },
@@ -250,7 +287,7 @@ test('HTTP 202 accepted run starts background polling without waiting for pipeli
   assert.equal(requests.filter((request) => request.path === '/automation/news-briefs/run').length, 1);
   assert.match(elements.get('automated-news-briefs-status').textContent, /Run accepted\. Processing continues in the background/);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /Queued/);
-  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Workflow instance: wf_accepted/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Coordinator Workflow: wf_accepted/);
 });
 
 test('active progress resumes after reload and renders determinate percentage', async () => {
@@ -267,7 +304,7 @@ test('active progress resumes after reload and renders determinate percentage', 
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /40% complete/);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /Newest story first/);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /Last update/);
-  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Workflow state: running/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Coordinator state: running/);
 });
 
 test('elapsed time updates locally while running', () => {
@@ -293,8 +330,59 @@ test('progress is indeterminate before targetItems and failed candidates still a
   ctx.renderAutomatedNewsBriefProgress(activeRun({ workflowState: 'retrying', currentWorkflowStep: 'candidate-2-primary-source-discovery', completedItems: 1, targetItems: 5, percentComplete: 20 }));
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /Retrying finding primary sources/);
   ctx.renderAutomatedNewsBriefProgress(activeRun({ completedItems: 2, targetItems: 5, percentComplete: 40, phase: 'drafting' }));
-  assert.match(elements.get('automated-news-brief-progress').innerHTML, /2 \/ 5 candidates/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /2 of 5 candidates completed/);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /40% complete/);
+});
+
+test('coordinator completion with active child Workflows remains logically running', () => {
+  const { ctx, elements } = loadDashboardHarness();
+  ctx.renderAutomatedNewsBriefProgress(activeRun({
+    workflowState: 'completed',
+    coordinatorWorkflowState: 'completed',
+    orchestrationState: 'fanout_completed',
+    applicationState: 'running',
+    state: 'running',
+    completedItems: 0,
+    targetItems: 5,
+    percentComplete: 100,
+    currentHeadline: '',
+    childWorkflowSummaries: [
+      { candidateIndex: 3, headline: 'Third story', workflowState: 'running', currentStage: 'primary_source_discovery', finalised: false, usage: { anthropicCalls: 1 }, externalRequestUsage: { totalExternalFetches: 10, softLimit: 32 } },
+      { candidateIndex: 4, headline: 'Fourth story', workflowState: 'running', currentStage: 'qualification', finalised: false, usage: { anthropicCalls: 0 }, externalRequestUsage: { totalExternalFetches: 2, softLimit: 32 } },
+      { candidateIndex: 5, headline: 'Fifth story', workflowState: 'queued', currentStage: 'queued', finalised: false, usage: {}, externalRequestUsage: { totalExternalFetches: 0, softLimit: 32 } },
+    ],
+  }));
+  const html = elements.get('automated-news-brief-progress').innerHTML;
+  assert.match(html, /Processing candidates independently/);
+  assert.match(html, /Candidate selection completed\. Independent candidate processing continues/);
+  assert.match(html, /0 of 5 candidates completed/);
+  assert.match(html, /0% complete/);
+  assert.match(html, /Candidate 3: Finding primary sources/);
+  assert.doesNotMatch(html, /100% complete/);
+});
+
+test('logical child completion drives progress percentages and valid empty completion', () => {
+  const { ctx, elements } = loadDashboardHarness();
+  ctx.renderAutomatedNewsBriefProgress(activeRun({ completedItems: 0, targetItems: 5, percentComplete: 100 }));
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /0 of 5 candidates completed/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /0% complete/);
+  ctx.renderAutomatedNewsBriefProgress(activeRun({
+    completedItems: 0,
+    targetItems: 5,
+    percentComplete: 100,
+    childWorkflowSummaries: [
+      { candidateIndex: 1, headline: 'Done', workflowState: 'completed', currentStage: 'completed', finalised: true },
+      { candidateIndex: 2, headline: 'Queued', workflowState: 'queued', currentStage: 'queued', finalised: false },
+    ],
+  }));
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /1 of 5 candidates completed/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /20% complete/);
+  ctx.renderAutomatedNewsBriefProgress(completedRun());
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /5 of 5 candidates completed/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /100% complete/);
+  ctx.renderAutomatedNewsBriefProgress(completedRun({ targetItems: 0, completedItems: 0, childWorkflowSummaries: [], reason: 'no eligible unprocessed candidates' }));
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /0 of 0 candidates completed/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /100% complete/);
 });
 
 test('completion reaches 100, reloads candidates and opens Latest run', async () => {
@@ -311,6 +399,7 @@ test('recovered failed run renders stopped state, actual progress and failure me
   const { ctx, elements } = loadDashboardHarness();
   const failed = completedRun({
     state: 'failed',
+    applicationState: 'failed',
     phase: 'primary_source_discovery',
     completedItems: 3,
     targetItems: 5,
@@ -319,6 +408,7 @@ test('recovered failed run renders stopped state, actual progress and failure me
     failureCode: 'stale_run_timeout',
     failureMessage: 'Run heartbeat became stale before finalisation.',
     usage: { anthropicCalls: 3, inputTokens: 72931, outputTokens: 3279, webSearchRequests: 7, models: ['claude-test'] },
+    childWorkflowSummaries: [],
   });
   ctx.handleAutomatedNewsBriefRunStatus(failed);
   await new Promise((resolve) => setImmediate(resolve));
@@ -390,9 +480,51 @@ test('latest run renders five attempted items in newest-first order with token t
   assert.match(detailHtml, /Possible duplicates/);
   assert.match(detailHtml, /Skipped before Claude/);
   assert.match(detailHtml, /Sent to Claude/);
-  assert.match(detailHtml, /Workflow instance/);
-  assert.match(detailHtml, /Workflow state/);
+  assert.match(detailHtml, /Coordinator Workflow/);
+  assert.match(detailHtml, /Coordinator state/);
+  assert.match(detailHtml, /Application state/);
   assert.match(detailHtml, /Durable step/);
+});
+
+test('latest run renders child Workflow status and Free-plan request usage in stable order', () => {
+  const { ctx } = loadDashboardHarness();
+  const run = completedRun({
+    childWorkflowSummaries: [
+      {
+        candidateIndex: 2,
+        headline: 'Second child',
+        workflowInstanceId: 'nbc-run-02',
+        workflowState: 'running',
+        applicationState: 'running',
+        currentStage: 'verification',
+        finalStatus: 'pending',
+        finalised: false,
+        usage: { anthropicCalls: 1, inputTokens: 200, outputTokens: 20, webSearchRequests: 0 },
+        externalRequestUsage: { totalExternalFetches: 30, firebaseAuth: 1, firestoreReads: 4, firestoreWrites: 4, anthropic: 1, articleFetches: 1, primarySourceFetches: 0, softLimit: 32, finalisationReserve: 6 },
+      },
+      {
+        candidateIndex: 1,
+        headline: 'First child',
+        workflowInstanceId: 'nbc-run-01',
+        workflowState: 'completed',
+        applicationState: 'completed',
+        currentStage: 'completed',
+        finalStatus: 'needs_editorial_check',
+        finalised: true,
+        usage: { anthropicCalls: 2, inputTokens: 100, outputTokens: 40, webSearchRequests: 1 },
+        externalRequestUsage: { totalExternalFetches: 12, firebaseAuth: 1, firestoreReads: 3, firestoreWrites: 4, anthropic: 2, articleFetches: 1, primarySourceFetches: 2, softLimit: 32, finalisationReserve: 6 },
+      },
+    ],
+  });
+  const html = ctx.automatedNewsBriefRunSummaryHtml(run);
+  assert.match(html, /Candidate Workflow status/);
+  assert.match(html, /Free-plan request usage/);
+  assert.ok(html.indexOf('Candidate 1: First child') < html.indexOf('Candidate 2: Second child'));
+  assert.match(html, /Workflow: nbc-run-01/);
+  assert.match(html, /Claude calls: 2/);
+  assert.match(html, /Total tracked external fetches: 30 \/ soft limit 32/);
+  assert.match(html, /Approaching the configured Free-plan soft limit/);
+  assert.doesNotMatch(html, /WORKER_ADMIN_TOKEN|Authorization: Bearer|sk-ant-|secret request/i);
 });
 
 test('latest run renders collapsed Claude call details safely', () => {
