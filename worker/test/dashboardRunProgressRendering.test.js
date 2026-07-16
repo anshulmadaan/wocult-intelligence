@@ -129,6 +129,45 @@ function completedRun(overrides = {}) {
         webSearchRequests: 3,
         models: ['claude-test'],
       },
+      anthropicCallLog: [
+        {
+          callId: 'call_1',
+          candidateId: 'candidate_1',
+          headline: 'Story 1',
+          stage: 'qualification',
+          status: 'completed',
+          inputTokens: 25,
+          outputTokens: 10,
+          webSearchRequests: 1,
+          durationMs: 1200,
+          prompt: 'PROMPT_SHOULD_NOT_RENDER',
+          rawModelResponse: 'RAW_RESPONSE_SHOULD_NOT_RENDER',
+        },
+        {
+          callId: 'call_2',
+          candidateId: 'candidate_2',
+          headline: 'Story 2',
+          stage: 'primary_source_discovery',
+          status: 'started',
+          inputTokens: 0,
+          outputTokens: 0,
+          webSearchRequests: 0,
+          durationMs: 0,
+          searchResults: 'SEARCH_RESULTS_SHOULD_NOT_RENDER',
+        },
+        {
+          callId: 'call_3',
+          candidateId: 'candidate_5',
+          headline: 'Story 5',
+          stage: 'drafting',
+          status: 'failed',
+          inputTokens: 75,
+          outputTokens: 40,
+          webSearchRequests: 2,
+          durationMs: 800,
+          failureCode: 'anthropic_api_error',
+        },
+      ],
       preflightSkippedItems: [
         {
           candidateId: 'nt_published',
@@ -318,6 +357,29 @@ test('latest run renders five attempted items in newest-first order with token t
   assert.match(detailHtml, /Possible duplicates/);
   assert.match(detailHtml, /Skipped before Claude/);
   assert.match(detailHtml, /Sent to Claude/);
+});
+
+test('latest run renders collapsed Claude call details safely', () => {
+  const { ctx } = loadDashboardHarness();
+  const html = ctx.automatedNewsBriefRunSummaryHtml(completedRun());
+  assert.match(html, /Claude call details/);
+  assert.match(html, /Story 1/);
+  assert.match(html, /Stage: qualification/);
+  assert.match(html, /Completed/);
+  assert.match(html, /Input: 25/);
+  assert.match(html, /Output: 10/);
+  assert.match(html, /Web searches: 1/);
+  assert.match(html, /Duration: 1.2s/);
+  assert.match(html, /Interrupted before completion/);
+  assert.match(html, /Failure code: anthropic_api_error/);
+  assert.doesNotMatch(html, /PROMPT_SHOULD_NOT_RENDER|RAW_RESPONSE_SHOULD_NOT_RENDER|SEARCH_RESULTS_SHOULD_NOT_RENDER/);
+});
+
+test('historical run without Claude call details renders safe empty state', () => {
+  const { ctx } = loadDashboardHarness();
+  const html = ctx.automatedNewsBriefRunSummaryHtml(completedRun({ anthropicCallLog: [] }));
+  assert.match(html, /Claude call details/);
+  assert.match(html, /Detailed call records were not captured for this earlier run/);
 });
 
 test('latest run renders preflight-skipped Wocult duplicate items separately with zero Claude usage', () => {
