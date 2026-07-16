@@ -582,9 +582,11 @@ async function fetchArticleForPrimaryDiscovery(item, deps = {}) {
   const fetchImpl = deps.fetch || fetch;
   const res = await fetchWithTimeout(articleUrl, { headers: { 'User-Agent': 'WocultIntelligence/1.0 by Wocult' } }, 12000, fetchImpl);
   const html = await res.text();
+  const prepared = prepareSourceContext(html, MAX_ARTICLE_TEXT_CHARS);
   return {
     ok: res.ok,
-    text: stripHtml(html).slice(0, 6000),
+    text: prepared.text,
+    textTruncated: prepared.truncated,
     html: html.slice(0, 60000),
     links: extractLinks(html, articleUrl).slice(0, 80),
     error: res.ok ? '' : `article_fetch_${res.status}`,
@@ -626,7 +628,7 @@ async function verifyPrimarySourceCandidate(candidate, item, articleText = '', d
   try {
     const fetchImpl = deps.fetch || fetch;
     const res = await fetchWithTimeout(source.url, { headers: { 'User-Agent': 'WocultIntelligence/1.0 by Wocult' } }, 12000, fetchImpl);
-    text = stripHtml(await res.text()).slice(0, 6000);
+    text = prepareSourceContext(await res.text(), MAX_PRIMARY_SOURCE_TEXT_CHARS).text;
     if (!res.ok) fetchError = `primary_source_fetch_${res.status}`;
   } catch (e) {
     fetchError = e.message;
@@ -664,7 +666,8 @@ function primarySourceSupportsClaim(source, item, sourceText, articleText = '') 
   return { ok: false, note: 'Primary-source candidate did not sufficiently support the central claim.' };
 }
 
-function buildPrimarySourceDiscoveryPrompt(item, qualification, articleText) {
+export function buildPrimarySourceDiscoveryPrompt(item, qualification, articleText) {
+  const context = prepareSourceContext(articleText, MAX_SEARCH_CONTEXT_CHARS);
   return `Find the original or primary source behind this publisher article. Return ONLY JSON with:
 {"primarySources":[{"title":"","url":"","publisherOrIssuer":"","sourceType":"government_report","publicationDate":"","relationship":"based_on","discoveryMethod":"web_search","confidence":"medium","verified":false,"verificationNote":""}],"searchesAttempted":[],"organisationsChecked":[],"notes":""}
 
@@ -678,10 +681,13 @@ Article source:
 ${JSON.stringify({ headline: item.headline, source: item.source, sourceUrl: item.sourceUrl, date: item.publicationDate || item.dateFound, qualification }, null, 2)}
 
 Article text excerpt:
-${safeShortText(articleText, 3500)}`;
+${context.text}
+
+Context notes:
+${context.truncated ? 'Article text was deduplicated and truncated for token control.' : 'Article text was deduplicated without truncation.'}`;
 }
 
-function buildPrimarySourceSearchQueries(item, qualification = null) {
+export function buildPrimarySourceSearchQueries(item, qualification = null) {
   const pieces = [
     item.headline,
     item.source,
@@ -689,13 +695,20 @@ function buildPrimarySourceSearchQueries(item, qualification = null) {
     qualification?.recommendedAngle,
     ...(qualification?.materialFacts || []),
   ].filter(Boolean).map((value) => safeShortText(value, 120));
-  return [...new Set([
+  const seen = new Set();
+  return [
     `${item.headline || ''} official report`,
     `${item.headline || ''} PDF`,
     `${pieces.join(' ')} site:gov.in`,
     `${pieces.join(' ')} filing disclosure`,
     `${pieces.join(' ')} court order notification circular`,
-  ].map((value) => value.replace(/\s+/g, ' ').trim()).filter(Boolean))].slice(0, 8);
+  ].map((value) => value.replace(/\s+/g, ' ').trim()).filter(Boolean)
+    .filter((value) => {
+      const key = normalizeText(value);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 8);
 }
 
 function inferPrimarySourceOrganisations(item, qualification = null) {
@@ -865,7 +878,10 @@ export async function callClaudeJson(env, prompt, maxTokens = 1200, deps = {}) {
   const fetchImpl = deps.fetch || fetch;
   const model = env.NEWS_BRIEF_CLAUDE_MODEL || 'claude-sonnet-4-6';
   const timeoutMs = Number(env.NEWS_BRIEF_ANTHROPIC_TIMEOUT_MS || DEFAULT_ANTHROPIC_TIMEOUT_MS);
-  if (deps.beforeAnthropicCall) await deps.beforeAnthropicCall({ model, maxTokens });
+  const stage = deps.failureStage || deps.stage || 'unknown';
+  const webSearchMaxUses = Number(env.NEWS_BRIEF_WEB_SEARCH_MAX_USES_PER_CALL || deps.webSearchMaxUses || DEFAULT_WEB_SEARCH_MAX_USES_PER_CALL);
+  const startedAtMs = Date.now();
+  const callMeta = deps.beforeAnthropicCall ? await deps.beforeAnthropicCall({ model, maxTokens, stage }) : null;
   let res;
   try {
     res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
@@ -879,22 +895,47 @@ export async function callClaudeJson(env, prompt, maxTokens = 1200, deps = {}) {
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: Number.isFinite(webSearchMaxUses) && webSearchMaxUses >= 0 ? webSearchMaxUses : DEFAULT_WEB_SEARCH_MAX_USES_PER_CALL }],
         messages: [{ role: 'user', content: prompt }],
       }),
     }, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_ANTHROPIC_TIMEOUT_MS, fetchImpl);
   } catch (e) {
     if (e?.name === 'AbortError' || e?.message === 'request_timeout') {
       e.failureCode = 'anthropic_timeout';
-      e.failureStage = deps.failureStage || 'unknown';
+      e.failureStage = stage;
+      if (deps.afterAnthropicCall) await deps.afterAnthropicCall({
+        ...callMeta,
+        model,
+        maxTokens,
+        stage,
+        status: 'timed_out',
+        failureCode: 'anthropic_timeout',
+        durationMs: Date.now() - startedAtMs,
+      });
+    } else if (deps.afterAnthropicCall) {
+      await deps.afterAnthropicCall({
+        ...callMeta,
+        model,
+        maxTokens,
+        stage,
+        status: 'failed',
+        failureCode: failureCodeForError(e, stage),
+        durationMs: Date.now() - startedAtMs,
+      });
     }
     throw e;
-  } finally {
-    if (deps.afterAnthropicCall) await deps.afterAnthropicCall({ model, maxTokens });
   }
   const data = await res.json();
-  if (deps.recordAnthropicUsage) deps.recordAnthropicUsage(normalizeAnthropicUsage(data, model));
-  if (!res.ok || data.error) throw new Error(data.error?.message || `Anthropic returned ${res.status}`);
+  const usage = normalizeAnthropicUsage(data, model);
+  if (deps.recordAnthropicUsage) deps.recordAnthropicUsage(usage);
+  if (!res.ok || data.error) {
+    const err = new Error(data.error?.message || `Anthropic returned ${res.status}`);
+    err.failureCode = failureCodeForError(err, stage);
+    err.failureStage = stage;
+    if (deps.afterAnthropicCall) await deps.afterAnthropicCall({ ...callMeta, model, maxTokens, stage, status: 'failed', usage, failureCode: err.failureCode, durationMs: Date.now() - startedAtMs });
+    throw err;
+  }
+  if (deps.afterAnthropicCall) await deps.afterAnthropicCall({ ...callMeta, model, maxTokens, stage, status: 'completed', usage, durationMs: Date.now() - startedAtMs });
   const txt = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
   try {
     return parseJsonFromText(txt);
@@ -920,12 +961,41 @@ ${JSON.stringify(item, null, 2)}`;
 }
 
 export function buildDraftPrompt(candidate) {
+  const safeCandidate = {
+    item: {
+      headline: candidate.item?.headline || candidate.originalHeadline || candidate.trackerItem?.headline || '',
+      source: candidate.item?.source || candidate.articleSourceName || candidate.trackerItem?.source || '',
+      sourceUrl: candidate.item?.sourceUrl || candidate.articleSourceUrl || candidate.canonicalUrl || '',
+      date: candidate.item?.publicationDate || candidate.item?.dateFound || candidate.sourcePublishedTimestamp || candidate.discoveredTimestamp || '',
+    },
+    qualification: candidate.qualification,
+    verification: candidate.verification ? {
+      status: candidate.verification.status,
+      summary: candidate.verification.summary,
+      primarySourceUrl: candidate.verification.primarySourceUrl,
+      supportingSourceUrls: candidate.verification.supportingSourceUrls,
+      sourceTitles: candidate.verification.sourceTitles,
+      publishers: candidate.verification.publishers,
+      excerpts: (candidate.verification.excerpts || []).map((value) => prepareSourceContext(value, 500).text),
+      confirmedFacts: candidate.verification.confirmedFacts,
+    } : null,
+    primarySources: (candidate.primarySources || []).map((source) => ({
+      title: source.title,
+      url: source.url,
+      publisherOrIssuer: source.publisherOrIssuer,
+      sourceType: source.sourceType,
+      confidence: source.confidence,
+      verified: source.verified,
+      relationship: source.relationship,
+    })),
+    sourceContextTruncated: !!candidate.sourceContextTruncated,
+  };
   return `Write a reported Wocult news brief after verification. Return ONLY valid JSON with title, slug, shortIntro, intro40, excerpt, standfirst, body, readTime, writerName, publishedDate, beat, sourceName, sourceUrl, imageUrl, seoDescription, wocultAngle, verificationNote.
 
 Rules: 250-400 words, British English, fact-led, for working professionals, no invented quotes or unsupported numbers, valid HTML paragraphs in body only.
 
 Candidate and verified sources:
-${JSON.stringify(candidate, null, 2)}`;
+${JSON.stringify(safeCandidate, null, 2)}`;
 }
 
 export function candidateFromTrackerItem(item, qualification = null, verification = null, draft = null) {
@@ -1109,6 +1179,13 @@ export async function scheduledNewsBriefAutomation(env, ctx, deps = {}) {
 const RUN_ID_PATTERN = /^run_[A-Za-z0-9_-]{8,96}$/;
 const ACTIVE_RUN_STALE_MS = 20 * 60 * 1000;
 const DEFAULT_ANTHROPIC_TIMEOUT_MS = 45000;
+const MAX_ANTHROPIC_CALLS_PER_CANDIDATE = 4;
+const MAX_ARTICLE_TEXT_CHARS = 2500;
+const MAX_PRIMARY_SOURCE_TEXT_CHARS = 3000;
+const MAX_SEARCH_CONTEXT_CHARS = 1800;
+const MAX_PRIOR_RESPONSE_CHARS = 1200;
+const MAX_TOTAL_SOURCE_CONTEXT_CHARS = 6000;
+const DEFAULT_WEB_SEARCH_MAX_USES_PER_CALL = 2;
 
 function createEmptyUsage() {
   return {
@@ -1146,6 +1223,20 @@ function addUsage(target, increment = {}) {
   return target;
 }
 
+function safeRandomId(prefix = 'call') {
+  const random = Math.random().toString(36).slice(2, 10);
+  return `${prefix}_${Date.now()}_${random}`;
+}
+
+function maxAnthropicCallLogLength(config) {
+  return Math.max(10, Number(config?.maxItemsPerRun || 5) * MAX_ANTHROPIC_CALLS_PER_CANDIDATE);
+}
+
+function trimAnthropicCallLog(log, config) {
+  const max = maxAnthropicCallLogLength(config);
+  return (Array.isArray(log) ? log : []).slice(-max);
+}
+
 function progressPercent(completed, target) {
   if (!target) return null;
   return Math.min(100, Math.round((Number(completed || 0) / Number(target)) * 100));
@@ -1168,6 +1259,16 @@ function staleRunMessage(run) {
   return `Run heartbeat became stale before finalisation; preserving ${count}${target ? ` of ${target}` : ''} completed items (${progress}).`;
 }
 
+function staleFailureStage(run = {}) {
+  return normalizeFailureStage(
+    run.failureStage && run.failureStage !== 'unknown' ? run.failureStage
+      : run.currentAnthropicStage
+        || run.phase
+        || run.lastSuccessfulStage
+        || 'unknown'
+  );
+}
+
 async function recoverStaleRun(store, run, dryRun = true) {
   if (!activeRunIsStale(run)) return run;
   const now = new Date().toISOString();
@@ -1175,6 +1276,7 @@ async function recoverStaleRun(store, run, dryRun = true) {
   const completed = Number(run.completedItems || 0);
   const failureMessage = staleRunMessage({ ...run, targetItems: target });
   const start = Date.parse(run.startTime || '');
+  const failureStage = staleFailureStage(run);
   const recovered = {
     ...run,
     state: 'failed',
@@ -1187,12 +1289,12 @@ async function recoverStaleRun(store, run, dryRun = true) {
     heartbeatAt: now,
     duration: Number.isFinite(start) ? Math.max(0, Date.parse(now) - start) : run.duration,
     activeRun: false,
-    failureStage: normalizeFailureStage(run.failureStage || run.phase || 'unknown'),
+    failureStage,
     failureCode: run.failureCode || 'stale_run_timeout',
     failureMessage,
     errorSummary: [
       ...(Array.isArray(run.errorSummary) ? run.errorSummary : []),
-      { run: failureMessage, failureStage: normalizeFailureStage(run.failureStage || run.phase || 'unknown'), failureCode: run.failureCode || 'stale_run_timeout' },
+      { run: failureMessage, failureStage, failureCode: run.failureCode || 'stale_run_timeout' },
     ],
   };
   if (store.saveRun) await store.saveRun(recovered, { dryRun }).catch(() => {});
@@ -1518,6 +1620,11 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
     errorSummary: [],
     attemptedItems: [],
     preflightSkippedItems: [],
+    anthropicCallLog: [],
+    currentAnthropicCallId: '',
+    currentAnthropicStage: '',
+    currentAnthropicCandidateId: '',
+    lastCompletedAnthropicCallId: '',
     usage: createEmptyUsage(),
     itemsAlreadyPublishedOnWocult: 0,
     itemsAlreadyInWebflowDraft: 0,
@@ -1649,14 +1756,72 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
       const candidateDeps = {
         ...deps,
         failureStage: processingStage,
-        beforeAnthropicCall: async () => {
+        beforeAnthropicCall: async ({ model, stage }) => {
           candidateDeps.failureStage = processingStage;
-          await updateRun({ heartbeatAt: new Date().toISOString(), phase: summary.phase });
-          if (deps.beforeAnthropicCall) await deps.beforeAnthropicCall({ stage: processingStage, candidateId: summary.currentCandidateId });
+          const callId = safeRandomId('anthropic');
+          const startedAt = new Date().toISOString();
+          const entry = stripEmptyOptionalFields({
+            callId,
+            candidateId: summary.currentCandidateId,
+            headline: item.headline,
+            stage: stage || processingStage,
+            model,
+            startedAt,
+            completedAt: '',
+            status: 'started',
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheCreationInputTokens: 0,
+            cacheReadInputTokens: 0,
+            webSearchRequests: 0,
+            durationMs: 0,
+            failureCode: '',
+          });
+          summary.anthropicCallLog = trimAnthropicCallLog([...(summary.anthropicCallLog || []), entry], config);
+          summary.currentAnthropicCallId = callId;
+          summary.currentAnthropicStage = entry.stage;
+          summary.currentAnthropicCandidateId = entry.candidateId;
+          await updateRun({
+            heartbeatAt: startedAt,
+            phase: summary.phase,
+            anthropicCallLog: summary.anthropicCallLog,
+            currentAnthropicCallId: summary.currentAnthropicCallId,
+            currentAnthropicStage: summary.currentAnthropicStage,
+            currentAnthropicCandidateId: summary.currentAnthropicCandidateId,
+          });
+          if (deps.beforeAnthropicCall) await deps.beforeAnthropicCall({ stage: entry.stage, candidateId: summary.currentCandidateId, callId });
+          return { callId };
         },
-        afterAnthropicCall: async () => {
-          await updateRun({ heartbeatAt: new Date().toISOString(), phase: summary.phase });
-          if (deps.afterAnthropicCall) await deps.afterAnthropicCall({ stage: processingStage, candidateId: summary.currentCandidateId });
+        afterAnthropicCall: async (result = {}) => {
+          const callId = result.callId || summary.currentAnthropicCallId;
+          const completedAt = new Date().toISOString();
+          const usage = result.usage || {};
+          summary.anthropicCallLog = trimAnthropicCallLog((summary.anthropicCallLog || []).map((entry) => entry.callId === callId ? {
+            ...entry,
+            completedAt,
+            status: ['completed', 'timed_out', 'failed'].includes(result.status) ? result.status : 'failed',
+            inputTokens: Number(usage.inputTokens || entry.inputTokens || 0),
+            outputTokens: Number(usage.outputTokens || entry.outputTokens || 0),
+            cacheCreationInputTokens: Number(usage.cacheCreationInputTokens || entry.cacheCreationInputTokens || 0),
+            cacheReadInputTokens: Number(usage.cacheReadInputTokens || entry.cacheReadInputTokens || 0),
+            webSearchRequests: Number(usage.webSearchRequests || entry.webSearchRequests || 0),
+            durationMs: Number(result.durationMs || entry.durationMs || 0),
+            failureCode: result.failureCode || entry.failureCode || '',
+          } : entry), config);
+          summary.lastCompletedAnthropicCallId = result.status === 'completed' ? callId : summary.lastCompletedAnthropicCallId;
+          summary.currentAnthropicCallId = '';
+          summary.currentAnthropicStage = '';
+          summary.currentAnthropicCandidateId = '';
+          await updateRun({
+            heartbeatAt: completedAt,
+            phase: summary.phase,
+            anthropicCallLog: summary.anthropicCallLog,
+            currentAnthropicCallId: '',
+            currentAnthropicStage: '',
+            currentAnthropicCandidateId: '',
+            lastCompletedAnthropicCallId: summary.lastCompletedAnthropicCallId,
+          });
+          if (deps.afterAnthropicCall) await deps.afterAnthropicCall({ stage: result.stage || processingStage, candidateId: summary.currentCandidateId, callId, status: result.status });
         },
         recordAnthropicUsage: (usage) => {
           addUsage(candidateUsage, usage);
@@ -1821,7 +1986,8 @@ async function verifyCandidateSources(item, deps = {}, primaryDiscovery = null) 
     try {
       const res = await fetchWithTimeout(primary.url, { headers: { 'User-Agent': 'WocultIntelligence/1.0 by Wocult' } }, 12000, fetchImpl);
       const text = await res.text();
-      sources.push({ ok: res.ok, url: primary.url, title: primary.title, publisher: primary.publisherOrIssuer, text: text.slice(0, 4000), excerpt: stripHtml(text).slice(0, 700), type: primary.sourceType || 'primary' });
+      const prepared = prepareSourceContext(text, MAX_PRIMARY_SOURCE_TEXT_CHARS);
+      sources.push({ ok: res.ok, url: primary.url, title: primary.title, publisher: primary.publisherOrIssuer, text: prepared.text, excerpt: prepared.text.slice(0, 700), truncated: prepared.truncated, type: primary.sourceType || 'primary' });
     } catch (e) {
       sources.push({ ok: false, url: primary.url, error: e.message });
     }
@@ -1830,7 +1996,8 @@ async function verifyCandidateSources(item, deps = {}, primaryDiscovery = null) 
     try {
       const res = await fetchWithTimeout(item.sourceUrl, { headers: { 'User-Agent': 'WocultIntelligence/1.0 by Wocult' } }, 12000, fetchImpl);
       const text = await res.text();
-      sources.push({ ok: res.ok, url: item.sourceUrl, title: item.headline, publisher: item.source, text: text.slice(0, 4000), excerpt: stripHtml(text).slice(0, 700), type: /gov|court|sebi|rbi|bseindia|nseindia|company|investor|annual|filing/i.test(item.sourceUrl) ? 'primary' : 'secondary' });
+      const prepared = prepareSourceContext(text, MAX_ARTICLE_TEXT_CHARS);
+      sources.push({ ok: res.ok, url: item.sourceUrl, title: item.headline, publisher: item.source, text: prepared.text, excerpt: prepared.text.slice(0, 700), truncated: prepared.truncated, type: /gov|court|sebi|rbi|bseindia|nseindia|company|investor|annual|filing/i.test(item.sourceUrl) ? 'primary' : 'secondary' });
     } catch (e) {
       sources.push({ ok: false, url: item.sourceUrl, error: e.message });
     }
@@ -2453,7 +2620,37 @@ function normalizeText(value) {
 }
 
 function stripHtml(value) {
-  return String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(value || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<(nav|footer|header|aside|form|noscript|svg|iframe)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function prepareSourceContext(value, maxChars = MAX_TOTAL_SOURCE_CONTEXT_CHARS) {
+  const plain = stripHtml(value);
+  const seen = new Set();
+  const paragraphs = plain
+    .split(/(?:\r?\n|\.\s+)/)
+    .map((part) => part.replace(/\s+/g, ' ').trim())
+    .filter((part) => part.length >= 30)
+    .filter((part) => {
+      const key = normalizeText(part).slice(0, 180);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  const joined = paragraphs.length ? paragraphs.join('. ') : plain;
+  const limit = Math.max(200, Number(maxChars || MAX_TOTAL_SOURCE_CONTEXT_CHARS));
+  const truncated = joined.length > limit;
+  return {
+    text: safeShortText(joined, limit),
+    originalChars: plain.length,
+    preparedChars: Math.min(joined.length, limit),
+    truncated,
+  };
 }
 
 function isUsableUrl(value) {
