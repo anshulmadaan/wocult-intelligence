@@ -11,7 +11,11 @@ import {
   discoverPrimarySources,
   getAutomationConfig,
   handleAutomationRequest,
+  checkWocultDuplicate,
+  buildWocultDuplicateIndex,
+  fetchWebflowNewsArchive,
   normalizeNewsTrackerResponse,
+  normalizeDuplicateUrl,
   normalizeQualificationResponse,
   qualificationStatus,
   renderApprovalEmail,
@@ -89,7 +93,7 @@ function makeRunMocks(items, options = {}) {
   const activities = [];
   const runs = [];
   const runMap = new Map(options.existingRuns || []);
-  const calls = { anthropic: 0, source: 0, draft: 0 };
+  const calls = { anthropic: 0, source: 0, draft: 0, webflowArchive: 0 };
   const existingLinks = new Set(options.existingLinks || []);
   const declinedLinks = new Set(options.declinedLinks || []);
   const qualificationFor = options.qualificationFor || (() => ({ ...goodQualification, qualifies: false, overallScore: 45, rejectionReasons: ['No Wocult angle'], recommendedPriority: null }));
@@ -131,7 +135,33 @@ function makeRunMocks(items, options = {}) {
     calls.source += 1;
     return new Response('<html>source text about Indian workers and jobs</html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
   };
-  return { saved, activities, calls, runs, runMap, store, fetch, primarySourceSearch: options.primarySourceSearch };
+  const webflowArchive = options.webflowArchive || [];
+  const fetchWebflowNewsArchive = async () => {
+    calls.webflowArchive += 1;
+    if (options.webflowArchiveError) throw options.webflowArchiveError;
+    return webflowArchive;
+  };
+  return { saved, activities, calls, runs, runMap, store, fetch, primarySourceSearch: options.primarySourceSearch, fetchWebflowNewsArchive };
+}
+
+function webflowNewsItem(id, overrides = {}) {
+  return {
+    id,
+    isDraft: false,
+    isArchived: false,
+    lastPublished: recent,
+    lastUpdated: recent,
+    fieldData: {
+      name: `Existing Wocult story ${id}`,
+      slug: `existing-wocult-story-${id}`,
+      standfirst: 'Existing Wocult News story.',
+      'source-name': 'Existing source',
+      'source-url': `https://example.com/source-${id}`,
+      'published-date': recent,
+      ...overrides.fieldData,
+    },
+    ...overrides,
+  };
 }
 
 function assertCandidateMetadata(candidate) {
@@ -591,11 +621,149 @@ test('automation run fetches only the configured News Tracker API and skips exis
   const result = await runNewsBriefAutomation({
     NEWS_TRACKER_API: 'https://tracker.example.test/current',
     NEWS_BRIEF_DRY_RUN: 'true',
-  }, { dryRun: true }, { fetch, store });
+  }, { dryRun: true }, { fetch, store, fetchWebflowNewsArchive: async () => [] });
   assert.equal(result.summary.itemsReceived, 1);
   assert.equal(result.summary.itemsSkipped, 1);
   assert.deepEqual(calls, ['https://tracker.example.test/current?t=' + calls[0].split('t=')[1]]);
   assert.equal(calls.some((url) => /reddit|official|newsdata|rss|radar|search/i.test(url)), false);
+});
+
+test('Webflow News archive fetch paginates with limit 100 and offset', async () => {
+  const calls = [];
+  const fetch = async (url) => {
+    calls.push(String(url));
+    const offset = Number(new URL(String(url)).searchParams.get('offset') || 0);
+    const count = offset < 100 ? 100 : 25;
+    return new Response(JSON.stringify({
+      items: Array.from({ length: count }, (_, index) => webflowNewsItem(`wf_${offset + index}`)),
+      pagination: { total: 125, limit: 100, offset },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const items = await fetchWebflowNewsArchive({ WEBFLOW_TOKEN: 'test-token' }, { fetch });
+  assert.equal(items.length, 125);
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /limit=100&offset=0/);
+  assert.match(calls[1], /limit=100&offset=100/);
+});
+
+test('URL normalization ignores tracking parameters and preserves meaningful parameters', () => {
+  const normalized = normalizeDuplicateUrl('HTTPS://www.Example.com/news/story/?utm_source=x&gclid=y&id=42&b=2&a=1#section');
+  assert.equal(normalized, 'https://example.com/news/story?a=1&b=2&id=42');
+});
+
+test('Wocult duplicate index excludes archived items and includes manual Webflow items', () => {
+  const index = buildWocultDuplicateIndex([
+    webflowNewsItem('archived', { isArchived: true, fieldData: { name: 'Archived duplicate', 'source-url': baseItem.link } }),
+    webflowNewsItem('manual', { fieldData: { name: baseItem.headline, slug: 'manual-wocult-story', 'source-url': baseItem.link } }),
+  ]);
+  assert.equal(index.length, 1);
+  assert.equal(index[0].webflowItemId, 'manual');
+  assert.equal(index[0].wocultUrl, 'https://www.wocult.com/news/manual-wocult-story');
+});
+
+test('published and draft Wocult source URL duplicates skip Claude and do not consume slots', async () => {
+  const items = [
+    trackerItem(1, { headline: 'Published duplicate story for Indian workers', link: 'https://source.test/published?utm_source=x' }),
+    trackerItem(2, { headline: 'Draft duplicate story for Indian workers', link: 'https://source.test/draft' }),
+    trackerItem(3), trackerItem(4), trackerItem(5), trackerItem(6), trackerItem(7),
+  ];
+  const mocks = makeRunMocks(items, {
+    webflowArchive: [
+      webflowNewsItem('published_wf', { fieldData: { name: 'Published duplicate story for Indian workers', slug: 'published-duplicate-story', 'source-url': 'https://source.test/published' } }),
+      webflowNewsItem('draft_wf', { isDraft: true, fieldData: { name: 'Draft duplicate story for Indian workers', slug: 'draft-duplicate-story', 'source-url': 'https://source.test/draft/' } }),
+    ],
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+    NEWS_TRACKER_API: 'https://tracker.example.test/feed',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.webflowItemsChecked, 2);
+  assert.equal(mocks.calls.webflowArchive, 1);
+  assert.equal(result.summary.itemsAlreadyPublishedOnWocult, 1);
+  assert.equal(result.summary.itemsAlreadyInWebflowDraft, 1);
+  assert.equal(result.summary.preflightSkippedItems.length, 2);
+  assert.equal(result.summary.targetItems, 5);
+  assert.equal(mocks.calls.anthropic, 5);
+  assert.equal(mocks.saved.find((c) => c.duplicateCheck?.matchedWebflowItemId === 'published_wf').duplicateCheck.anthropicCalls, 0);
+  assert.equal(mocks.saved.find((c) => c.duplicateCheck?.matchedWebflowItemId === 'draft_wf').duplicateCheck.webSearchRequests, 0);
+});
+
+test('primary-source URL, exact headline and exact slug duplicates are detected before Claude', async () => {
+  const items = [
+    trackerItem(1, { headline: 'Primary source duplicate for workers', primarySourceUrl: 'https://labour.gov.in/report.pdf' }),
+    trackerItem(2, { headline: 'Exact headline duplicate for Indian employees' }),
+    trackerItem(3, { headline: 'Acme hiring plan adds 5000 jobs' }),
+  ];
+  const mocks = makeRunMocks(items, {
+    webflowArchive: [
+      webflowNewsItem('primary_match', { fieldData: { name: 'Old primary story', 'primary-source-url': 'https://labour.gov.in/report.pdf' } }),
+      webflowNewsItem('headline_match', { fieldData: { name: 'Exact headline duplicate for Indian employees', slug: 'other-story' } }),
+      webflowNewsItem('slug_match', { fieldData: { name: 'Different title', slug: 'acme-hiring-plan-adds-5000-jobs' } }),
+    ],
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_TRACKER_API: 'https://tracker.example.test/feed',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.preflightSkippedItems.length, 3);
+  assert.deepEqual(result.summary.preflightSkippedItems.map((i) => i.matchReason), ['primary_source_url_exact', 'headline_exact', 'slug_exact']);
+  assert.equal(mocks.calls.anthropic, 0);
+});
+
+test('high-confidence same-story match skips while broad-topic similarity does not', () => {
+  const index = buildWocultDuplicateIndex([
+    webflowNewsItem('same_story', { fieldData: { name: 'TCS layoffs affect 12000 employees in India', slug: 'tcs-layoffs-affect-12000-employees' } }),
+    webflowNewsItem('broad_ai', { fieldData: { name: 'AI adoption changes office work', slug: 'ai-adoption-changes-office-work' } }),
+  ]);
+  const high = checkWocultDuplicate(trackerItem(1, { headline: 'TCS layoffs affect 12000 workers in India' }), index);
+  assert.equal(high.confidence, 'high');
+  assert.equal(high.matchReason, 'story_fingerprint_high');
+  const broad = checkWocultDuplicate(trackerItem(2, { headline: 'AI tools influence hiring plans for workers' }), index);
+  assert.equal(broad.status, 'no_wocult_match');
+});
+
+test('possible Wocult duplicate is held for editorial check without Claude usage', async () => {
+  const item = trackerItem(1, {
+    headline: 'Infosys AI hiring plan adds 5000 roles',
+    whyItMatters: 'The story mentions Infosys hiring.',
+  });
+  const mocks = makeRunMocks([item], {
+    webflowArchive: [
+      webflowNewsItem('possible_wf', { fieldData: { name: 'Infosys AI hiring plan shifts 5000 jobs', slug: 'infosys-ai-hiring-plan-shifts-5000-jobs', standfirst: 'Infosys plans 5000 jobs in AI services.' } }),
+    ],
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_TRACKER_API: 'https://tracker.example.test/feed',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsPossibleWocultDuplicates, 1);
+  assert.equal(result.summary.targetItems, 0);
+  assert.equal(mocks.calls.anthropic, 0);
+  assert.equal(mocks.saved[0].status, 'needs_editorial_check');
+  assert.equal(mocks.saved[0].duplicateCheck.status, 'possible_wocult_duplicate');
+  assert.equal(mocks.saved[0].duplicateCheck.matchedWocultUrl, 'https://www.wocult.com/news/infosys-ai-hiring-plan-shifts-5000-jobs');
+});
+
+test('archive-check failure blocks assessment and records zero usage', async () => {
+  const err = new Error('webflow unavailable');
+  err.failureStage = 'wocult_duplicate_check';
+  err.failureCode = 'webflow_news_fetch_failed';
+  const mocks = makeRunMocks([trackerItem(1)], { webflowArchiveError: err });
+  const result = await runNewsBriefAutomation({
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_TRACKER_API: 'https://tracker.example.test/feed',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.ok, false);
+  assert.equal(result.summary.state, 'failed');
+  assert.equal(result.summary.wocultDuplicateCheckCompleted, false);
+  assert.equal(result.summary.errorSummary[0].failureStage, 'wocult_duplicate_check');
+  assert.equal(mocks.calls.anthropic, 0);
+  assert.equal(result.summary.usage.anthropicCalls, 0);
 });
 
 test('run accepts valid client runId, rejects invalid and reused runId', async () => {
@@ -1101,7 +1269,7 @@ test('empty qualifying set does not send an approval digest', async () => {
     NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
     NEWS_BRIEF_EMAIL_ENABLED: 'true',
     NEWS_BRIEF_DRY_RUN: 'false',
-  }, { dryRun: false }, { fetch, store });
+  }, { dryRun: false }, { fetch, store, fetchWebflowNewsArchive: async () => [] });
   assert.equal(result.summary.itemsRejected, 1);
   assert.equal(result.summary.emailsSent, 0);
   assert.equal(emailFetches, 0);
@@ -1141,7 +1309,7 @@ test('malformed qualification JSON fails one item without stopping remaining can
     NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
     NEWS_BRIEF_DRY_RUN: 'true',
     NEWS_BRIEF_MAX_ITEMS_PER_RUN: '2',
-  }, { dryRun: true }, { fetch, store });
+  }, { dryRun: true }, { fetch, store, fetchWebflowNewsArchive: async () => [] });
   assert.equal(result.summary.failures, 1);
   assert.equal(result.summary.itemsRejected, 1);
   assert.equal(saved.length, 2);
@@ -1188,7 +1356,7 @@ test('unsupported qualification enum failure stores only a truncated diagnostic'
     NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
     NEWS_BRIEF_DRY_RUN: 'true',
     NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
-  }, { dryRun: true }, { fetch, store });
+  }, { dryRun: true }, { fetch, store, fetchWebflowNewsArchive: async () => [] });
   assert.equal(result.summary.failures, 1);
   assert.equal(result.summary.errorSummary[0].error, 'Invalid qualification JSON: recommendedPriority_invalid');
   assert.equal(result.summary.errorSummary[0].qualificationDiagnostic.length, 4000);
