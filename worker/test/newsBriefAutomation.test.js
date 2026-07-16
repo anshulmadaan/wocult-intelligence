@@ -87,6 +87,8 @@ function trackerItem(n, overrides = {}) {
 function makeRunMocks(items, options = {}) {
   const saved = [];
   const activities = [];
+  const runs = [];
+  const runMap = new Map(options.existingRuns || []);
   const calls = { anthropic: 0, source: 0, draft: 0 };
   const existingLinks = new Set(options.existingLinks || []);
   const declinedLinks = new Set(options.declinedLinks || []);
@@ -96,7 +98,16 @@ function makeRunMocks(items, options = {}) {
     isDeclinedSuppressed: async (cKey) => declinedLinks.has(cKey),
     saveCandidate: async (candidate) => { saved.push(candidate); return candidate; },
     addActivity: async (id, type, data) => { activities.push({ id, type, data }); },
-    saveRun: async () => {},
+    getRun: async (id) => runMap.get(id) || null,
+    activeRun: async () => options.activeRun || null,
+    latestCompletedRun: async () => null,
+    latestRuns: async () => [...runMap.values()].reverse(),
+    saveRun: async (run, saveOptions = {}) => {
+      if (saveOptions.createOnly && runMap.has(run.runId)) throw new Error('already_exists');
+      const copy = JSON.parse(JSON.stringify(run));
+      runs.push(copy);
+      runMap.set(run.runId, copy);
+    },
   };
   const fetch = async (url, init = {}) => {
     const href = String(url);
@@ -114,12 +125,13 @@ function makeRunMocks(items, options = {}) {
       const index = calls.anthropic - calls.draft;
       const response = qualificationFor(index, body);
       if (response instanceof Error) throw response;
-      return new Response(JSON.stringify({ content: [{ type: 'text', text: typeof response === 'string' ? response : JSON.stringify(response) }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      const usage = options.usageFor ? options.usageFor(calls.anthropic, body) : {};
+      return new Response(JSON.stringify({ model: options.model || 'claude-test', usage, content: [{ type: 'text', text: typeof response === 'string' ? response : JSON.stringify(response) }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
     calls.source += 1;
     return new Response('<html>source text about Indian workers and jobs</html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
   };
-  return { saved, activities, calls, store, fetch, primarySourceSearch: options.primarySourceSearch };
+  return { saved, activities, calls, runs, runMap, store, fetch, primarySourceSearch: options.primarySourceSearch };
 }
 
 function assertCandidateMetadata(candidate) {
@@ -584,6 +596,147 @@ test('automation run fetches only the configured News Tracker API and skips exis
   assert.equal(result.summary.itemsSkipped, 1);
   assert.deepEqual(calls, ['https://tracker.example.test/current?t=' + calls[0].split('t=')[1]]);
   assert.equal(calls.some((url) => /reddit|official|newsdata|rss|radar|search/i.test(url)), false);
+});
+
+test('run accepts valid client runId, rejects invalid and reused runId', async () => {
+  const valid = makeRunMocks([trackerItem(1)]);
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+  }, { dryRun: true, requestRunId: 'run_client_abc12345' }, valid);
+  assert.equal(result.summary.runId, 'run_client_abc12345');
+  assert.equal(valid.runs[0].runId, 'run_client_abc12345');
+
+  const invalid = await runNewsBriefAutomation({}, { dryRun: true, requestRunId: '../bad' }, makeRunMocks([]));
+  assert.equal(invalid.status, 400);
+
+  const reused = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_DRY_RUN: 'true',
+  }, { dryRun: true, requestRunId: 'run_client_abc12345' }, makeRunMocks([], { existingRuns: [['run_client_abc12345', { runId: 'run_client_abc12345' }]] }));
+  assert.equal(reused.status, 409);
+});
+
+test('active run lock rejects concurrent runs and allows stale recovery', async () => {
+  const active = { runId: 'run_active_12345678', state: 'running', phase: 'qualifying', heartbeatAt: new Date().toISOString() };
+  const conflict = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_DRY_RUN: 'true',
+  }, { dryRun: true, requestRunId: 'run_new_12345678' }, makeRunMocks([], { activeRun: active }));
+  assert.equal(conflict.status, 409);
+  assert.equal(conflict.activeRunId, 'run_active_12345678');
+
+  const stale = { ...active, heartbeatAt: new Date(Date.now() - 40 * 60 * 1000).toISOString() };
+  const recovered = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_DRY_RUN: 'true',
+  }, { dryRun: true, requestRunId: 'run_new_87654321' }, makeRunMocks([], { activeRun: stale }));
+  assert.equal(recovered.status, undefined);
+  assert.equal(recovered.summary.runId, 'run_new_87654321');
+});
+
+test('run progress moves from indeterminate to target percentage and final 100', async () => {
+  const items = Array.from({ length: 5 }, (_, i) => trackerItem(i + 1));
+  const mocks = makeRunMocks(items, {
+    usageFor: () => ({ input_tokens: 10, output_tokens: 3 }),
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true, requestRunId: 'run_progress_12345678' }, mocks);
+  assert.equal(result.summary.targetItems, 5);
+  assert.equal(result.summary.percentComplete, 100);
+  assert.ok(mocks.runs.some((run) => run.targetItems === null && run.percentComplete === null));
+  assert.ok(mocks.runs.some((run) => run.targetItems === 5 && run.percentComplete === 0));
+  assert.ok(mocks.runs.some((run) => run.completedItems === 2 && run.percentComplete === 40));
+});
+
+test('attempted items preserve newest-first order, exclude skipped records and never exceed max', async () => {
+  const hoursAgo = (hours) => new Date(Date.now() - hours * 3600000).toISOString();
+  const items = Array.from({ length: 7 }, (_, i) => trackerItem(i + 1, { dateFound: hoursAgo(7 - i) }));
+  const ordered = normalizeNewsTrackerResponse({ items }).items.sort((a, b) => Date.parse(b.dateFound) - Date.parse(a.dateFound));
+  const existingLinks = [createStoryFingerprint(ordered[0])];
+  const mocks = makeRunMocks(items, { existingLinks });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.itemsSkipped, 1);
+  assert.equal(result.summary.attemptedItems.length, 5);
+  assert.deepEqual(result.summary.attemptedItems.map((i) => i.headline), ordered.slice(1, 6).map((i) => i.headline));
+});
+
+test('usage accumulates input, output, cache and web-search fields across calls and candidates', async () => {
+  const items = [trackerItem(1), trackerItem(2)];
+  const mocks = makeRunMocks(items, {
+    qualificationFor: (index, body) => String(body.messages?.[0]?.content || '').includes('Write a reported')
+      ? goodDraft
+      : { ...goodQualification, materialFacts: [] },
+    usageFor: (call) => ({
+      input_tokens: call * 10,
+      output_tokens: call,
+      cache_creation_input_tokens: 2,
+      cache_read_input_tokens: 3,
+      server_tool_use: { web_search_requests: 1 },
+    }),
+    model: 'claude-usage-test',
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '2',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.usage.anthropicCalls, 4);
+  assert.equal(result.summary.usage.inputTokens, 100);
+  assert.equal(result.summary.usage.outputTokens, 10);
+  assert.equal(result.summary.usage.cacheCreationInputTokens, 8);
+  assert.equal(result.summary.usage.cacheReadInputTokens, 12);
+  assert.equal(result.summary.usage.webSearchRequests, 4);
+  assert.deepEqual(result.summary.usage.models, ['claude-usage-test']);
+  assert.equal(result.summary.attemptedItems[0].usage.anthropicCalls, 2);
+});
+
+test('deterministic rejection contributes zero usage and historical missing usage remains safe', async () => {
+  const oldItem = trackerItem(1, { dateFound: '2026-01-01T00:00:00.000Z' });
+  const mocks = makeRunMocks([oldItem]);
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.usage.anthropicCalls, 0);
+  assert.equal(result.summary.attemptedItems[0].usage.inputTokens, 0);
+  assert.doesNotThrow(() => JSON.stringify({ runId: 'run_old', state: 'completed' }));
+});
+
+test('later technical failure preserves qualification data and stores safe failure metadata', async () => {
+  const mocks = makeRunMocks([baseItem], {
+    qualificationFor: (index, body) => String(body.messages?.[0]?.content || '').includes('Write a reported')
+      ? { title: 'Bad draft' }
+      : { ...goodQualification, materialFacts: [] },
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.failures, 1);
+  assert.equal(result.summary.completedItems, 1);
+  assert.equal(result.summary.percentComplete, 100);
+  assert.equal(mocks.saved[0].qualificationResult.overallScore, goodQualification.overallScore);
+  assert.equal(mocks.saved[0].failureStage, 'drafting_parse');
+  assert.equal(mocks.saved[0].failureCode, 'drafting_json_invalid');
+  assert.ok(mocks.saved[0].failureMessage.length <= 1000);
+  assert.equal(JSON.stringify(mocks.saved[0]).includes('rawModelResponse'), false);
 });
 
 test('run skips first five handled records and processes the next five new tracker records', async () => {
