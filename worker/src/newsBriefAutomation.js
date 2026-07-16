@@ -85,11 +85,11 @@ export function normalizeNewsTrackerItem(item = {}, index = 0) {
   const sourceId = clean(item.id || item.sourceItemId || item.rowId || item.guid || stableHash(`${headline}|${sourceUrl}|${item.dateFound || ''}`));
   return {
     sourceId,
-    dateFound: clean(item.dateFound || item.foundDate || item.discoveredAt || ''),
+    dateFound: clean(item.dateFound || item.foundDate || item.discoveredAt || item.discoveredTimestamp || item.dateFoundTimestamp || ''),
     headline,
     source: clean(item.source || item.publisher || item.src || ''),
     sourceUrl: clean(sourceUrl),
-    publicationDate: clean(item.publicationDate || item.publishedDate || item.pub || item.date || ''),
+    publicationDate: clean(item.publicationDate || item.publishedAt || item.datePublished || item.publishedDate || item.pubDate || item.pub || item.date || ''),
     theme: clean(item.theme || ''),
     priority: clean(item.priority || ''),
     suggestedFormat: clean(item.suggestedFormat || item.format || ''),
@@ -114,6 +114,55 @@ export function normalizeNewsTrackerResponse(data = {}) {
     count: Number(data.count || items.length || 0),
     items: items.map(normalizeNewsTrackerItem),
   };
+}
+
+export function sortNewsTrackerItemsNewestFirst(items = []) {
+  return [...items].map((item, originalIndex) => ({
+    item,
+    originalIndex,
+    order: newsTrackerItemOrder(item, originalIndex),
+  })).sort((a, b) => {
+    if (a.order.timestamp && b.order.timestamp) {
+      if (b.order.timestamp !== a.order.timestamp) return b.order.timestamp - a.order.timestamp;
+      return a.originalIndex - b.originalIndex;
+    }
+    if (a.order.timestamp || b.order.timestamp) return a.order.timestamp ? -1 : 1;
+    if (a.order.rowOrder !== null && b.order.rowOrder !== null && b.order.rowOrder !== a.order.rowOrder) {
+      return b.order.rowOrder - a.order.rowOrder;
+    }
+    return a.originalIndex - b.originalIndex;
+  }).map((entry) => entry.item);
+}
+
+function newsTrackerItemOrder(item = {}, originalIndex = 0) {
+  const timestamp =
+    firstValidTimestamp(item, ['publicationDate', 'publishedAt', 'datePublished', 'publishedDate', 'pubDate', 'pub', 'date'])
+    || firstValidTimestamp(item, ['dateFound', 'foundDate', 'discoveredAt', 'discoveredTimestamp', 'dateFoundTimestamp'])
+    || firstValidTimestamp(item, ['timestamp', 'createdAt', 'emailDate', 'insertedAt']);
+  return {
+    timestamp,
+    rowOrder: timestamp ? null : firstNumericField(item, ['rowNumber', 'row', 'sourceRow', 'index']),
+    originalIndex,
+  };
+}
+
+function firstValidTimestamp(item, fields) {
+  for (const field of fields) {
+    const value = item?.[field] ?? item?.raw?.[field];
+    const timestamp = parseDateMs(value);
+    if (timestamp) return timestamp;
+  }
+  return 0;
+}
+
+function firstNumericField(item, fields) {
+  for (const field of fields) {
+    const value = item?.[field] ?? item?.raw?.[field];
+    if (value === undefined || value === null || value === '') continue;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return null;
 }
 
 export function deterministicEligibility(item, now = new Date()) {
@@ -385,7 +434,8 @@ export async function fetchNewsTracker(config, deps = {}) {
   const url = `${config.newsTrackerApi}${config.newsTrackerApi.includes('?') ? '&' : '?'}t=${Date.now()}`;
   const res = await fetchWithTimeout(url, { headers: { accept: 'application/json' } }, 15000, fetchImpl);
   if (!res.ok) throw new Error(`News Tracker returned ${res.status}`);
-  return normalizeNewsTrackerResponse(await res.json());
+  const tracker = normalizeNewsTrackerResponse(await res.json());
+  return { ...tracker, items: sortNewsTrackerItemsNewestFirst(tracker.items) };
 }
 
 export async function callClaudeJson(env, prompt, maxTokens = 1200, deps = {}) {
