@@ -58,6 +58,33 @@ const REQUIRED_DRAFT_FIELDS = [
   'sourceUrl',
 ];
 
+export const PRIMARY_SOURCE_TYPES = [
+  'government_report',
+  'government_notification',
+  'regulator_circular',
+  'court_order',
+  'court_judgment',
+  'official_dataset',
+  'company_filing',
+  'stock_exchange_disclosure',
+  'company_announcement',
+  'press_release',
+  'research_paper',
+  'survey_report',
+  'think_tank_report',
+  'industry_report',
+  'official_transcript',
+  'policy_document',
+  'union_statement',
+  'original_interview',
+  'other_primary_source',
+];
+
+const PRIMARY_SOURCE_RELATIONSHIPS = ['based_on', 'reports_findings_from', 'announces', 'responds_to', 'analyses', 'cites', 'summarises', 'unclear'];
+const PRIMARY_SOURCE_DISCOVERY_METHODS = ['directly_linked_by_article', 'article_text_reference', 'official_site_search', 'web_search', 'document_title_search', 'organisation_search', 'statistic_match', 'manual_staff_entry'];
+const PRIMARY_SOURCE_DISCOVERY_STATUSES = ['not_required', 'pending', 'found', 'multiple_found', 'not_found', 'ambiguous', 'failed'];
+const PRIMARY_SOURCE_FAILURE_CODES = ['primary_source_not_found', 'primary_source_ambiguous', 'primary_source_url_invalid', 'primary_source_unreachable', 'primary_source_content_mismatch', 'primary_source_verification_failed'];
+
 export function getAutomationConfig(env = {}) {
   return {
     automationEnabled: flag(env.NEWS_BRIEF_AUTOMATION_ENABLED, false),
@@ -326,7 +353,7 @@ export function validateDraft(value) {
 
 export function verifySources(candidate, fetchedSources = []) {
   const accessible = fetchedSources.filter((s) => s && s.ok !== false && s.url && (s.text || s.excerpt));
-  const primary = accessible.find((s) => /primary|official|filing|government|court|regulator|company|research/i.test(s.type || s.publisher || s.url));
+  const primary = accessible.find((s) => /primary|official|filing|government|court|regulator|company|research|report|circular|dataset|policy|release|judgment|judgement/i.test(s.type || s.publisher || s.url));
   const credibleSecondary = accessible.filter((s) => !primary || s.url !== primary.url);
   const conflicts = detectConflicts(accessible);
   if (conflicts.length) {
@@ -361,6 +388,396 @@ export function verifySources(candidate, fetchedSources = []) {
     summary: 'Not enough accessible factual source material.',
     sourceAccessFailures: fetchedSources.filter((s) => s && s.ok === false).map((s) => ({ url: s.url, error: s.error || 'fetch_failed' })),
   };
+}
+
+export function primarySourceDiscoveryRequired(item = {}, qualification = null) {
+  const text = [
+    item.headline,
+    item.theme,
+    item.whyItMatters,
+    item.verification,
+    qualification?.recommendedAngle,
+    ...(qualification?.materialFacts || []),
+    ...(qualification?.qualificationReasons || []),
+    ...(qualification?.missingInformation || []),
+  ].join(' ').toLowerCase();
+  return /(report|study|survey|filing|disclosure|court|judgment|order|tribunal|policy|notification|circular|dataset|data portal|ministry|regulator|sebi|rbi|nse|bse|parliament|gazette|press release|white paper|research|paper|doi|university|think tank|association|union|official|announcement)/i.test(text);
+}
+
+export async function discoverPrimarySources(item, qualification = null, env = {}, deps = {}, options = {}) {
+  const runId = options.runId || '';
+  const now = options.now || new Date().toISOString();
+  if (!primarySourceDiscoveryRequired(item, qualification)) {
+    return buildPrimarySourceDiscovery({
+      status: 'not_required',
+      notes: 'No external report, filing, order, dataset or official document dependency was detected.',
+      runId,
+      now,
+    });
+  }
+
+  let articleFetch = { ok: false, text: '', html: '', links: [], error: '' };
+  try {
+    articleFetch = await fetchArticleForPrimaryDiscovery(item, deps);
+  } catch (e) {
+    return buildPrimarySourceDiscovery({
+      status: 'failed',
+      failureCode: 'primary_source_unreachable',
+      notes: `Could not inspect article source for primary-source references: ${safeShortText(e.message, 180)}`,
+      searchesAttempted: buildPrimarySourceSearchQueries(item, qualification).slice(0, 5),
+      organisationsChecked: inferPrimarySourceOrganisations(item, qualification),
+      runId,
+      now,
+    });
+  }
+
+  const directSources = [];
+  for (const source of findPrimarySourceLinksInArticle(item, articleFetch)) {
+    const verified = await verifyPrimarySourceCandidate(source, item, articleFetch.text, deps);
+    if (verified.accepted) directSources.push(verified.source);
+  }
+  if (directSources.length) {
+    return buildPrimarySourceDiscovery({
+      status: directSources.length > 1 ? 'multiple_found' : 'found',
+      primarySources: directSources,
+      notes: `Found ${directSources.length} primary source${directSources.length === 1 ? '' : 's'} directly referenced by the article.`,
+      searchesAttempted: ['article outbound link inspection'],
+      organisationsChecked: inferPrimarySourceOrganisations(item, qualification),
+      runId,
+      now,
+    });
+  }
+
+  try {
+    const searchResult = deps.primarySourceSearch
+      ? await deps.primarySourceSearch({ item, qualification, articleText: articleFetch.text, queries: buildPrimarySourceSearchQueries(item, qualification) })
+      : await callClaudeJson(env, buildPrimarySourceDiscoveryPrompt(item, qualification, articleFetch.text), 1200, deps);
+    const candidates = Array.isArray(searchResult?.primarySources) ? searchResult.primarySources : [];
+    const accepted = [];
+    const rejectedNotes = [];
+    for (const candidate of candidates.slice(0, 5)) {
+      const verified = await verifyPrimarySourceCandidate(candidate, item, articleFetch.text, deps);
+      if (verified.accepted) accepted.push(verified.source);
+      else rejectedNotes.push(verified.reason);
+    }
+    if (accepted.length) {
+      return buildPrimarySourceDiscovery({
+        status: accepted.length > 1 ? 'multiple_found' : 'found',
+        primarySources: accepted,
+        notes: safeShortText(searchResult?.notes || `Found ${accepted.length} primary-source candidate${accepted.length === 1 ? '' : 's'} through search.`, 420),
+        searchesAttempted: conciseList(searchResult?.searchesAttempted || buildPrimarySourceSearchQueries(item, qualification), 8),
+        organisationsChecked: conciseList(searchResult?.organisationsChecked || inferPrimarySourceOrganisations(item, qualification), 8),
+        runId,
+        now,
+      });
+    }
+    const status = candidates.length > 1 ? 'ambiguous' : 'not_found';
+    return buildPrimarySourceDiscovery({
+      status,
+      failureCode: status === 'ambiguous' ? 'primary_source_ambiguous' : 'primary_source_not_found',
+      notes: safeShortText(searchResult?.notes || rejectedNotes.filter(Boolean).join('; ') || 'No authoritative primary source could be verified.', 420),
+      searchesAttempted: conciseList(searchResult?.searchesAttempted || buildPrimarySourceSearchQueries(item, qualification), 8),
+      organisationsChecked: conciseList(searchResult?.organisationsChecked || inferPrimarySourceOrganisations(item, qualification), 8),
+      runId,
+      now,
+    });
+  } catch (e) {
+    return buildPrimarySourceDiscovery({
+      status: 'failed',
+      failureCode: 'primary_source_verification_failed',
+      notes: `Primary-source discovery failed safely: ${safeShortText(e.message, 180)}`,
+      searchesAttempted: buildPrimarySourceSearchQueries(item, qualification).slice(0, 5),
+      organisationsChecked: inferPrimarySourceOrganisations(item, qualification),
+      runId,
+      now,
+    });
+  }
+}
+
+export function applyPrimarySourceDiscovery(candidate, discovery, existing = null) {
+  const manualSources = (existing?.primarySources || candidate.primarySources || [])
+    .filter((source) => source?.discoveryMethod === 'manual_staff_entry' || source?.manual === true);
+  const automaticSources = discovery?.primarySources || [];
+  const primarySources = mergePrimarySources(manualSources, automaticSources);
+  const firstVerified = primarySources.find((source) => source.verified) || null;
+  return {
+    ...candidate,
+    articleSourceUrl: candidate.articleSourceUrl || candidate.canonicalUrl || candidate.trackerItem?.sourceUrl || '',
+    articleSourceName: candidate.articleSourceName || candidate.trackerItem?.source || candidate.publishers?.[0] || '',
+    primarySourceFound: primarySources.length > 0,
+    primarySources,
+    primarySourceUrl: firstVerified?.url || '',
+    supportingSourceUrls: mergeUrlLists(candidate.supportingSourceUrls || [], primarySources.map((source) => source.url)),
+    primarySourceDiscoveryStatus: discovery?.status || 'pending',
+    primarySourceDiscoveryAt: discovery?.discoveredAt || new Date().toISOString(),
+    primarySourceDiscoveryRunId: discovery?.runId || candidate.runId || '',
+    primarySourceDiscoveryNotes: discovery?.notes || '',
+    primarySourceDiscoveryFailureCode: discovery?.failureCode || '',
+    failureStage: discovery?.status === 'failed' ? 'primary_source_discovery' : candidate.failureStage || '',
+    lastSuccessfulStage: ['found', 'multiple_found', 'not_found', 'ambiguous', 'not_required'].includes(discovery?.status) ? 'primary_source_discovery' : candidate.lastSuccessfulStage || '',
+    primarySourceSearchesAttempted: conciseList(discovery?.searchesAttempted || [], 8),
+    primarySourceOrganisationsChecked: conciseList(discovery?.organisationsChecked || [], 8),
+    sourceChain: {
+      newsTracker: candidate.newsTrackerSourceId || candidate.trackerItem?.sourceId || '',
+      articleSource: {
+        name: candidate.articleSourceName || candidate.trackerItem?.source || '',
+        url: candidate.articleSourceUrl || candidate.canonicalUrl || '',
+        headline: candidate.originalHeadline || candidate.trackerItem?.headline || '',
+        publicationDate: candidate.sourcePublishedTimestamp || '',
+        discoveredAt: candidate.discoveredTimestamp || '',
+      },
+      primarySources,
+    },
+  };
+}
+
+function buildPrimarySourceDiscovery(payload = {}) {
+  const status = PRIMARY_SOURCE_DISCOVERY_STATUSES.includes(payload.status) ? payload.status : 'failed';
+  const sources = (payload.primarySources || []).map(sanitizePrimarySource).filter(Boolean);
+  return {
+    status: sources.length > 1 && status === 'found' ? 'multiple_found' : status,
+    primarySources: sources,
+    notes: safeShortText(payload.notes || '', 420),
+    searchesAttempted: conciseList(payload.searchesAttempted || [], 8),
+    organisationsChecked: conciseList(payload.organisationsChecked || [], 8),
+    failureCode: PRIMARY_SOURCE_FAILURE_CODES.includes(payload.failureCode) ? payload.failureCode : '',
+    discoveredAt: payload.now || new Date().toISOString(),
+    runId: payload.runId || '',
+  };
+}
+
+function sanitizePrimarySource(source = {}) {
+  const url = canonicalizeUrl(source.url || source.href || '');
+  if (!isUsableUrl(url)) return null;
+  const sourceType = PRIMARY_SOURCE_TYPES.includes(source.sourceType) ? source.sourceType : 'other_primary_source';
+  const relationship = PRIMARY_SOURCE_RELATIONSHIPS.includes(source.relationship) ? source.relationship : 'unclear';
+  const discoveryMethod = PRIMARY_SOURCE_DISCOVERY_METHODS.includes(source.discoveryMethod) ? source.discoveryMethod : 'web_search';
+  const confidence = ['high', 'medium', 'low'].includes(source.confidence) ? source.confidence : 'low';
+  return stripEmptyOptionalFields({
+    title: safeShortText(source.title || source.name || '', 180),
+    url,
+    publisherOrIssuer: safeShortText(source.publisherOrIssuer || source.issuer || source.publisher || '', 140),
+    sourceType,
+    publicationDate: safeShortText(source.publicationDate || source.date || '', 80),
+    relationship,
+    discoveryMethod,
+    confidence,
+    verified: source.verified === true,
+    verificationNote: safeShortText(source.verificationNote || '', 260),
+    confirmedByStaff: source.confirmedByStaff === true,
+    rejectedByStaff: source.rejectedByStaff === true,
+    manual: source.manual === true || discoveryMethod === 'manual_staff_entry',
+  });
+}
+
+async function fetchArticleForPrimaryDiscovery(item, deps = {}) {
+  const articleUrl = item.sourceUrl || item.link || item.url || '';
+  if (!articleUrl) return { ok: false, text: '', html: '', links: [], error: 'missing_article_url' };
+  const fetchImpl = deps.fetch || fetch;
+  const res = await fetchWithTimeout(articleUrl, { headers: { 'User-Agent': 'WocultIntelligence/1.0 by Wocult' } }, 12000, fetchImpl);
+  const html = await res.text();
+  return {
+    ok: res.ok,
+    text: stripHtml(html).slice(0, 6000),
+    html: html.slice(0, 60000),
+    links: extractLinks(html, articleUrl).slice(0, 80),
+    error: res.ok ? '' : `article_fetch_${res.status}`,
+  };
+}
+
+function findPrimarySourceLinksInArticle(item, articleFetch) {
+  const articleUrl = item.sourceUrl || item.link || item.url || '';
+  const articleHost = hostName(articleUrl);
+  return (articleFetch.links || []).filter((link) => {
+    if (!isUsableUrl(link.url)) return false;
+    if (canonicalizeUrl(link.url) === canonicalizeUrl(articleUrl)) return false;
+    const host = hostName(link.url);
+    if (!host || host === articleHost) return false;
+    return isAuthoritativePrimaryDomain(host) || primarySourceTypeFromUrl(link.url, link.text) !== 'other_primary_source';
+  }).map((link) => ({
+    title: link.text || link.url,
+    url: link.url,
+    publisherOrIssuer: issuerFromHost(link.url),
+    sourceType: primarySourceTypeFromUrl(link.url, link.text),
+    relationship: 'cites',
+    discoveryMethod: 'directly_linked_by_article',
+    confidence: isAuthoritativePrimaryDomain(hostName(link.url)) ? 'high' : 'medium',
+  }));
+}
+
+async function verifyPrimarySourceCandidate(candidate, item, articleText = '', deps = {}) {
+  const source = sanitizePrimarySource(candidate);
+  if (!source) return { accepted: false, reason: 'primary_source_url_invalid' };
+  const articleUrl = item.sourceUrl || item.link || item.url || '';
+  if (canonicalizeUrl(source.url) === canonicalizeUrl(articleUrl)) return { accepted: false, reason: 'secondary media article is not a primary source' };
+  const host = hostName(source.url);
+  if (hostName(articleUrl) === host && source.discoveryMethod !== 'manual_staff_entry') return { accepted: false, reason: 'publisher article domain cannot verify itself as primary source' };
+  if (isLikelySecondaryMediaDomain(host) && !['original_interview', 'press_release'].includes(source.sourceType)) {
+    return { accepted: false, reason: 'secondary media source rejected as primary' };
+  }
+  let text = '';
+  let fetchError = '';
+  try {
+    const fetchImpl = deps.fetch || fetch;
+    const res = await fetchWithTimeout(source.url, { headers: { 'User-Agent': 'WocultIntelligence/1.0 by Wocult' } }, 12000, fetchImpl);
+    text = stripHtml(await res.text()).slice(0, 6000);
+    if (!res.ok) fetchError = `primary_source_fetch_${res.status}`;
+  } catch (e) {
+    fetchError = e.message;
+  }
+  if (fetchError && source.discoveryMethod !== 'manual_staff_entry') return { accepted: false, reason: 'primary_source_unreachable' };
+  const support = primarySourceSupportsClaim(source, item, text, articleText);
+  if (!support.ok && source.discoveryMethod !== 'manual_staff_entry') return { accepted: false, reason: 'primary_source_content_mismatch' };
+  return {
+    accepted: true,
+    source: {
+      ...source,
+      verified: source.verified === true || support.ok,
+      confidence: source.confidence === 'high' || support.ok ? source.confidence : 'low',
+      verificationNote: source.verificationNote || support.note,
+    },
+  };
+}
+
+function primarySourceSupportsClaim(source, item, sourceText, articleText = '') {
+  const haystack = normalizeText(`${source.title} ${source.publisherOrIssuer} ${sourceText}`);
+  const content = normalizeText(sourceText);
+  const article = normalizeText(articleText);
+  const titleTerms = normalizeText(`${item.headline || ''} ${item.theme || ''}`).split(' ').filter((term) => term.length > 4).slice(0, 10);
+  const overlap = titleTerms.filter((term) => haystack.includes(term)).length;
+  const contentOverlap = titleTerms.filter((term) => content.includes(term)).length;
+  const issuerMatch = source.publisherOrIssuer && content.includes(normalizeText(source.publisherOrIssuer).split(' ')[0] || '');
+  const statMatches = (String(articleText || '').match(/\b\d+(?:\.\d+)?%?|\b\d{2,}(?:,\d{3})*\b/g) || [])
+    .slice(0, 8)
+    .filter((value) => sourceText.includes(value)).length;
+  const official = isAuthoritativePrimaryDomain(hostName(source.url));
+  if (official && (contentOverlap >= 1 || issuerMatch || statMatches >= 1 || !sourceText)) {
+    return { ok: true, note: 'Official or authoritative source matched article context.' };
+  }
+  if ((contentOverlap >= 3 && overlap >= 3) || statMatches >= 2) return { ok: true, note: 'Primary source content matched central article terms or statistics.' };
+  return { ok: false, note: 'Primary-source candidate did not sufficiently support the central claim.' };
+}
+
+function buildPrimarySourceDiscoveryPrompt(item, qualification, articleText) {
+  return `Find the original or primary source behind this publisher article. Return ONLY JSON with:
+{"primarySources":[{"title":"","url":"","publisherOrIssuer":"","sourceType":"government_report","publicationDate":"","relationship":"based_on","discoveryMethod":"web_search","confidence":"medium","verified":false,"verificationNote":""}],"searchesAttempted":[],"organisationsChecked":[],"notes":""}
+
+Rules:
+- Do not return the publisher article URL as a primary source.
+- Prefer official domains, regulator/court/company filings, official PDFs, datasets, DOI pages or report landing pages.
+- Return an empty primarySources array when no authoritative URL can be verified.
+- Do not include raw search result pages or scraped text.
+
+Article source:
+${JSON.stringify({ headline: item.headline, source: item.source, sourceUrl: item.sourceUrl, date: item.publicationDate || item.dateFound, qualification }, null, 2)}
+
+Article text excerpt:
+${safeShortText(articleText, 3500)}`;
+}
+
+function buildPrimarySourceSearchQueries(item, qualification = null) {
+  const pieces = [
+    item.headline,
+    item.source,
+    item.theme,
+    qualification?.recommendedAngle,
+    ...(qualification?.materialFacts || []),
+  ].filter(Boolean).map((value) => safeShortText(value, 120));
+  return [...new Set([
+    `${item.headline || ''} official report`,
+    `${item.headline || ''} PDF`,
+    `${pieces.join(' ')} site:gov.in`,
+    `${pieces.join(' ')} filing disclosure`,
+    `${pieces.join(' ')} court order notification circular`,
+  ].map((value) => value.replace(/\s+/g, ' ').trim()).filter(Boolean))].slice(0, 8);
+}
+
+function inferPrimarySourceOrganisations(item, qualification = null) {
+  const text = `${item.headline || ''} ${item.theme || ''} ${item.whyItMatters || ''} ${(qualification?.materialFacts || []).join(' ')}`;
+  const known = text.match(/\b(SEBI|RBI|EPFO|ESIC|NSE|BSE|Supreme Court|High Court|Ministry of [A-Za-z ]+|Government of India|Parliament|Lok Sabha|Rajya Sabha)\b/gi) || [];
+  return conciseList(known, 8);
+}
+
+function extractLinks(html, baseUrl) {
+  const links = [];
+  const re = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+  while ((match = re.exec(String(html || '')))) {
+    try {
+      links.push({
+        url: new URL(match[1], baseUrl).toString(),
+        text: stripHtml(match[2]).slice(0, 180),
+      });
+    } catch (e) {
+      // Ignore malformed article links.
+    }
+  }
+  return links;
+}
+
+function primarySourceTypeFromUrl(url, text = '') {
+  const value = `${url || ''} ${text || ''}`.toLowerCase();
+  if (/judgment|judgement/.test(value)) return 'court_judgment';
+  if (/court|tribunal|order/.test(value)) return 'court_order';
+  if (/circular|regulator|sebi|rbi/.test(value)) return 'regulator_circular';
+  if (/notification|gazette/.test(value)) return 'government_notification';
+  if (/dataset|data\.gov|csv|xlsx/.test(value)) return 'official_dataset';
+  if (/filing|disclosure|nseindia|bseindia|sec\.gov/.test(value)) return 'stock_exchange_disclosure';
+  if (/press[- ]release|announcement/.test(value)) return 'press_release';
+  if (/doi\.org|journal|research|paper/.test(value)) return 'research_paper';
+  if (/survey/.test(value)) return 'survey_report';
+  if (/policy/.test(value)) return 'policy_document';
+  if (/report|pdf/.test(value)) return hostName(url).endsWith('.gov.in') ? 'government_report' : 'other_primary_source';
+  return 'other_primary_source';
+}
+
+function isAuthoritativePrimaryDomain(host) {
+  return /\.(gov|gov\.in|nic\.in|edu|ac\.in)$/i.test(host)
+    || /(sebi\.gov\.in|rbi\.org\.in|nseindia\.com|bseindia\.com|indiacode\.nic\.in|egazette|sci\.gov\.in|indiancourts|mca\.gov\.in|data\.gov\.in|doi\.org|sec\.gov)$/i.test(host)
+    || /(investor|investors|ir)\./i.test(host);
+}
+
+function isLikelySecondaryMediaDomain(host) {
+  return /(economictimes|moneycontrol|ndtv|business-standard|livemint|hindustantimes|indianexpress|timesofindia|news18|firstpost|thehindu|reuters|bloomberg|bbc|cnn|forbes|fortune)\./i.test(host);
+}
+
+function issuerFromHost(url) {
+  const host = hostName(url).replace(/^www\./, '');
+  return host.split('.').slice(0, -1).join('.').replace(/[-.]/g, ' ');
+}
+
+function hostName(value) {
+  try {
+    return new URL(value).hostname.toLowerCase();
+  } catch (e) {
+    return '';
+  }
+}
+
+function mergePrimarySources(...groups) {
+  const seen = new Set();
+  const out = [];
+  groups.flat().forEach((source) => {
+    const cleanSource = sanitizePrimarySource(source);
+    if (!cleanSource) return;
+    const key = canonicalizeUrl(cleanSource.url);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(cleanSource);
+  });
+  return out.slice(0, 8);
+}
+
+function mergeUrlLists(...groups) {
+  return [...new Set(groups.flat().filter(Boolean).map(canonicalizeUrl).filter(isUsableUrl))].slice(0, 12);
+}
+
+function conciseList(values, limit = 8) {
+  return [...new Set((Array.isArray(values) ? values : []).map((value) => safeShortText(value, 160)).filter(Boolean))].slice(0, limit);
+}
+
+function safeShortText(value, max = 240) {
+  return clean(value).slice(0, max);
 }
 
 export async function signApprovalToken(payload, secret, cryptoImpl = globalThis.crypto) {
@@ -500,7 +917,17 @@ export function candidateFromTrackerItem(item, qualification = null, verificatio
     originalHeadline: item.headline,
     proposedHeadline: draft?.title || '',
     canonicalUrl: canonicalizeUrl(item.sourceUrl),
-    primarySourceUrl: verification?.primarySourceUrl || item.sourceUrl,
+    articleSourceUrl: canonicalizeUrl(item.sourceUrl),
+    articleSourceName: item.source,
+    articleSourceHeadline: item.headline,
+    articleSourcePublishedTimestamp: item.publicationDate || '',
+    primarySourceUrl: verification?.primarySourceUrl || '',
+    primarySourceFound: false,
+    primarySources: [],
+    primarySourceDiscoveryStatus: 'pending',
+    primarySourceDiscoveryAt: '',
+    primarySourceDiscoveryRunId: '',
+    primarySourceDiscoveryNotes: '',
     supportingSourceUrls: verification?.supportingSourceUrls || [],
     sourceTitles: verification?.sourceTitles || [item.headline],
     publishers: verification?.publishers || [item.source],
@@ -725,28 +1152,44 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
         let verification = null;
         let draft = null;
         let status = nextStatus;
-        if (nextStatus === 'verifying') {
-          processingStage = 'verification';
-          verification = await verifyCandidateSources(item, deps);
-          if (!verification.ok) status = 'verification_failed';
-          else {
-            summary.itemsVerified += 1;
-            processingStage = 'drafting';
-            status = 'drafting';
-            draft = await callClaudeJson(env, buildDraftPrompt({ item, qualification, verification }), 1800, deps);
-            const dValid = validateDraft(draft);
-            if (!dValid.ok) {
-              const err = new Error(`Invalid draft JSON: ${dValid.errors.join(',')}`);
-              err.failureStatus = 'drafting_failed';
-              throw err;
-            }
-            status = 'awaiting_approval';
-            summary.draftsGenerated += 1;
+        let primaryDiscovery = null;
+        if (nextStatus !== 'rejected_by_filter') {
+          processingStage = 'primary_source_discovery';
+          primaryDiscovery = await discoverPrimarySources(item, qualification, env, deps, { runId });
+          if (primaryDiscovery.status === 'failed') {
+            status = 'needs_editorial_check';
+            if (nextStatus !== 'needs_editorial_check') summary.itemsNeedingEditorialCheck += 1;
+          } else if (['not_found', 'ambiguous'].includes(primaryDiscovery.status) && primarySourceDiscoveryRequired(item, qualification)) {
+            status = 'needs_editorial_check';
+            if (nextStatus !== 'needs_editorial_check') summary.itemsNeedingEditorialCheck += 1;
           }
         }
-        const candidate = withCandidateMetadata({ ...candidateFromTrackerItem(item, qualification, verification, draft), status, dryRun }, null, { runId });
+        if (nextStatus === 'verifying') {
+          if (status === 'verifying') {
+            processingStage = 'verification';
+            verification = await verifyCandidateSources(item, deps, primaryDiscovery);
+            if (!verification.ok) status = 'verification_failed';
+            else {
+              summary.itemsVerified += 1;
+              processingStage = 'drafting';
+              status = 'drafting';
+              draft = await callClaudeJson(env, buildDraftPrompt({ item, qualification, verification, primarySources: primaryDiscovery?.primarySources || [] }), 1800, deps);
+              const dValid = validateDraft(draft);
+              if (!dValid.ok) {
+                const err = new Error(`Invalid draft JSON: ${dValid.errors.join(',')}`);
+                err.failureStatus = 'drafting_failed';
+                throw err;
+              }
+              status = 'awaiting_approval';
+              summary.draftsGenerated += 1;
+            }
+          }
+        }
+        const candidateBase = { ...candidateFromTrackerItem(item, qualification, verification, draft), status, dryRun };
+        const candidate = withCandidateMetadata(primaryDiscovery ? applyPrimarySourceDiscovery(candidateBase, primaryDiscovery) : candidateBase, null, { runId });
         await store.saveCandidate(candidate, { dryRun, runId });
         await store.addActivity(candidate.candidateId, 'qualification', { status, score: qualification.overallScore }, { dryRun });
+        if (primaryDiscovery) await store.addActivity(candidate.candidateId, 'primary_source_discovery', { status: primaryDiscovery.status, count: primaryDiscovery.primarySources.length }, { dryRun });
         if (status === 'awaiting_approval') awaiting.push(candidate);
       } catch (e) {
         summary.failures += 1;
@@ -781,9 +1224,19 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
   return { ok: summary.failures === 0, summary };
 }
 
-async function verifyCandidateSources(item, deps = {}) {
+async function verifyCandidateSources(item, deps = {}, primaryDiscovery = null) {
   const fetchImpl = deps.fetch || fetch;
   const sources = [];
+  for (const primary of primaryDiscovery?.primarySources || []) {
+    if (!primary?.url) continue;
+    try {
+      const res = await fetchWithTimeout(primary.url, { headers: { 'User-Agent': 'WocultIntelligence/1.0 by Wocult' } }, 12000, fetchImpl);
+      const text = await res.text();
+      sources.push({ ok: res.ok, url: primary.url, title: primary.title, publisher: primary.publisherOrIssuer, text: text.slice(0, 4000), excerpt: stripHtml(text).slice(0, 700), type: primary.sourceType || 'primary' });
+    } catch (e) {
+      sources.push({ ok: false, url: primary.url, error: e.message });
+    }
+  }
   if (item.sourceUrl) {
     try {
       const res = await fetchWithTimeout(item.sourceUrl, { headers: { 'User-Agent': 'WocultIntelligence/1.0 by Wocult' } }, 12000, fetchImpl);
