@@ -106,8 +106,9 @@ test('dashboard renders one needs_editorial_check candidate and populates detail
   assert.match(detailHtml, /Qualification reasons/);
   assert.match(detailHtml, /Cautions/);
   assert.match(detailHtml, /Recommended angle/);
-  assert.match(detailHtml, /Editorial-check items are read-only/);
-  assert.doesNotMatch(detailHtml, />Approve</);
+  assert.match(detailHtml, /Original \/ primary source/);
+  assert.match(detailHtml, /Add manual primary-source URL/);
+  assert.match(detailHtml, /Approve with editorial note/);
 });
 
 test('dashboard switches tabs and clears detail panel for empty tabs', () => {
