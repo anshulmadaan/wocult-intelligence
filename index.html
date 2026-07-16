@@ -6024,9 +6024,10 @@ function renderAutomatedNewsBriefLatestRun() {
     return;
   }
   var attempts = run.attemptedItems || [];
-  list.innerHTML = attempts.length
-    ? attempts.map(automatedNewsBriefAttemptCardHtml).join('')
-    : '<div class="empty" style="padding:18px">No attempted items recorded for this run.</div>';
+  list.innerHTML = '<div style="font-weight:700;color:var(--blk);font-size:14px">Candidates assessed by AI</div>'
+    + (attempts.length
+      ? attempts.map(automatedNewsBriefAttemptCardHtml).join('')
+      : '<div class="empty" style="padding:18px">No candidates were assessed by AI in this run.</div>');
   detail.innerHTML = automatedNewsBriefRunSummaryHtml(run);
 }
 

@@ -220,7 +220,9 @@ test('latest run renders five attempted items in newest-first order with token t
   ctx.automatedNewsBriefFilter = 'latest_run';
   ctx.renderAutomatedNewsBriefList();
   const listHtml = elements.get('automated-news-brief-list').innerHTML;
+  assert.match(listHtml, /Candidates assessed by AI/);
   assert.equal((listHtml.match(/Story /g) || []).length, 5);
+  assert.ok(listHtml.indexOf('Candidates assessed by AI') < listHtml.indexOf('Story 1'));
   assert.ok(listHtml.indexOf('Story 1') < listHtml.indexOf('Story 5'));
   const detailHtml = elements.get('automated-news-brief-detail').innerHTML;
   assert.match(detailHtml, /Anthropic calls/);
@@ -240,7 +242,10 @@ test('latest run renders preflight-skipped Wocult duplicate items separately wit
   ctx.automatedNewsBriefLatestRun = completedRun();
   ctx.automatedNewsBriefFilter = 'latest_run';
   ctx.renderAutomatedNewsBriefList();
+  const listHtml = elements.get('automated-news-brief-list').innerHTML;
   const detailHtml = elements.get('automated-news-brief-detail').innerHTML;
+  assert.match(listHtml, /Candidates assessed by AI/);
+  assert.doesNotMatch(listHtml, /Published duplicate/);
   assert.match(detailHtml, /Skipped before AI assessment/);
   assert.match(detailHtml, /Already published on Wocult/);
   assert.match(detailHtml, /Possible existing Wocult story/);
@@ -249,6 +254,20 @@ test('latest run renders preflight-skipped Wocult duplicate items separately wit
   assert.doesNotMatch(detailHtml, /Published duplicate <script>/);
   assert.match(detailHtml, /Published duplicate &lt;script&gt;/);
   assert.match(detailHtml, /Matching Wocult URL unavailable/);
+});
+
+test('latest run shows empty AI-assessed state without moving skipped items into attempted list', () => {
+  const { ctx, elements } = loadDashboardHarness();
+  ctx.automatedNewsBriefLatestRun = completedRun({ attemptedItems: [] });
+  ctx.automatedNewsBriefFilter = 'latest_run';
+  ctx.renderAutomatedNewsBriefList();
+  const listHtml = elements.get('automated-news-brief-list').innerHTML;
+  const detailHtml = elements.get('automated-news-brief-detail').innerHTML;
+  assert.match(listHtml, /Candidates assessed by AI/);
+  assert.match(listHtml, /No candidates were assessed by AI in this run/);
+  assert.doesNotMatch(listHtml, /Published duplicate|Possible duplicate story/);
+  assert.match(detailHtml, /Skipped before AI assessment/);
+  assert.match(detailHtml, /Published duplicate/);
 });
 
 test('possible duplicate controls render for possible matches but not confirmed published matches', () => {
