@@ -5879,6 +5879,7 @@ function renderAutomatedNewsBriefCard(item) {
     + '<strong style="font-size:14px;color:var(--blk);line-height:1.35">'+escapeHtml(title)+'</strong>'
     + '<span style="font-size:12px;color:var(--g3)">'+escapeHtml(source)+' · Score '+escapeHtml(String(item.qualificationScore || ''))+' · '+escapeHtml(item.recommendedPriority || '')+'</span>'
     + '<span style="font-size:12px;color:var(--g3)">'+escapeHtml(item.normalizedStatus || automatedNewsBriefStatus(item))+' · Webflow: '+escapeHtml(item.webflowStatus || 'not started')+'</span>'
+    + '<span style="font-size:12px;color:var(--g3)">Article: '+escapeHtml(item.articleSourceName || source || '')+' · Primary source: '+escapeHtml(item.primarySourceDiscoveryStatus || 'pending')+' · '+escapeHtml(String((item.primarySources || []).length))+' found'+((item.normalizedStatus || automatedNewsBriefStatus(item)) === 'needs_editorial_check' ? ' · staff action required' : '')+'</span>'
     + '</button>';
 }
 
@@ -5920,11 +5921,97 @@ function selectAutomatedNewsBrief(id) {
   if (item) renderAutomatedNewsBriefDetail(item);
 }
 
+function findAutomatedNewsBriefById(id) {
+  return (automatedNewsBriefItems || []).find(function(i){ return String(i.id || i.candidateId || '') === String(id || ''); });
+}
+
+function automatedNewsBriefSafeJson(value) {
+  function scrub(v) {
+    if (!v || typeof v !== 'object') return v;
+    if (Array.isArray(v)) return v.map(scrub);
+    var out = {};
+    Object.keys(v).forEach(function(key) {
+      if (/rawModelResponse|rawSearchOutput|qualificationDiagnostic|sourceText|scraped|token|secret|authorization/i.test(key)) return;
+      out[key] = scrub(v[key]);
+    });
+    return out;
+  }
+  return JSON.stringify(scrub(value || {}), null, 2);
+}
+
+function automatedNewsBriefPrimarySourceBadge(item) {
+  var status = item.primarySourceDiscoveryStatus || (item.primarySourceFound ? 'found' : 'pending');
+  var sources = item.primarySources || [];
+  if (status === 'not_required') return 'Primary source not required';
+  if (status === 'not_found') return 'Primary source not found';
+  if (status === 'ambiguous') return 'Multiple possible sources';
+  if (status === 'failed') return 'Primary-source search failed';
+  if (sources.some(function(s){ return s.verified || s.confirmedByStaff; })) return 'Primary source verified';
+  if (sources.length) return 'Primary source found, needs confirmation';
+  return 'Primary-source search pending';
+}
+
+function automatedNewsBriefArticleSourceHtml(item) {
+  var url = item.articleSourceUrl || item.canonicalUrl || '';
+  var name = item.articleSourceName || (item.publishers && item.publishers[0]) || item.publisher || '';
+  var date = item.articleSourcePublishedTimestamp || item.sourcePublishedTimestamp || item.discoveredTimestamp || '';
+  return '<div style="margin-top:14px;padding:12px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
+    + '<strong>Article source</strong>'
+    + '<div class="hint" style="margin-top:4px">'+escapeHtml(name || 'Publisher article')+' · '+escapeHtml(date || 'date unknown')+'</div>'
+    + '<div style="margin-top:6px">'+escapeHtml(item.originalHeadline || item.articleSourceHeadline || '')+'</div>'
+    + (url ? '<div style="margin-top:6px"><a href="'+escapeAttr(url)+'" target="_blank" rel="noopener">'+escapeHtml(url)+'</a></div>' : '<div class="hint" style="margin-top:6px">No article URL stored.</div>')
+    + '</div>';
+}
+
+function automatedNewsBriefPrimarySourcesHtml(item) {
+  var sources = item.primarySources || [];
+  var status = item.primarySourceDiscoveryStatus || '';
+  var notes = item.primarySourceDiscoveryNotes || '';
+  var searches = item.primarySourceSearchesAttempted || [];
+  var orgs = item.primarySourceOrganisationsChecked || [];
+  var html = '<div style="margin-top:12px;padding:12px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
+    + '<strong>Original / primary source</strong>'
+    + '<div class="hint" style="margin-top:4px">'+escapeHtml(automatedNewsBriefPrimarySourceBadge(item))+'</div>';
+  if (sources.length) {
+    html += '<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">';
+    sources.forEach(function(source, index) {
+      html += '<div style="border-top:1px solid var(--bdr);padding-top:10px">'
+        + '<div><strong>'+(index + 1)+'. '+escapeHtml(source.title || 'Primary source')+'</strong></div>'
+        + '<div class="hint">'+escapeHtml(source.publisherOrIssuer || 'Issuer unknown')+' · '+escapeHtml(source.sourceType || 'primary source')+' · '+escapeHtml(source.publicationDate || 'date unknown')+'</div>'
+        + '<div class="hint">Relationship: '+escapeHtml(source.relationship || 'unclear')+' · Confidence: '+escapeHtml(source.confidence || 'low')+' · '+escapeHtml(source.verified || source.confirmedByStaff ? 'verified' : 'unverified')+'</div>'
+        + (source.verificationNote ? '<div style="font-size:12px;margin-top:4px">'+escapeHtml(source.verificationNote)+'</div>' : '')
+        + (source.url ? '<div style="margin-top:6px"><a href="'+escapeAttr(source.url)+'" target="_blank" rel="noopener">'+escapeHtml(source.url)+'</a></div>' : '')
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+        + '<button class="btn" onclick="confirmAutomatedNewsBriefPrimarySource(\''+escapeAttr(item.id || item.candidateId)+'\','+index+')">Mark confirmed</button>'
+        + '<button class="btn" onclick="rejectAutomatedNewsBriefPrimarySource(\''+escapeAttr(item.id || item.candidateId)+'\','+index+')">Reject source</button>'
+        + '</div>'
+        + '</div>';
+    });
+    html += '</div>';
+  } else if (status === 'not_found') {
+    html += '<div style="margin-top:10px"><strong>Primary source not found</strong><div class="hint">Staff should investigate manually before relying on the publisher article alone.</div></div>';
+  } else if (status === 'ambiguous') {
+    html += '<div style="margin-top:10px"><strong>Multiple possible primary sources found. Editorial confirmation required.</strong></div>';
+  } else if (status === 'failed') {
+    html += '<div style="margin-top:10px"><strong>Primary-source search failed</strong></div>';
+  }
+  if (notes) html += '<div style="margin-top:10px"><strong>Discovery notes</strong><br>'+escapeHtml(notes)+'</div>';
+  if (searches.length) html += '<div style="margin-top:10px"><strong>Searches attempted</strong><br>'+searches.map(escapeHtml).join('<br>')+'</div>';
+  if (orgs.length) html += '<div style="margin-top:10px"><strong>Organisations checked</strong><br>'+orgs.map(escapeHtml).join('<br>')+'</div>';
+  html += '<div style="margin-top:12px;display:grid;gap:8px">'
+    + '<input id="automated-news-brief-manual-primary-url" placeholder="Manual primary-source URL" style="width:100%;border:1px solid var(--bdr);border-radius:8px;padding:10px">'
+    + '<input id="automated-news-brief-manual-primary-title" placeholder="Manual source title or issuer" style="width:100%;border:1px solid var(--bdr);border-radius:8px;padding:10px">'
+    + '<button class="btn" onclick="addAutomatedNewsBriefManualPrimarySource(\''+escapeAttr(item.id || item.candidateId)+'\')">Add manual primary-source URL</button>'
+    + '<button class="btn" onclick="requestAutomatedNewsBriefPrimarySourceSearch(\''+escapeAttr(item.id || item.candidateId)+'\')">Request another source search</button>'
+    + '</div>'
+    + '</div>';
+  return html;
+}
+
 function renderAutomatedNewsBriefDetail(item) {
   var detail = document.getElementById('automated-news-brief-detail');
   if (!detail) return;
   var draft = item.generatedDraft || {};
-  var sources = [].concat(item.primarySourceUrl ? [item.primarySourceUrl] : []).concat(item.supportingSourceUrls || []);
   var normalizedStatus = item.normalizedStatus || automatedNewsBriefStatus(item);
   var rejected = normalizedStatus === 'rejected_by_filter';
   var editorialCheck = normalizedStatus === 'needs_editorial_check';
@@ -5940,8 +6027,14 @@ function renderAutomatedNewsBriefDetail(item) {
     .concat((item.qualificationResult && item.qualificationResult.legalRisk && item.qualificationResult.legalRisk !== 'low') ? ['Legal risk: '+item.qualificationResult.legalRisk] : [])
     .filter(Boolean);
   var materialFacts = (item.qualificationResult && item.qualificationResult.materialFacts) || item.verifiedFacts || [];
-  var actions = rejected || editorialCheck
-    ? '<div style="margin-top:12px;padding:10px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);color:var(--g3)">'+(rejected ? 'Rejected items are read-only in this queue.' : 'Editorial-check items are read-only until Phase 1 review handling is enabled.')+'</div>'
+  var actions = rejected
+    ? '<div style="margin-top:12px;padding:10px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);color:var(--g3)">Rejected items are read-only in this queue.</div>'
+    : editorialCheck
+      ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'
+        + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'approve\')">Approve with editorial note</button>'
+        + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'hold\')">Hold</button>'
+        + '<button class="btn" onclick="dashboardAutomatedNewsBriefAction(\''+escapeAttr(item.id)+'\',\'decline\')">Decline</button>'
+        + '</div>'
     : '<div style="margin-top:12px"><label style="font-weight:700;color:var(--blk)">Editable draft JSON</label><textarea id="automated-news-brief-draft-editor" rows="14" style="width:100%;margin-top:6px;border:1px solid var(--bdr);border-radius:8px;padding:10px;font-family:monospace;font-size:12px">'+escapeHtml(JSON.stringify(draft, null, 2))+'</textarea></div>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'
       + '<button class="btn" onclick="saveAutomatedNewsBriefDraft(\''+escapeAttr(item.id)+'\')">Save changes</button>'
@@ -5956,13 +6049,14 @@ function renderAutomatedNewsBriefDetail(item) {
   detail.innerHTML = '<h3 style="font-size:20px;font-family:Georgia,serif;margin:0 0 8px;color:var(--blk)">'+escapeHtml(draft.title || item.proposedHeadline || item.originalHeadline || '')+'</h3>'
     + '<div class="hint">'+escapeHtml(normalizedStatus)+' · Score '+escapeHtml(String(item.qualificationScore || ''))+' · '+escapeHtml(item.recommendedPriority || '')+'</div>'
     + '<div style="margin-top:14px"><strong>Original headline</strong><br>'+escapeHtml(item.originalHeadline || '')+'</div>'
-    + '<div style="margin-top:12px"><strong>Sources</strong><br>'+sources.map(function(u){return '<a href="'+escapeAttr(u)+'" target="_blank" rel="noopener">'+escapeHtml(u)+'</a>';}).join('<br>')+'</div>'
+    + automatedNewsBriefArticleSourceHtml(item)
+    + automatedNewsBriefPrimarySourcesHtml(item)
     + (item.recommendedAngle ? '<div style="margin-top:12px"><strong>Recommended angle</strong><br>'+escapeHtml(item.recommendedAngle)+'</div>' : '')
     + (rejectionReasons.length ? '<div style="margin-top:12px"><strong>Rejection reasons</strong><ul style="margin:8px 0 0 18px;padding:0">'+rejectionReasons.map(function(reason){ return '<li>'+escapeHtml(reason)+'</li>'; }).join('')+'</ul></div>' : '')
     + (qualificationReasons.length ? '<div style="margin-top:12px"><strong>Qualification reasons</strong><ul style="margin:8px 0 0 18px;padding:0">'+qualificationReasons.map(function(reason){ return '<li>'+escapeHtml(reason)+'</li>'; }).join('')+'</ul></div>' : '')
     + (cautionReasons.length ? '<div style="margin-top:12px"><strong>Cautions</strong><ul style="margin:8px 0 0 18px;padding:0">'+cautionReasons.map(function(reason){ return '<li>'+escapeHtml(reason)+'</li>'; }).join('')+'</ul></div>' : '')
     + (materialFacts.length ? '<div style="margin-top:12px"><strong>Material facts</strong><ul style="margin:8px 0 0 18px;padding:0">'+materialFacts.map(function(fact){ return '<li>'+escapeHtml(fact)+'</li>'; }).join('')+'</ul></div>' : '')
-    + '<div style="margin-top:12px"><strong>Qualification assessment</strong><pre style="white-space:pre-wrap;background:var(--gray);padding:10px;border-radius:8px;max-height:180px;overflow:auto">'+escapeHtml(JSON.stringify(item.qualificationResult || {}, null, 2))+'</pre></div>'
+    + '<div style="margin-top:12px"><strong>Qualification assessment</strong><pre style="white-space:pre-wrap;background:var(--gray);padding:10px;border-radius:8px;max-height:180px;overflow:auto">'+escapeHtml(automatedNewsBriefSafeJson(item.qualificationResult || {}))+'</pre></div>'
     + '<div style="margin-top:12px"><strong>Verification</strong><br>'+escapeHtml(item.verificationSummary || item.verificationStatus || '')+'</div>'
     + actions
     + '<div id="automated-news-brief-action-status" class="hint" style="margin-top:10px"></div>'
@@ -6014,11 +6108,125 @@ function saveAutomatedNewsBriefDraft(id) {
   }).catch(function(err) { if (status) status.textContent = 'Could not save: ' + err.message; });
 }
 
+function updateAutomatedNewsBriefPrimarySources(id, updater, activityType) {
+  var status = document.getElementById('automated-news-brief-action-status');
+  var item = findAutomatedNewsBriefById(id);
+  if (!item || !db) return Promise.resolve();
+  var sources = (item.primarySources || []).map(function(s){ return Object.assign({}, s); });
+  var patch = updater(sources) || {};
+  patch.updatedBy = currentUser ? currentUser.email : '';
+  patch.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+  if (status) status.textContent = 'Updating primary-source review...';
+  return db.collection('news_brief_automation').doc(id).set(patch, {merge:true}).then(function() {
+    return db.collection('news_brief_automation').doc(id).collection('activity').add({
+      type: activityType || 'primary source review',
+      updatedBy: currentUser ? currentUser.email : '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }).then(function() {
+    if (status) status.textContent = 'Primary-source review updated.';
+    return loadAutomatedNewsBriefs(true);
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not update primary-source review: ' + err.message;
+  });
+}
+
+function confirmAutomatedNewsBriefPrimarySource(id, index) {
+  return updateAutomatedNewsBriefPrimarySources(id, function(sources) {
+    if (!sources[index]) return null;
+    sources[index].verified = true;
+    sources[index].confirmedByStaff = true;
+    sources[index].confirmedBy = currentUser ? currentUser.email : '';
+    sources[index].confirmedAt = new Date().toISOString();
+    return {
+      primarySources: sources,
+      primarySourceFound: true,
+      primarySourceDiscoveryStatus: sources.length > 1 ? 'multiple_found' : 'found',
+      primarySourceDiscoveryNotes: 'Primary source confirmed by staff.',
+      primarySourceUrl: sources[index].url || ''
+    };
+  }, 'primary source confirmed');
+}
+
+function rejectAutomatedNewsBriefPrimarySource(id, index) {
+  var reason = prompt('Why is this primary source incorrect?');
+  if (reason === null) return Promise.resolve();
+  return updateAutomatedNewsBriefPrimarySources(id, function(sources) {
+    if (!sources[index]) return null;
+    sources[index].rejectedByStaff = true;
+    sources[index].rejectedBy = currentUser ? currentUser.email : '';
+    sources[index].rejectedAt = new Date().toISOString();
+    sources[index].rejectionReason = reason;
+    var activeSources = sources.filter(function(source){ return !source.rejectedByStaff; });
+    return {
+      primarySources: sources,
+      primarySourceFound: activeSources.length > 0,
+      primarySourceDiscoveryStatus: activeSources.length ? 'ambiguous' : 'not_found',
+      primarySourceDiscoveryNotes: 'One or more primary-source candidates were rejected by staff.',
+      primarySourceUrl: ''
+    };
+  }, 'primary source rejected');
+}
+
+function addAutomatedNewsBriefManualPrimarySource(id) {
+  var urlEl = document.getElementById('automated-news-brief-manual-primary-url');
+  var titleEl = document.getElementById('automated-news-brief-manual-primary-title');
+  var url = (urlEl && urlEl.value || '').trim();
+  var title = (titleEl && titleEl.value || '').trim();
+  if (!url) { alert('Enter a primary-source URL.'); return Promise.resolve(); }
+  return updateAutomatedNewsBriefPrimarySources(id, function(sources) {
+    sources.push({
+      title: title || 'Manual primary source',
+      url: url,
+      publisherOrIssuer: title || '',
+      sourceType: 'other_primary_source',
+      publicationDate: '',
+      relationship: 'unclear',
+      discoveryMethod: 'manual_staff_entry',
+      confidence: 'medium',
+      verified: true,
+      confirmedByStaff: true,
+      verificationNote: 'Manual primary-source URL added by staff.',
+      manual: true,
+      confirmedBy: currentUser ? currentUser.email : '',
+      confirmedAt: new Date().toISOString()
+    });
+    return {
+      primarySources: sources,
+      primarySourceFound: true,
+      primarySourceDiscoveryStatus: sources.length > 1 ? 'multiple_found' : 'found',
+      primarySourceDiscoveryNotes: 'Manual primary-source URL added by staff.',
+      primarySourceUrl: url
+    };
+  }, 'manual primary source added');
+}
+
+function requestAutomatedNewsBriefPrimarySourceSearch(id) {
+  return updateAutomatedNewsBriefPrimarySources(id, function(sources) {
+    return {
+      primarySources: sources,
+      primarySourceDiscoveryStatus: 'pending',
+      primarySourceDiscoveryNotes: 'Staff requested another primary-source search.',
+      primarySourceSearchRequestedBy: currentUser ? currentUser.email : '',
+      primarySourceSearchRequestedAt: new Date().toISOString()
+    };
+  }, 'primary source search requested');
+}
+
 function dashboardAutomatedNewsBriefAction(id, action) {
   var status = document.getElementById('automated-news-brief-action-status');
+  var item = findAutomatedNewsBriefById(id);
+  var note = '';
+  if (action === 'approve' && item && (item.normalizedStatus || automatedNewsBriefStatus(item)) === 'needs_editorial_check') {
+    var hasConfirmedPrimary = (item.primarySources || []).some(function(source){ return source.verified || source.confirmedByStaff; });
+    if (!hasConfirmedPrimary && item.primarySourceDiscoveryStatus !== 'not_required') {
+      note = prompt('Approval without a confirmed primary source requires an editorial note.');
+      if (!note || !note.trim()) { if (status) status.textContent = 'Approval cancelled: editorial note required.'; return Promise.resolve(); }
+    }
+  }
   if (!confirm('Confirm '+action+' for this candidate?')) return;
   if (status) status.textContent = 'Submitting action...';
-  return workerFetch('/automation/news-briefs/action', {method:'POST', body:JSON.stringify({candidateId:id, action:action, actorEmail:(currentUser && currentUser.email) || ''})})
+  return workerFetch('/automation/news-briefs/action', {method:'POST', body:JSON.stringify({candidateId:id, action:action, actorEmail:(currentUser && currentUser.email) || '', note: note})})
     .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
     .then(function(res) { if (!res.ok) throw new Error(res.data.error || 'Action failed'); if (status) status.textContent = 'Action recorded.'; return loadAutomatedNewsBriefs(true); })
     .catch(function(err) { if (status) status.textContent = 'Could not submit action: ' + err.message; });
