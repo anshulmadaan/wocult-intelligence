@@ -141,7 +141,19 @@ function makeRunMocks(items, options = {}) {
     if (options.webflowArchiveError) throw options.webflowArchiveError;
     return webflowArchive;
   };
-  return { saved, activities, calls, runs, runMap, store, fetch, primarySourceSearch: options.primarySourceSearch, fetchWebflowNewsArchive };
+  return {
+    saved,
+    activities,
+    calls,
+    runs,
+    runMap,
+    store,
+    fetch,
+    primarySourceSearch: options.primarySourceSearch,
+    fetchWebflowNewsArchive,
+    beforeAnthropicCall: options.beforeAnthropicCall,
+    afterAnthropicCall: options.afterAnthropicCall,
+  };
 }
 
 function webflowNewsItem(id, overrides = {}) {
@@ -797,12 +809,51 @@ test('active run lock rejects concurrent runs and allows stale recovery', async 
   assert.equal(conflict.activeRunId, 'run_active_12345678');
 
   const stale = { ...active, heartbeatAt: new Date(Date.now() - 40 * 60 * 1000).toISOString() };
+  const staleMocks = makeRunMocks([], { activeRun: stale });
   const recovered = await runNewsBriefAutomation({
     NEWS_TRACKER_API: 'https://tracker.example.test/current',
     NEWS_BRIEF_DRY_RUN: 'true',
-  }, { dryRun: true, requestRunId: 'run_new_87654321' }, makeRunMocks([], { activeRun: stale }));
+  }, { dryRun: true, requestRunId: 'run_new_87654321' }, staleMocks);
   assert.equal(recovered.status, undefined);
   assert.equal(recovered.summary.runId, 'run_new_87654321');
+  const recoveredStale = staleMocks.runs.find((run) => run.runId === 'run_active_12345678' && run.state === 'failed');
+  assert.equal(recoveredStale.activeRun, false);
+  assert.equal(recoveredStale.failureCode, 'stale_run_timeout');
+});
+
+test('stale run recovery preserves partial progress and releases lock', async () => {
+  const stale = {
+    runId: 'run_stale_partial_12345678',
+    state: 'running',
+    phase: 'primary_source_discovery',
+    startTime: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    heartbeatAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+    completedItems: 3,
+    targetItems: 5,
+    percentComplete: 60,
+    currentCandidateId: 'nt_current',
+    currentHeadline: 'Current stuck candidate',
+    attemptedItems: [{ candidateId: 'nt_1' }, { candidateId: 'nt_2' }, { candidateId: 'nt_3' }],
+    usage: { anthropicCalls: 3, inputTokens: 72931, outputTokens: 3279, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, webSearchRequests: 7, models: ['claude-test'] },
+  };
+  const mocks = makeRunMocks([trackerItem(10)], { activeRun: stale });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+  }, { dryRun: true, requestRunId: 'run_after_recovery_12345678' }, mocks);
+  const recovered = mocks.runs.find((run) => run.runId === stale.runId && run.state === 'failed');
+  assert.equal(recovered.completedItems, 3);
+  assert.equal(recovered.targetItems, 5);
+  assert.equal(recovered.percentComplete, 60);
+  assert.equal(recovered.currentCandidateId, 'nt_current');
+  assert.equal(recovered.currentHeadline, 'Current stuck candidate');
+  assert.equal(recovered.activeRun, false);
+  assert.equal(recovered.failureStage, 'primary_source_discovery');
+  assert.equal(recovered.failureCode, 'stale_run_timeout');
+  assert.equal(recovered.usage.inputTokens, 72931);
+  assert.equal(recovered.attemptedItems.length, 3);
+  assert.equal(result.summary.runId, 'run_after_recovery_12345678');
 });
 
 test('run progress moves from indeterminate to target percentage and final 100', async () => {
@@ -905,6 +956,40 @@ test('later technical failure preserves qualification data and stores safe failu
   assert.equal(mocks.saved[0].failureCode, 'drafting_json_invalid');
   assert.ok(mocks.saved[0].failureMessage.length <= 1000);
   assert.equal(JSON.stringify(mocks.saved[0]).includes('rawModelResponse'), false);
+});
+
+test('anthropic timeout fails only the affected candidate and continues with heartbeat updates', async () => {
+  const timeout = new Error('request_timeout');
+  timeout.name = 'AbortError';
+  let beforeCalls = 0;
+  let afterCalls = 0;
+  const mocks = makeRunMocks([trackerItem(1), trackerItem(2)], {
+    qualificationFor: (index) => {
+      if (index === 1) return timeout;
+      return { ...goodQualification, qualifies: false, overallScore: 45, rejectionReasons: ['No Wocult angle'], recommendedPriority: null };
+    },
+    beforeAnthropicCall: () => { beforeCalls += 1; },
+    afterAnthropicCall: () => { afterCalls += 1; },
+  });
+  const result = await runNewsBriefAutomation({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '2',
+    NEWS_BRIEF_ANTHROPIC_TIMEOUT_MS: '1000',
+  }, { dryRun: true }, mocks);
+  assert.equal(result.summary.completedItems, 2);
+  assert.equal(result.summary.percentComplete, 100);
+  assert.equal(result.summary.failures, 1);
+  assert.equal(mocks.saved[0].status, 'qualification_failed');
+  assert.equal(mocks.saved[0].failureStage, 'qualification');
+  assert.equal(mocks.saved[0].failureCode, 'anthropic_timeout');
+  assert.equal(mocks.saved[1].status, 'rejected_by_filter');
+  assert.equal(result.summary.attemptedItems.length, 2);
+  assert.equal(result.summary.attemptedItems[0].failureCode, 'anthropic_timeout');
+  assert.equal(beforeCalls, 2);
+  assert.equal(afterCalls, 2);
+  assert.ok(mocks.runs.filter((run) => run.heartbeatAt).length >= 4);
 });
 
 test('run skips first five handled records and processes the next five new tracker records', async () => {
@@ -1422,6 +1507,33 @@ test('automation namespace applies auth, supported route handling and namespace 
   const authenticatedData = await authenticated.json();
   assert.equal(authenticated.status, 200);
   assert.equal(authenticatedData.ok, true);
+
+  const stale = {
+    runId: 'run_status_stale_12345678',
+    state: 'running',
+    phase: 'drafting',
+    startTime: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    heartbeatAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+    completedItems: 3,
+    targetItems: 5,
+    percentComplete: 60,
+    usage: { anthropicCalls: 3, inputTokens: 72931, outputTokens: 3279, webSearchRequests: 7, models: ['claude-test'] },
+  };
+  let recoveredRun = null;
+  const recoveredResponse = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/status?runId=run_status_stale_12345678', {
+    headers: { Authorization: 'Bearer admin' },
+  }), { WORKER_ADMIN_TOKEN: 'admin', NEWS_BRIEF_DRY_RUN: 'true' }, null, {}, {
+    store: {
+      getRun: async () => stale,
+      saveRun: async (run) => { recoveredRun = run; },
+    },
+  });
+  const recoveredData = await recoveredResponse.json();
+  assert.equal(recoveredData.run.state, 'failed');
+  assert.equal(recoveredData.run.percentComplete, 60);
+  assert.equal(recoveredData.run.failureCode, 'stale_run_timeout');
+  assert.equal(recoveredData.run.activeRun, false);
+  assert.equal(recoveredRun.activeRun, false);
 
   const unsupported = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/status', {
     method: 'PUT',

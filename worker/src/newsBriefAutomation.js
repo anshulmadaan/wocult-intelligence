@@ -864,21 +864,34 @@ export async function fetchNewsTracker(config, deps = {}) {
 export async function callClaudeJson(env, prompt, maxTokens = 1200, deps = {}) {
   const fetchImpl = deps.fetch || fetch;
   const model = env.NEWS_BRIEF_CLAUDE_MODEL || 'claude-sonnet-4-6';
-  const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'web-search-2025-03-05',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  }, 45000, fetchImpl);
+  const timeoutMs = Number(env.NEWS_BRIEF_ANTHROPIC_TIMEOUT_MS || DEFAULT_ANTHROPIC_TIMEOUT_MS);
+  if (deps.beforeAnthropicCall) await deps.beforeAnthropicCall({ model, maxTokens });
+  let res;
+  try {
+    res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'web-search-2025-03-05',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    }, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_ANTHROPIC_TIMEOUT_MS, fetchImpl);
+  } catch (e) {
+    if (e?.name === 'AbortError' || e?.message === 'request_timeout') {
+      e.failureCode = 'anthropic_timeout';
+      e.failureStage = deps.failureStage || 'unknown';
+    }
+    throw e;
+  } finally {
+    if (deps.afterAnthropicCall) await deps.afterAnthropicCall({ model, maxTokens });
+  }
   const data = await res.json();
   if (deps.recordAnthropicUsage) deps.recordAnthropicUsage(normalizeAnthropicUsage(data, model));
   if (!res.ok || data.error) throw new Error(data.error?.message || `Anthropic returned ${res.status}`);
@@ -1095,6 +1108,7 @@ export async function scheduledNewsBriefAutomation(env, ctx, deps = {}) {
 
 const RUN_ID_PATTERN = /^run_[A-Za-z0-9_-]{8,96}$/;
 const ACTIVE_RUN_STALE_MS = 20 * 60 * 1000;
+const DEFAULT_ANTHROPIC_TIMEOUT_MS = 45000;
 
 function createEmptyUsage() {
   return {
@@ -1141,6 +1155,48 @@ function activeRunIsRecent(run, now = Date.now()) {
   if (!run || !['preparing', 'running'].includes(run.state)) return false;
   const heartbeat = Date.parse(run.heartbeatAt || run.updatedAt || run.startTime || '');
   return Number.isFinite(heartbeat) && now - heartbeat < ACTIVE_RUN_STALE_MS;
+}
+
+function activeRunIsStale(run, now = Date.now()) {
+  return !!run && ['preparing', 'running'].includes(run.state) && !activeRunIsRecent(run, now);
+}
+
+function staleRunMessage(run) {
+  const count = Number(run?.completedItems || 0);
+  const target = Number(run?.targetItems || 0);
+  const progress = target ? `${progressPercent(count, target)}%` : 'unknown progress';
+  return `Run heartbeat became stale before finalisation; preserving ${count}${target ? ` of ${target}` : ''} completed items (${progress}).`;
+}
+
+async function recoverStaleRun(store, run, dryRun = true) {
+  if (!activeRunIsStale(run)) return run;
+  const now = new Date().toISOString();
+  const target = run.targetItems === null || run.targetItems === undefined ? null : run.targetItems;
+  const completed = Number(run.completedItems || 0);
+  const failureMessage = staleRunMessage({ ...run, targetItems: target });
+  const start = Date.parse(run.startTime || '');
+  const recovered = {
+    ...run,
+    state: 'failed',
+    phase: run.phase || 'unknown',
+    targetItems: target,
+    completedItems: completed,
+    percentComplete: target ? progressPercent(completed, target) : run.percentComplete ?? null,
+    endTime: now,
+    updatedAt: now,
+    heartbeatAt: now,
+    duration: Number.isFinite(start) ? Math.max(0, Date.parse(now) - start) : run.duration,
+    activeRun: false,
+    failureStage: normalizeFailureStage(run.failureStage || run.phase || 'unknown'),
+    failureCode: run.failureCode || 'stale_run_timeout',
+    failureMessage,
+    errorSummary: [
+      ...(Array.isArray(run.errorSummary) ? run.errorSummary : []),
+      { run: failureMessage, failureStage: normalizeFailureStage(run.failureStage || run.phase || 'unknown'), failureCode: run.failureCode || 'stale_run_timeout' },
+    ],
+  };
+  if (store.saveRun) await store.saveRun(recovered, { dryRun }).catch(() => {});
+  return recovered;
 }
 
 function safeRunId(value) {
@@ -1482,7 +1538,10 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
   try {
     if (!config.automationEnabled && !dryRun) throw new Error('NEWS_BRIEF_AUTOMATION_ENABLED is not enabled');
     if (requested && store.getRun && await store.getRun(runId)) return { ok: false, status: 409, error: 'runId_already_exists', runId };
-    const activeRun = store.activeRun ? await store.activeRun() : null;
+    let activeRun = store.activeRun ? await store.activeRun() : null;
+    if (activeRunIsStale(activeRun, startedAt)) {
+      activeRun = await recoverStaleRun(store, activeRun, dryRun);
+    }
     if (activeRunIsRecent(activeRun, startedAt)) {
       return { ok: false, status: 409, error: 'active_run_exists', activeRunId: activeRun.runId, state: activeRun.state, phase: activeRun.phase };
     }
@@ -1589,6 +1648,16 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
       const candidateUsage = createEmptyUsage();
       const candidateDeps = {
         ...deps,
+        failureStage: processingStage,
+        beforeAnthropicCall: async () => {
+          candidateDeps.failureStage = processingStage;
+          await updateRun({ heartbeatAt: new Date().toISOString(), phase: summary.phase });
+          if (deps.beforeAnthropicCall) await deps.beforeAnthropicCall({ stage: processingStage, candidateId: summary.currentCandidateId });
+        },
+        afterAnthropicCall: async () => {
+          await updateRun({ heartbeatAt: new Date().toISOString(), phase: summary.phase });
+          if (deps.afterAnthropicCall) await deps.afterAnthropicCall({ stage: processingStage, candidateId: summary.currentCandidateId });
+        },
         recordAnthropicUsage: (usage) => {
           addUsage(candidateUsage, usage);
           addUsage(summary.usage, usage);
@@ -1617,6 +1686,7 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
           continue;
         }
         processingStage = 'qualification';
+        candidateDeps.failureStage = processingStage;
         qualification = normalizeQualificationResponse(await callClaudeJson(env, buildQualificationPrompt(item), 1400, candidateDeps));
         const qValid = validateQualification(qualification);
         if (!qValid.ok) {
@@ -1635,6 +1705,7 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
         let status = nextStatus;
         if (nextStatus !== 'rejected_by_filter') {
           processingStage = 'primary_source_discovery';
+          candidateDeps.failureStage = processingStage;
           await updateRun({ phase: 'primary_source_discovery' });
           primaryDiscovery = await discoverPrimarySources(item, qualification, env, candidateDeps, { runId });
           if (primaryDiscovery.status === 'failed') {
@@ -1648,12 +1719,14 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
         if (nextStatus === 'verifying') {
           if (status === 'verifying') {
             processingStage = 'verification';
+            candidateDeps.failureStage = processingStage;
             await updateRun({ phase: 'verifying' });
             verification = await verifyCandidateSources(item, candidateDeps, primaryDiscovery);
             if (!verification.ok) status = 'verification_failed';
             else {
               summary.itemsVerified += 1;
               processingStage = 'drafting';
+              candidateDeps.failureStage = processingStage;
               await updateRun({ phase: 'drafting' });
               status = 'drafting';
               draft = await callClaudeJson(env, buildDraftPrompt({ item, qualification, verification, primarySources: primaryDiscovery?.primarySources || [] }), 1800, candidateDeps);
@@ -1715,20 +1788,26 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
     }
   } catch (e) {
     if (!e.alreadyRecordedInRun) {
+      const failure = createFailureMetadata(e, e.failureStage || summary.phase || 'unknown', runId);
       summary.failures += 1;
-      summary.errorSummary.push({ run: e.message });
+      summary.failureStage = failure.failureStage;
+      summary.failureCode = failure.failureCode;
+      summary.failureMessage = failure.failureMessage;
+      summary.errorSummary.push({ run: e.message, failureStage: failure.failureStage, failureCode: failure.failureCode });
     }
     summary.state = 'failed';
   } finally {
-    summary.phase = 'completed';
-    if (summary.state !== 'failed') summary.state = summary.failures ? 'completed_with_failures' : 'completed';
+    const failed = summary.state === 'failed';
+    if (!failed) summary.phase = 'completed';
+    if (!failed) summary.state = summary.failures ? 'completed_with_failures' : 'completed';
     summary.completedItems = Number(summary.completedItems || 0);
     summary.targetItems = summary.targetItems === null ? summary.completedItems : summary.targetItems;
-    summary.percentComplete = 100;
+    summary.percentComplete = failed ? progressPercent(summary.completedItems, summary.targetItems) : 100;
     summary.endTime = new Date().toISOString();
     summary.duration = Date.now() - startedAt;
     summary.updatedAt = summary.endTime;
     summary.heartbeatAt = summary.endTime;
+    summary.activeRun = false;
     await store.saveRun(summary, { dryRun }).catch(() => {});
   }
   return { ok: summary.failures === 0, summary };
@@ -1960,15 +2039,22 @@ export async function createWebflowNewsDraft(draft, env, deps = {}) {
 
 async function getAutomationStatus(env, deps = {}, runId = '') {
   const store = getStore(env, deps);
+  const config = getAutomationConfig(env);
   if (runId) {
-    const run = await store.getRun(runId);
+    let run = await store.getRun(runId);
+    if (activeRunIsStale(run)) run = await recoverStaleRun(store, run, config.dryRun);
     return { ok: !!run, run: run || null };
+  }
+  let activeRun = store.activeRun ? await store.activeRun() : null;
+  if (activeRunIsStale(activeRun)) {
+    await recoverStaleRun(store, activeRun, config.dryRun);
+    activeRun = null;
   }
   return {
     ok: true,
-    config: redactConfig(getAutomationConfig(env)),
+    config: redactConfig(config),
     counts: await store.statusCounts(),
-    activeRun: store.activeRun ? await store.activeRun() : null,
+    activeRun,
     latestCompletedRun: store.latestCompletedRun ? await store.latestCompletedRun() : null,
     latestRuns: await store.latestRuns(10),
   };
@@ -2163,7 +2249,7 @@ function createFirestoreStore(env, deps = {}) {
       const rows = await res.json();
       const runs = rows.filter((r) => r.document).map((r) => fromFirestoreDoc(r.document))
         .sort((a, b) => Date.parse(b.heartbeatAt || b.updatedAt || b.startTime || 0) - Date.parse(a.heartbeatAt || a.updatedAt || a.startTime || 0));
-      return runs.find((run) => activeRunIsRecent(run)) || null;
+      return runs[0] || null;
     },
     async latestCompletedRun() {
       const runs = await this.latestRuns(10);
@@ -2487,6 +2573,13 @@ async function fetchWithTimeout(url, init, timeoutMs, fetchImpl) {
   const t = setTimeout(() => controller.abort('timeout'), timeoutMs);
   try {
     return await fetchImpl(url, { ...init, signal: controller.signal });
+  } catch (e) {
+    if (controller.signal.aborted) {
+      const err = new Error('request_timeout');
+      err.name = 'AbortError';
+      throw err;
+    }
+    throw e;
   } finally {
     clearTimeout(t);
   }
