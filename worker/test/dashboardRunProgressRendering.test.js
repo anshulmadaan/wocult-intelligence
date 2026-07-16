@@ -52,7 +52,7 @@ function loadDashboardHarness(overrides = {}) {
         return { ok: true, json: async () => ({ ok: true, activeRun: null, latestCompletedRun: null, latestRuns: [] }) };
       }
       if (path === '/automation/news-briefs/run') {
-        return { ok: true, json: async () => ({ ok: true, summary: completedRun() }) };
+        return { ok: true, status: 202, json: async () => ({ accepted: true, runId: activeRun().runId, workflowInstanceId: activeRun().workflowInstanceId, state: 'queued' }) };
       }
       return { ok: true, json: async () => ({ ok: true }) };
     },
@@ -74,6 +74,9 @@ function loadDashboardHarness(overrides = {}) {
 function activeRun(overrides = {}) {
   return {
     runId: 'run_07070707070707070707070707070707',
+    workflowInstanceId: 'run_07070707070707070707070707070707',
+    workflowState: 'running',
+    currentWorkflowStep: 'candidate-2-qualification',
     state: 'running',
     phase: 'qualifying',
     startTime: '2026-07-16T05:00:00.000Z',
@@ -90,6 +93,8 @@ function completedRun(overrides = {}) {
   return {
     ...activeRun({
       state: 'completed',
+      workflowState: 'completed',
+      currentWorkflowStep: 'completed',
       phase: 'completed',
       completedItems: 5,
       percentComplete: 100,
@@ -136,6 +141,7 @@ function completedRun(overrides = {}) {
           headline: 'Story 1',
           stage: 'qualification',
           status: 'completed',
+          attempt: 1,
           inputTokens: 25,
           outputTokens: 10,
           webSearchRequests: 1,
@@ -149,6 +155,7 @@ function completedRun(overrides = {}) {
           headline: 'Story 2',
           stage: 'primary_source_discovery',
           status: 'started',
+          attempt: 1,
           inputTokens: 0,
           outputTokens: 0,
           webSearchRequests: 0,
@@ -161,6 +168,7 @@ function completedRun(overrides = {}) {
           headline: 'Story 5',
           stage: 'drafting',
           status: 'failed',
+          attempt: 2,
           inputTokens: 75,
           outputTokens: 40,
           webSearchRequests: 2,
@@ -210,7 +218,10 @@ test('dry run disables immediately, sends generated requestRunId and blocks doub
       if (path === '/automation/news-briefs/status') {
         return { ok: true, json: async () => ({ ok: true, activeRun: null, latestCompletedRun: completedRun() }) };
       }
-      return { ok: true, json: async () => ({ ok: true, summary: completedRun() }) };
+      if (path === '/automation/news-briefs/run') {
+        return { ok: true, status: 202, json: async () => ({ accepted: true, runId: 'run_07070707070707070707070707070707', workflowInstanceId: 'run_07070707070707070707070707070707', state: 'queued' }) };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
     },
   });
   await Promise.all([ctx.runAutomatedNewsBriefDryRun(), ctx.runAutomatedNewsBriefDryRun()]);
@@ -221,6 +232,25 @@ test('dry run disables immediately, sends generated requestRunId and blocks doub
   assert.equal(body.triggerType, 'dashboard_dry_run');
   assert.match(body.requestRunId, /^run_[a-f0-9]{32}$/);
   assert.equal(elements.get('automated-news-brief-dry-run-btn').disabled, false);
+});
+
+test('HTTP 202 accepted run starts background polling without waiting for pipeline response', async () => {
+  const { ctx, elements, requests } = loadDashboardHarness({
+    workerFetch: async (path) => {
+      if (path === '/automation/news-briefs/run') {
+        return { ok: true, status: 202, json: async () => ({ accepted: true, runId: 'run_accepted_070707070707070707', workflowInstanceId: 'wf_accepted', state: 'queued' }) };
+      }
+      if (path.startsWith('/automation/news-briefs/status?runId=')) {
+        return { ok: true, json: async () => ({ ok: true, run: activeRun({ runId: 'run_accepted_070707070707070707', workflowInstanceId: 'wf_accepted', workflowState: 'queued', currentWorkflowStep: 'initialise-run', targetItems: null, percentComplete: null }) }) };
+      }
+      return { ok: true, json: async () => ({ ok: true, activeRun: null }) };
+    },
+  });
+  await ctx.runAutomatedNewsBriefDryRun();
+  assert.equal(requests.filter((request) => request.path === '/automation/news-briefs/run').length, 1);
+  assert.match(elements.get('automated-news-briefs-status').textContent, /Run accepted\. Processing continues in the background/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Queued/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Workflow instance: wf_accepted/);
 });
 
 test('active progress resumes after reload and renders determinate percentage', async () => {
@@ -237,6 +267,7 @@ test('active progress resumes after reload and renders determinate percentage', 
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /40% complete/);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /Newest story first/);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /Last update/);
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Workflow state: running/);
 });
 
 test('elapsed time updates locally while running', () => {
@@ -255,10 +286,12 @@ test('elapsed time updates locally while running', () => {
 
 test('progress is indeterminate before targetItems and failed candidates still advance progress', () => {
   const { ctx, elements } = loadDashboardHarness();
-  ctx.renderAutomatedNewsBriefProgress(activeRun({ targetItems: null, completedItems: 0, percentComplete: null, phase: 'fetching_tracker' }));
+  ctx.renderAutomatedNewsBriefProgress(activeRun({ targetItems: null, completedItems: 0, percentComplete: null, phase: 'fetching_tracker', currentWorkflowStep: 'fetch-news-tracker' }));
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /Progress percentage will appear/);
-  ctx.renderAutomatedNewsBriefProgress(activeRun({ targetItems: null, completedItems: 0, percentComplete: null, phase: 'checking_wocult_archive' }));
+  ctx.renderAutomatedNewsBriefProgress(activeRun({ targetItems: null, completedItems: 0, percentComplete: null, phase: 'checking_wocult_archive', currentWorkflowStep: 'fetch-webflow-news-archive' }));
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /Checking stories already on Wocult/);
+  ctx.renderAutomatedNewsBriefProgress(activeRun({ workflowState: 'retrying', currentWorkflowStep: 'candidate-2-primary-source-discovery', completedItems: 1, targetItems: 5, percentComplete: 20 }));
+  assert.match(elements.get('automated-news-brief-progress').innerHTML, /Retrying finding primary sources/);
   ctx.renderAutomatedNewsBriefProgress(activeRun({ completedItems: 2, targetItems: 5, percentComplete: 40, phase: 'drafting' }));
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /2 \/ 5 candidates/);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /40% complete/);
@@ -310,7 +343,7 @@ test('POST failure checks server status and does not show failed while run is st
     },
   });
   await ctx.runAutomatedNewsBriefDryRun();
-  assert.match(elements.get('automated-news-briefs-status').textContent, /Connection interrupted\. Checking run status/);
+  assert.match(elements.get('automated-news-briefs-status').textContent, /Connection interrupted\. Checking durable run status/);
   assert.equal(elements.get('automated-news-brief-dry-run-btn').disabled, true);
   assert.doesNotMatch(elements.get('automated-news-briefs-status').textContent, /Dry run failed/);
   assert.match(elements.get('automated-news-brief-progress').innerHTML, /Drafting News Brief|Assessing candidate/);
@@ -357,6 +390,9 @@ test('latest run renders five attempted items in newest-first order with token t
   assert.match(detailHtml, /Possible duplicates/);
   assert.match(detailHtml, /Skipped before Claude/);
   assert.match(detailHtml, /Sent to Claude/);
+  assert.match(detailHtml, /Workflow instance/);
+  assert.match(detailHtml, /Workflow state/);
+  assert.match(detailHtml, /Durable step/);
 });
 
 test('latest run renders collapsed Claude call details safely', () => {
@@ -365,6 +401,7 @@ test('latest run renders collapsed Claude call details safely', () => {
   assert.match(html, /Claude call details/);
   assert.match(html, /Story 1/);
   assert.match(html, /Stage: qualification/);
+  assert.match(html, /Attempt: 1/);
   assert.match(html, /Completed/);
   assert.match(html, /Input: 25/);
   assert.match(html, /Output: 10/);
@@ -372,7 +409,16 @@ test('latest run renders collapsed Claude call details safely', () => {
   assert.match(html, /Duration: 1.2s/);
   assert.match(html, /Interrupted before completion/);
   assert.match(html, /Failure code: anthropic_api_error/);
+  assert.match(html, /Attempt: 2/);
   assert.doesNotMatch(html, /PROMPT_SHOULD_NOT_RENDER|RAW_RESPONSE_SHOULD_NOT_RENDER|SEARCH_RESULTS_SHOULD_NOT_RENDER/);
+});
+
+test('timestamp objects and invalid dates render safely in Indian local time', () => {
+  const { ctx } = loadDashboardHarness();
+  assert.doesNotMatch(ctx.formatAutomatedNewsBriefDate({ seconds: 1784178000, nanoseconds: 123000000 }), /Timestamp/);
+  assert.doesNotMatch(ctx.formatAutomatedNewsBriefDate({ _seconds: 1784178000, _nanoseconds: 123000000 }), /Timestamp/);
+  assert.match(ctx.formatAutomatedNewsBriefDate({ _seconds: 1784178000, _nanoseconds: 123000000 }), /2026/);
+  assert.equal(ctx.formatAutomatedNewsBriefDate('not-a-date'), 'Date unavailable');
 });
 
 test('historical run without Claude call details renders safe empty state', () => {
