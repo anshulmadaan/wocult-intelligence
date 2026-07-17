@@ -26,6 +26,24 @@ const STAFF_EMAILS = new Set([
   'anmadaan@gmail.com',
 ]);
 
+const RECOVER_FINALISED_CHILD_CONFIRMATION = 'RECOVER_PROVEN_FINALISED_CHILD';
+const RECOVERABLE_TERMINAL_CHILD_STATUSES = new Set([
+  'rejected_by_filter',
+  'needs_editorial_check',
+  'qualification_failed',
+  'verification_failed',
+  'drafting_failed',
+  'awaiting_approval',
+  'held',
+  'declined',
+  'approved',
+  'webflow_draft_created',
+  'webflow_failed',
+  'failed',
+]);
+const CANDIDATE_ID_PATTERN = /^[A-Za-z0-9_-]{2,160}$/;
+const WORKFLOW_INSTANCE_ID_PATTERN = /^[A-Za-z0-9_-]{3,100}$/;
+
 const REQUIRED_QUALIFICATION_FIELDS = {
   qualifies: 'boolean',
   overallScore: 'number',
@@ -1100,6 +1118,13 @@ export async function requireWorkerAdmin(request, env, deps = {}) {
   return { ok: false };
 }
 
+function requireWorkerAdminTokenOnly(request, env) {
+  const auth = request.headers.get('Authorization') || '';
+  const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1] || '';
+  if (env.WORKER_ADMIN_TOKEN && bearer && constantTimeEqual(bearer, env.WORKER_ADMIN_TOKEN)) return { ok: true, type: 'admin_token' };
+  return { ok: false };
+}
+
 export async function requireProtectedRoute(request, env, deps = {}) {
   const auth = await requireWorkerAdmin(request, env, deps);
   if (!auth.ok) return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
@@ -1146,6 +1171,15 @@ export async function handleAutomationRequest(request, env, ctx, shared = {}, de
         ? 'Approved. Webflow draft creation is disabled or needs retry.'
         : result.message || result.error || 'Decision recorded.';
     return new Response(createMessageHtml(message, result.detail || ''), { status: result.ok ? 200 : 409, headers: { 'Content-Type': 'text/html' } });
+  }
+
+  if (url.pathname === '/automation/news-briefs/recover-finalised-child') {
+    if (request.method !== 'POST') return json({ ok: false, error: 'automation_route_not_found' }, 404);
+    const admin = requireWorkerAdminTokenOnly(request, env);
+    if (!admin.ok) return json({ ok: false, error: 'Unauthorized' }, 401);
+    const body = await safeJson(request);
+    const result = await recoverFinalisedChild(body, env, deps);
+    return json(result, result.ok ? 200 : (result.status || 409));
   }
 
   const protectedResponse = await requireProtectedRoute(request, env, deps);
@@ -2037,7 +2071,7 @@ function childRecordsWithParentFallbacks(run = {}, children = []) {
   }
   for (const workflow of run.candidateWorkflowIds || []) {
     if (!workflow?.candidateId) continue;
-    byId.set(workflow.candidateId, { ...(byId.get(workflow.candidateId) || {}), ...workflow });
+    byId.set(workflow.candidateId, { ...workflow, ...(byId.get(workflow.candidateId) || {}) });
   }
   return [...byId.values()].sort((a, b) => Number(a.candidateIndex || 0) - Number(b.candidateIndex || 0));
 }
@@ -2673,6 +2707,14 @@ async function triggerFinalizerWorkflow(env, runId, candidateId, dryRun, store, 
   return { workflowInstanceId: instanceId, triggered: true };
 }
 
+function safeCandidateId(value) {
+  return CANDIDATE_ID_PATTERN.test(String(value || '')) ? String(value) : '';
+}
+
+function safeWorkflowInstanceId(value) {
+  return WORKFLOW_INSTANCE_ID_PATTERN.test(String(value || '')) ? String(value) : '';
+}
+
 export async function runNewsBriefCandidateWorkflow(env, options = {}, deps = {}) {
   const config = getAutomationConfig(env);
   const dryRun = options.dryRun !== undefined ? !!options.dryRun : config.dryRun;
@@ -2876,6 +2918,61 @@ export async function runNewsBriefCandidateWorkflow(env, options = {}, deps = {}
   return { ok: true, runId, candidateId, finalStatus };
 }
 
+async function aggregateNewsBriefRunChildren(store, runId, dryRun, extraPatch = {}) {
+  const run = await store.getRun(runId);
+  if (!run) return { ok: false, error: 'run_not_found' };
+  const children = childRecordsWithParentFallbacks(run, await store.listChildRuns(runId));
+  const target = Number(run.targetItems ?? children.length ?? 0);
+  const finalised = children.filter((child) => child.finalised === true);
+  const usage = createEmptyUsage();
+  const externalRequestUsage = createEmptyExternalRequestUsage();
+  for (const child of finalised) {
+    addUsage(usage, child.usage || {});
+    addExternalUsage(externalRequestUsage, child.externalRequestUsage || {});
+  }
+  const completedItems = finalised.length;
+  const percentComplete = target ? progressPercent(completedItems, target) : 100;
+  const fallback = childDisplayFallbacks(run);
+  const childWorkflowSummaries = children.map((child) => childSummaryFromRecord(child, fallback));
+  const attemptedItems = finalised.map((child) => child.attemptedItem).filter(Boolean);
+  const allTerminal = target === 0 || (target > 0 && completedItems === target && attemptedItems.length === target);
+  const terminalState = allTerminal
+    ? finalised.some((child) => child.applicationState === 'failed' || child.finalStatus === 'failed' || /_failed$/.test(child.finalStatus || '')) ? 'completed_with_failures' : 'completed'
+    : 'running';
+  const patch = {
+    ...run,
+    childWorkflowSummaries,
+    completedItems,
+    percentComplete,
+    usage,
+    externalRequestUsage,
+    attemptedItems,
+    updatedAt: new Date().toISOString(),
+    heartbeatAt: new Date().toISOString(),
+    applicationState: terminalState,
+    state: terminalState,
+    activeRun: !allTerminal,
+    phase: allTerminal ? 'completed' : run.phase,
+    currentWorkflowStep: allTerminal ? 'completed' : run.currentWorkflowStep,
+    currentCandidateId: allTerminal ? '' : run.currentCandidateId,
+    currentHeadline: allTerminal ? '' : run.currentHeadline,
+    endTime: allTerminal ? (run.endTime || new Date().toISOString()) : run.endTime,
+    itemsRejected: finalised.filter((child) => child.finalStatus === 'rejected_by_filter').length,
+    itemsNeedingEditorialCheck: finalised.filter((child) => child.finalStatus === 'needs_editorial_check').length,
+    itemsVerified: finalised.filter((child) => child.verificationResult?.ok).length,
+    draftsGenerated: finalised.filter((child) => child.finalStatus === 'awaiting_approval').length,
+    failures: finalised.filter((child) => child.applicationState === 'failed' || child.finalStatus === 'failed' || /_failed$/.test(child.finalStatus || '')).length,
+    ...extraPatch,
+  };
+  if (target > 0 && completedItems < target) {
+    patch.applicationState = 'running';
+    patch.state = 'running';
+    patch.activeRun = true;
+  }
+  await store.saveRun(patch, { dryRun });
+  return { ok: true, runId, completedItems, targetItems: target, completed: allTerminal, run: patch };
+}
+
 export async function runNewsBriefFinalizerWorkflow(env, options = {}, deps = {}) {
   const config = getAutomationConfig(env);
   const dryRun = options.dryRun !== undefined ? !!options.dryRun : config.dryRun;
@@ -2883,58 +2980,133 @@ export async function runNewsBriefFinalizerWorkflow(env, options = {}, deps = {}
   if (!safeRunId(runId)) return { ok: false, error: 'invalid_runId' };
   const store = getStore(env, deps);
   return workflowStep(deps, 'finalise-run', 'default', async () => {
-    const run = await store.getRun(runId);
-    if (!run) return { ok: false, error: 'run_not_found' };
-    const children = childRecordsWithParentFallbacks(run, await store.listChildRuns(runId));
-    const target = Number(run.targetItems ?? children.length ?? 0);
-    const finalised = children.filter((child) => child.finalised === true);
-    const usage = createEmptyUsage();
-    const externalRequestUsage = createEmptyExternalRequestUsage();
-    for (const child of finalised) {
-      addUsage(usage, child.usage || {});
-      addExternalUsage(externalRequestUsage, child.externalRequestUsage || {});
-    }
-    const completedItems = finalised.length;
-    const percentComplete = target ? progressPercent(completedItems, target) : 100;
-    const fallback = childDisplayFallbacks(run);
-    const childWorkflowSummaries = children.map((child) => childSummaryFromRecord(child, fallback));
-    const attemptedItems = finalised.map((child) => child.attemptedItem).filter(Boolean);
-    const allTerminal = target === 0 || (target > 0 && completedItems === target && attemptedItems.length === target);
-    const terminalState = allTerminal
-      ? finalised.some((child) => child.applicationState === 'failed' || child.finalStatus === 'failed' || /_failed$/.test(child.finalStatus || '')) ? 'completed_with_failures' : 'completed'
-      : 'running';
-    const patch = {
-      ...run,
-      childWorkflowSummaries,
-      completedItems,
-      percentComplete,
-      usage,
-      externalRequestUsage,
-      attemptedItems,
-      updatedAt: new Date().toISOString(),
-      heartbeatAt: new Date().toISOString(),
-      applicationState: terminalState,
-      state: terminalState,
-      activeRun: !allTerminal,
-      phase: allTerminal ? 'completed' : run.phase,
-      currentWorkflowStep: allTerminal ? 'completed' : run.currentWorkflowStep,
-      currentCandidateId: allTerminal ? '' : run.currentCandidateId,
-      currentHeadline: allTerminal ? '' : run.currentHeadline,
-      endTime: allTerminal ? (run.endTime || new Date().toISOString()) : run.endTime,
-      itemsRejected: finalised.filter((child) => child.finalStatus === 'rejected_by_filter').length,
-      itemsNeedingEditorialCheck: finalised.filter((child) => child.finalStatus === 'needs_editorial_check').length,
-      itemsVerified: finalised.filter((child) => child.verificationResult?.ok).length,
-      draftsGenerated: finalised.filter((child) => child.finalStatus === 'awaiting_approval').length,
-      failures: finalised.filter((child) => child.applicationState === 'failed' || child.finalStatus === 'failed' || /_failed$/.test(child.finalStatus || '')).length,
-    };
-    if (target > 0 && completedItems < target) {
-      patch.applicationState = 'running';
-      patch.state = 'running';
-      patch.activeRun = true;
-    }
-    await store.saveRun(patch, { dryRun });
-    return { ok: true, runId, completedItems, targetItems: target, completed: allTerminal };
+    const result = await aggregateNewsBriefRunChildren(store, runId, dryRun);
+    return { ok: result.ok, runId, completedItems: result.completedItems || 0, targetItems: result.targetItems || 0, completed: result.completed === true, error: result.error };
   });
+}
+
+function recoveryError(error, message, status = 409) {
+  return { ok: false, status, error, message };
+}
+
+export async function recoverFinalisedChild(body = {}, env, deps = {}) {
+  const runId = safeRunId(body.runId);
+  const candidateId = safeCandidateId(body.candidateId);
+  const workflowInstanceId = safeWorkflowInstanceId(body.workflowInstanceId);
+  const finalStatus = String(body.finalStatus || '');
+  if (!runId) return recoveryError('invalid_runId', 'A valid runId is required.', 400);
+  if (!candidateId) return recoveryError('invalid_candidateId', 'A valid candidateId is required.', 400);
+  if (!workflowInstanceId) return recoveryError('invalid_workflowInstanceId', 'A valid workflowInstanceId is required.', 400);
+  if (body.confirmation !== RECOVER_FINALISED_CHILD_CONFIRMATION) return recoveryError('missing_confirmation', 'Recovery confirmation did not match.', 400);
+  if (!RECOVERABLE_TERMINAL_CHILD_STATUSES.has(finalStatus)) return recoveryError('invalid_finalStatus', 'The supplied finalStatus is not recoverable.', 400);
+
+  const config = getAutomationConfig(env);
+  const dryRun = config.dryRun;
+  const store = getStore(env, deps);
+  const run = await store.getRun(runId);
+  if (!run) return recoveryError('run_not_found', 'Parent run was not found.', 404);
+  if (run.runId !== runId) return recoveryError('run_mismatch', 'Parent run ID did not match.');
+  if (Number(run.targetItems) !== 1) return recoveryError('unsupported_target_count', 'This recovery is restricted to one-candidate incident runs.');
+
+  const selected = (run.selectedCandidates || []).find((candidate) => candidate.candidateId === candidateId);
+  if (!selected) return recoveryError('candidate_not_selected', 'Candidate was not present in selectedCandidates.');
+  const workflow = (run.candidateWorkflowIds || []).find((entry) => entry.candidateId === candidateId);
+  if (!workflow) return recoveryError('candidate_workflow_missing', 'Candidate was not present in candidateWorkflowIds.');
+  if (workflow.workflowInstanceId !== workflowInstanceId) return recoveryError('workflow_instance_mismatch', 'Supplied Workflow instance ID did not match parent metadata.');
+  if (selected.candidateId !== candidateId) return recoveryError('candidate_mismatch', 'Selected candidate did not match supplied candidateId.');
+
+  const child = await store.getChildRun?.(runId, candidateId);
+  if (!child) return recoveryError('child_not_found', 'Child record was not found.', 404);
+
+  const parentRecoverable = ['running', 'preparing'].includes(logicalRunState(run)) || run.activeRun === true || Number(run.completedItems || 0) < Number(run.targetItems || 0);
+  const alreadyRecovered = child.finalised === true
+    && child.finalStatus === finalStatus
+    && child.workflowInstanceId === workflowInstanceId
+    && child.recoveryCode === 'child_document_overwritten_after_finalisation';
+  if (!alreadyRecovered) {
+    if (!parentRecoverable) return recoveryError('parent_not_recoverable', 'Parent run is not in a recoverable state.');
+    if (run.activeRun !== true) return recoveryError('active_run_required', 'Parent activeRun is not true.');
+  }
+
+  const recoveredAt = new Date().toISOString();
+  const usage = child.usage || createEmptyUsage();
+  const externalRequestUsage = child.externalRequestUsage || createEmptyExternalRequestUsage();
+  const recoveredFinalizerWorkflowInstanceId = child.finalizerWorkflowInstanceId || finalizerWorkflowInstanceId(runId, candidateId);
+  const attemptedItem = child.attemptedItem || {
+    candidateId,
+    headline: selected.headline,
+    source: selected.sourceName || selected.source,
+    sourceUrl: selected.sourceUrl,
+    dateFound: selected.dateFound,
+    processedAt: child.finalisedAt || recoveredAt,
+    status: finalStatus,
+    outcome: finalStatus,
+    failureStage: '',
+    failureCode: '',
+    failureMessage: '',
+  };
+
+  if (!alreadyRecovered) {
+    await store.saveChildRun(runId, candidateId, {
+      runId,
+      candidateId,
+      candidateIndex: selected.candidateIndex || workflow.candidateIndex,
+      headline: selected.headline || workflow.headline,
+      sourceName: selected.sourceName || selected.source,
+      sourceUrl: selected.sourceUrl,
+      dateFound: selected.dateFound,
+      workflowInstanceId,
+      workflowState: 'errored',
+      applicationState: finalStatus === 'failed' || /_failed$/.test(finalStatus) ? 'failed' : 'completed',
+      currentStage: 'finalised',
+      finalStatus,
+      finalised: true,
+      finalisedAt: child.finalisedAt || recoveredAt,
+      finalizerWorkflowInstanceId: recoveredFinalizerWorkflowInstanceId,
+      externalRequestUsage,
+      usage,
+      anthropicCallLog: child.anthropicCallLog || [],
+      qualificationResult: child.qualificationResult,
+      primarySourceDiscoveryResult: child.primarySourceDiscoveryResult,
+      primarySourceDiscoveryStatus: child.primarySourceDiscoveryStatus,
+      primarySources: child.primarySources || [],
+      verificationResult: child.verificationResult,
+      draftResult: child.draftResult,
+      attemptedItem,
+      recovered: true,
+      recoveredAt,
+      recoveryCode: 'child_document_overwritten_after_finalisation',
+      recoverySource: 'proven_workflow_step_output',
+      workflowFailureCode: 'candidate_workflow_completion_invariant_failed',
+      updatedAt: recoveredAt,
+    }, { dryRun });
+  }
+
+  const aggregate = await aggregateNewsBriefRunChildren(store, runId, dryRun, {
+    recoveredItems: 1,
+    recoveryWarning: true,
+    recoveryCode: 'child_document_overwritten_after_finalisation',
+  });
+  if (!aggregate.ok) return recoveryError(aggregate.error || 'aggregation_failed', 'Parent aggregation failed.', 500);
+
+  store.addActivity?.(candidateId, 'authorised recovery', {
+    runId,
+    workflowInstanceId,
+    finalStatus,
+    recoveryCode: 'child_document_overwritten_after_finalisation',
+  }).catch(() => {});
+
+  return {
+    ok: true,
+    alreadyRecovered,
+    runId,
+    candidateId,
+    completedItems: aggregate.run.completedItems,
+    targetItems: aggregate.run.targetItems,
+    percentComplete: aggregate.run.percentComplete,
+    activeRun: aggregate.run.activeRun,
+    applicationState: aggregate.run.applicationState,
+  };
 }
 
 async function verifyCandidateSources(item, deps = {}, primaryDiscovery = null) {
