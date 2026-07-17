@@ -1622,7 +1622,7 @@ function createFailureMetadata(error, stage, runId) {
 }
 
 function normalizeFailureStage(stage) {
-  const allowed = new Set(['wocult_duplicate_check', 'qualification', 'primary_source_discovery', 'primary_source_fetch', 'primary_source_verification', 'source_fetch', 'verification', 'verification_parse', 'drafting', 'drafting_parse', 'firestore_write', 'webflow', 'unknown']);
+  const allowed = new Set(['wocult_duplicate_check', 'spawn_candidate_workflow', 'qualification', 'primary_source_discovery', 'primary_source_fetch', 'primary_source_verification', 'source_fetch', 'verification', 'verification_parse', 'drafting', 'drafting_parse', 'firestore_write', 'webflow', 'unknown']);
   return allowed.has(stage) ? stage : stage === 'drafting_failed' ? 'drafting_parse' : stage === 'qualification_failed' ? 'qualification' : 'unknown';
 }
 
@@ -1635,6 +1635,7 @@ function failureCodeForError(error, stage) {
   if (stage === 'verification_parse') return 'verification_json_invalid';
   if (stage === 'firestore_write') return 'firestore_write_failed';
   if (stage === 'wocult_duplicate_check') return error?.failureCode || 'webflow_news_duplicate_index_failed';
+  if (stage === 'spawn_candidate_workflow') return error?.failureCode || 'candidate_workflow_create_failed';
   if (stage === 'primary_source_discovery') return error?.failureCode || 'primary_source_verification_failed';
   if (message.includes('anthropic')) return 'anthropic_api_error';
   return 'unknown_processing_error';
@@ -1646,6 +1647,7 @@ function retryableFailure(stage, code) {
 
 function lastSuccessfulStageBefore(stage) {
   if (stage === 'wocult_duplicate_check') return 'sorting_items';
+  if (stage === 'spawn_candidate_workflow') return 'selecting_candidates';
   if (['primary_source_discovery', 'primary_source_fetch', 'primary_source_verification'].includes(stage)) return 'qualification';
   if (['verification', 'verification_parse', 'source_fetch'].includes(stage)) return 'primary_source_discovery';
   if (['drafting', 'drafting_parse'].includes(stage)) return 'verification';
@@ -1987,6 +1989,59 @@ function selectedPayloadSizeBytes(payload) {
   return new TextEncoder().encode(JSON.stringify(payload)).length;
 }
 
+function childDisplayFallbacks(run = {}) {
+  const selected = new Map((run.selectedCandidates || []).map((candidate) => [candidate.candidateId, candidate]));
+  const workflows = new Map((run.candidateWorkflowIds || []).map((entry) => [entry.candidateId, entry]));
+  return { selected, workflows };
+}
+
+function childSummaryFromRecord(child = {}, fallback = {}) {
+  const selected = fallback.selected?.get(child.candidateId) || {};
+  const workflow = fallback.workflows?.get(child.candidateId) || {};
+  return stripEmptyOptionalFields({
+    candidateId: child.candidateId || selected.candidateId || workflow.candidateId,
+    candidateIndex: child.candidateIndex || selected.candidateIndex || workflow.candidateIndex,
+    headline: child.headline || selected.headline || workflow.headline,
+    workflowInstanceId: child.workflowInstanceId || workflow.workflowInstanceId,
+    workflowState: child.workflowState || workflow.workflowState,
+    applicationState: child.applicationState || workflow.applicationState,
+    currentStage: child.currentStage || workflow.currentStage,
+    finalStatus: child.finalStatus || workflow.finalStatus,
+    finalised: child.finalised === true,
+    usage: child.usage || createEmptyUsage(),
+    externalRequestUsage: child.externalRequestUsage || createEmptyExternalRequestUsage(),
+    failureStage: child.failureStage || workflow.failureStage,
+    failureCode: child.failureCode || workflow.failureCode,
+    failureMessage: child.failureMessage || workflow.failureMessage,
+    updatedAt: child.updatedAt || workflow.updatedAt,
+  });
+}
+
+function childRecordsWithParentFallbacks(run = {}, children = []) {
+  const byId = new Map(children.map((child) => [child.candidateId, child]));
+  for (const candidate of run.selectedCandidates || []) {
+    if (!candidate?.candidateId || byId.has(candidate.candidateId)) continue;
+    byId.set(candidate.candidateId, {
+      candidateId: candidate.candidateId,
+      candidateIndex: candidate.candidateIndex,
+      headline: candidate.headline,
+      sourceName: candidate.sourceName,
+      sourceUrl: candidate.sourceUrl,
+      dateFound: candidate.dateFound,
+      workflowState: 'unknown',
+      applicationState: 'queued',
+      currentStage: 'queued',
+      finalStatus: 'pending',
+      finalised: false,
+    });
+  }
+  for (const workflow of run.candidateWorkflowIds || []) {
+    if (!workflow?.candidateId) continue;
+    byId.set(workflow.candidateId, { ...(byId.get(workflow.candidateId) || {}), ...workflow });
+  }
+  return [...byId.values()].sort((a, b) => Number(a.candidateIndex || 0) - Number(b.candidateIndex || 0));
+}
+
 export async function runNewsBriefCoordinatorWorkflow(env, options = {}, deps = {}) {
   const config = getAutomationConfig(env);
   const dryRun = options.dryRun !== undefined ? !!options.dryRun : config.dryRun;
@@ -2097,7 +2152,17 @@ export async function runNewsBriefCoordinatorWorkflow(env, options = {}, deps = 
     const childIds = [];
     for (const candidate of selection.selectedCandidates) {
       const instanceId = candidateWorkflowInstanceId(runId, candidate);
-      childIds.push({ candidateId: candidate.candidateId, workflowInstanceId: instanceId, candidateIndex: candidate.candidateIndex });
+      childIds.push({
+        candidateId: candidate.candidateId,
+        candidateIndex: candidate.candidateIndex,
+        headline: candidate.headline,
+        workflowInstanceId: instanceId,
+        workflowState: 'queued',
+        applicationState: 'queued',
+        currentStage: 'queued',
+        finalStatus: 'pending',
+        finalised: false,
+      });
       await workflowStep(deps, `spawn-candidate-${candidate.candidateIndex}`, 'default', async () => {
         await store.saveChildRun(runId, candidate.candidateId, {
           ...candidate,
@@ -2111,16 +2176,59 @@ export async function runNewsBriefCoordinatorWorkflow(env, options = {}, deps = 
           externalRequestUsage: createEmptyExternalRequestUsage(),
           updatedAt: now(),
         }, { dryRun });
-        if (!env[NEWS_BRIEF_CANDIDATE_WORKFLOW_BINDING]?.create) throw Object.assign(new Error('candidate workflow binding unavailable'), { failureCode: 'candidate_workflow_binding_unavailable', failureStage: 'spawning_candidates' });
+        let workflowCreated = false;
         try {
+          if (!env[NEWS_BRIEF_CANDIDATE_WORKFLOW_BINDING]?.create) throw Object.assign(new Error('candidate workflow binding unavailable'), { failureCode: 'candidate_workflow_binding_unavailable', failureStage: 'spawn_candidate_workflow' });
           await env[NEWS_BRIEF_CANDIDATE_WORKFLOW_BINDING].create({
             id: instanceId,
             params: { runId, candidate, dryRun, workflowInstanceId: instanceId },
           });
+          workflowCreated = true;
         } catch (e) {
-          if (!/already|exist|duplicate/i.test(e.message || '')) throw e;
+          if (/already|exist|duplicate/i.test(e.message || '')) workflowCreated = false;
+          else {
+            const failure = createFailureMetadata(Object.assign(e, { failureStage: 'spawn_candidate_workflow', failureCode: e.failureCode || 'candidate_workflow_create_failed' }), 'spawn_candidate_workflow', runId);
+            await store.saveChildRun(runId, candidate.candidateId, {
+              runId,
+              candidateId: candidate.candidateId,
+              candidateIndex: candidate.candidateIndex,
+              headline: candidate.headline,
+              sourceName: candidate.sourceName,
+              sourceUrl: candidate.sourceUrl,
+              dateFound: candidate.dateFound,
+              workflowInstanceId: instanceId,
+              workflowState: 'failed',
+              applicationState: 'failed',
+              currentStage: 'spawn_candidate_workflow',
+              finalStatus: 'failed',
+              finalised: true,
+              finalisedAt: now(),
+              failureStage: failure.failureStage,
+              failureCode: failure.failureCode,
+              failureMessage: failure.failureMessage,
+              retryable: false,
+              usage: createEmptyUsage(),
+              externalRequestUsage: createEmptyExternalRequestUsage(),
+              attemptedItem: {
+                candidateId: candidate.candidateId,
+                headline: candidate.headline,
+                source: candidate.sourceName,
+                sourceUrl: candidate.sourceUrl,
+                dateFound: candidate.dateFound,
+                processedAt: now(),
+                status: 'failed',
+                outcome: 'failed',
+                failureStage: failure.failureStage,
+                failureCode: failure.failureCode,
+                failureMessage: failure.failureMessage,
+              },
+              updatedAt: now(),
+            }, { dryRun });
+            if (env[NEWS_BRIEF_FINALIZER_WORKFLOW_BINDING]?.create) await triggerFinalizerWorkflow(env, runId, candidate.candidateId, dryRun, store, createEmptyExternalRequestUsage());
+            return { candidateId: candidate.candidateId, candidateIndex: candidate.candidateIndex, workflowInstanceId: instanceId, workflowCreated: false, headline: candidate.headline };
+          }
         }
-        return { candidateId: candidate.candidateId, workflowInstanceId: instanceId };
+        return { candidateId: candidate.candidateId, candidateIndex: candidate.candidateIndex, workflowInstanceId: instanceId, workflowCreated, headline: candidate.headline };
       });
     }
     await saveRunCritical({
@@ -2551,7 +2659,7 @@ async function saveChildCritical(store, runId, candidateId, patch, dryRun) {
 
 async function triggerFinalizerWorkflow(env, runId, candidateId, dryRun, store, externalUsage) {
   const instanceId = finalizerWorkflowInstanceId(runId, candidateId);
-  if (!env[NEWS_BRIEF_FINALIZER_WORKFLOW_BINDING]?.create) return { workflowInstanceId: '', triggered: false };
+  if (!env[NEWS_BRIEF_FINALIZER_WORKFLOW_BINDING]?.create) throw Object.assign(new Error('finalizer workflow binding unavailable'), { failureStage: 'firestore_write', failureCode: 'finalizer_workflow_binding_unavailable' });
   externalUsage.workflowBindingCalls += 1;
   try {
     await env[NEWS_BRIEF_FINALIZER_WORKFLOW_BINDING].create({
@@ -2777,7 +2885,7 @@ export async function runNewsBriefFinalizerWorkflow(env, options = {}, deps = {}
   return workflowStep(deps, 'finalise-run', 'default', async () => {
     const run = await store.getRun(runId);
     if (!run) return { ok: false, error: 'run_not_found' };
-    const children = (await store.listChildRuns(runId)).sort((a, b) => Number(a.candidateIndex || 0) - Number(b.candidateIndex || 0));
+    const children = childRecordsWithParentFallbacks(run, await store.listChildRuns(runId));
     const target = Number(run.targetItems ?? children.length ?? 0);
     const finalised = children.filter((child) => child.finalised === true);
     const usage = createEmptyUsage();
@@ -2788,23 +2896,8 @@ export async function runNewsBriefFinalizerWorkflow(env, options = {}, deps = {}
     }
     const completedItems = finalised.length;
     const percentComplete = target ? progressPercent(completedItems, target) : 100;
-    const childWorkflowSummaries = children.map((child) => stripEmptyOptionalFields({
-      candidateId: child.candidateId,
-      candidateIndex: child.candidateIndex,
-      headline: child.headline,
-      workflowInstanceId: child.workflowInstanceId,
-      workflowState: child.workflowState,
-      applicationState: child.applicationState,
-      currentStage: child.currentStage,
-      finalStatus: child.finalStatus,
-      finalised: child.finalised === true,
-      usage: child.usage || createEmptyUsage(),
-      externalRequestUsage: child.externalRequestUsage || createEmptyExternalRequestUsage(),
-      failureStage: child.failureStage,
-      failureCode: child.failureCode,
-      failureMessage: child.failureMessage,
-      updatedAt: child.updatedAt,
-    }));
+    const fallback = childDisplayFallbacks(run);
+    const childWorkflowSummaries = children.map((child) => childSummaryFromRecord(child, fallback));
     const attemptedItems = finalised.map((child) => child.attemptedItem).filter(Boolean);
     const allTerminal = target === 0 || (target > 0 && completedItems === target && attemptedItems.length === target);
     const terminalState = allTerminal
@@ -3076,7 +3169,7 @@ async function getAutomationStatus(env, deps = {}, runId = '') {
   const attachChildren = async (run) => {
     if (!run) return run;
     if (!store.listChildRuns || !(Array.isArray(run.selectedCandidates) || Array.isArray(run.candidateWorkflowIds))) return run;
-    const children = (await store.listChildRuns(run.runId)).sort((a, b) => Number(a.candidateIndex || 0) - Number(b.candidateIndex || 0));
+    const children = childRecordsWithParentFallbacks(run, await store.listChildRuns(run.runId));
     const target = Number(run.targetItems ?? children.length ?? 0);
     const finalised = children.filter((child) => child.finalised === true);
     const completedItems = finalised.length;
@@ -3087,23 +3180,8 @@ async function getAutomationStatus(env, deps = {}, runId = '') {
       addUsage(usage, child.usage || {});
       addExternalUsage(externalRequestUsage, child.externalRequestUsage || {});
     }
-    const childWorkflowSummaries = children.map((child) => stripEmptyOptionalFields({
-      candidateId: child.candidateId,
-      candidateIndex: child.candidateIndex,
-      headline: child.headline,
-      workflowInstanceId: child.workflowInstanceId,
-      workflowState: child.workflowState,
-      applicationState: child.applicationState,
-      currentStage: child.currentStage,
-      finalStatus: child.finalStatus,
-      finalised: child.finalised === true,
-      usage: child.usage || createEmptyUsage(),
-      externalRequestUsage: child.externalRequestUsage || createEmptyExternalRequestUsage(),
-      failureStage: child.failureStage,
-      failureCode: child.failureCode,
-      failureMessage: child.failureMessage,
-      updatedAt: child.updatedAt,
-    }));
+    const fallback = childDisplayFallbacks(run);
+    const childWorkflowSummaries = children.map((child) => childSummaryFromRecord(child, fallback));
     return {
       ...run,
       childWorkflowSummaries,
@@ -3298,9 +3376,12 @@ function createFirestoreStore(env, deps = {}) {
       return fromFirestoreDoc(await res.json());
     },
     async saveChildRun(runId, candidateId, child) {
-      await firestoreFetch(`${root}/news_brief_automation_runs/${encodeURIComponent(runId)}/children/${encodeURIComponent(candidateId)}`, env, fetchImpl, {
+      const fields = { ...child, runId, candidateId };
+      const target = new URL(`${root}/news_brief_automation_runs/${encodeURIComponent(runId)}/children/${encodeURIComponent(candidateId)}`);
+      for (const field of Object.keys(fields)) target.searchParams.append('updateMask.fieldPaths', field);
+      await firestoreFetch(target.toString(), env, fetchImpl, {
         method: 'PATCH',
-        body: JSON.stringify({ fields: toFirestoreFields({ ...child, runId, candidateId }) }),
+        body: JSON.stringify({ fields: toFirestoreFields(fields) }),
       });
     },
     async listChildRuns(runId) {
