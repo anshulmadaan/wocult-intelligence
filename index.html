@@ -5694,15 +5694,55 @@ function showManualNewsBrief() {
   setTimeout(function(){ document.getElementById('manual-news-headline').focus(); }, 100);
 }
 
+function plainHeaders(headers) {
+  var out = {};
+  if (!headers) return out;
+  if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+    headers.forEach(function(value, key) { out[key] = value; });
+    return out;
+  }
+  Object.keys(headers).forEach(function(key) { out[key] = headers[key]; });
+  return out;
+}
+
+function getCurrentUserIdToken(forceRefresh) {
+  if (!currentUser || !currentUser.getIdToken) {
+    return Promise.reject(new Error('Your session has expired. Please sign in again.'));
+  }
+  return currentUser.getIdToken(forceRefresh === true).catch(function(err) {
+    console.warn('Firebase ID token retrieval failed:', err);
+    throw new Error('Your session has expired. Please sign in again.');
+  });
+}
+
 function workerFetch(path, options) {
   options = options || {};
-  options.headers = Object.assign({'Content-Type':'application/json'}, options.headers || {});
+  options.headers = Object.assign({'Content-Type':'application/json'}, plainHeaders(options.headers));
   var send = function(token) {
     if (token) options.headers.Authorization = 'Bearer ' + token;
     return fetch(WORKER + path, options);
   };
   if (!currentUser || !currentUser.getIdToken) return send('');
   return currentUser.getIdToken().then(send);
+}
+
+function workerFetchWithFirebaseAuth(path, options) {
+  options = options || {};
+  var requestOptions = Object.assign({}, options);
+  requestOptions.headers = Object.assign({'Content-Type':'application/json'}, plainHeaders(options.headers));
+  return getCurrentUserIdToken(false).then(function(token) {
+    requestOptions.headers.Authorization = 'Bearer ' + token;
+    return fetch(WORKER + path, requestOptions);
+  }).then(function(response) {
+    if (response.status !== 401) return response;
+    return getCurrentUserIdToken(true).then(function(refreshedToken) {
+      var retryOptions = Object.assign({}, options);
+      retryOptions.headers = Object.assign({'Content-Type':'application/json'}, plainHeaders(options.headers), {
+        Authorization: 'Bearer ' + refreshedToken
+      });
+      return fetch(WORKER + path, retryOptions);
+    });
+  });
 }
 
 var automatedNewsBriefFilter = 'awaiting_approval';
@@ -10788,7 +10828,7 @@ function createNewsBriefWebflowDraft(docId, data) {
   if (!docId) return Promise.reject(new Error('Missing Firebase article ID for Webflow draft creation.'));
   return existingWebflowMetadata(docId).then(function(existing) {
     if (existing) return existing;
-    return workerFetch('/webflow-news', {
+    return workerFetchWithFirebaseAuth('/webflow-news', {
       method:'POST',
       body:JSON.stringify({docId:docId, fieldData:buildNewsBriefFieldData(data), isDraft:true, isArchived:false})
     }).then(parseWorkerResponse).then(function(webflowData) {
