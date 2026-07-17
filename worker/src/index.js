@@ -26,6 +26,7 @@ export default {
     };
 
     const NEWS_COLLECTION_ID = '6a4d6ad32871d46ed1edc6a4';
+    const POSTS_COLLECTION_ID = '695be252bae2cf37c3a4b17b';
     const NEWS_BEAT_OPTIONS = {
       companies: '26b338ed973fe5a8e9723ee27c3cab91',
       'new jobs': '8a9188ad0192ce310bd9257582c1023b',
@@ -110,6 +111,60 @@ export default {
         'source-url': data.sourceUrl || data.sourceURL || data['source-url'] || data.url || '',
         'seo-description': seoDescription,
         'news-image': data.image || data.imageUrl || data.coverImageUrl || data['news-image'] || '',
+      });
+    };
+    const isValidSlug = (slug) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(slug || '').trim());
+    const isValidUrl = (value) => {
+      if (!value) return true;
+      try {
+        const parsed = new URL(value);
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+      } catch (e) {
+        return false;
+      }
+    };
+    const requirePostField = (condition, message) => {
+      if (!condition) {
+        const err = new Error(message);
+        err.status = 400;
+        throw err;
+      }
+    };
+    const buildPostFieldData = (payload) => {
+      const data = payload.fieldData || payload;
+      const title = toSentenceCaseHeadline(data.title || data.name || data.postTitle);
+      const slug = String(data.slug || '').trim();
+      const seoDescription = String(data.seoDescription || data['seo-description'] || '').replace(/\s+/g, ' ').trim();
+      const storyIntro = String(data.storyIntro || data.storyIntroPara || data['story-intro'] || data['story-intro-para'] || '').trim();
+      const excerpt = String(data.excerpt || '').trim();
+      const shortBrief = String(data.shortBrief || data['four-line-intro'] || data['short-brief'] || data.shortIntro || '').replace(/\s+/g, ' ').trim();
+      const body = String(data.body || '').trim();
+      const publishDate = toWebflowDateTime(data.publishDate || data.publishedDate || data['publish-date'] || new Date());
+      const imageUrl = String(data.imageUrl || data.coverImageUrl || data.postImage || data['post-image'] || '').trim();
+
+      requirePostField(title, 'Post Title is required.');
+      requirePostField(slug && isValidSlug(slug), 'Slug is required and must contain lowercase letters, numbers and hyphens only.');
+      requirePostField(body, 'Body is required.');
+      requirePostField(seoDescription.length <= 250, 'SEO Description must be 250 characters or fewer.');
+      requirePostField(storyIntro.length <= 500, 'Story Intro Para must be 500 characters or fewer.');
+      requirePostField(excerpt.length <= 500, 'Excerpt must be 500 characters or fewer.');
+      requirePostField(shortBrief.length >= 150 && shortBrief.length <= 180, 'Short Brief must be between 150 and 180 characters.');
+      requirePostField(!Number.isNaN(new Date(publishDate).getTime()), 'Publish date is invalid.');
+      requirePostField(isValidUrl(imageUrl), 'Post Image must be a valid URL when provided.');
+
+      return stripEmptyOptionalFields({
+        name: title,
+        slug,
+        'sub-title-heading': data.subtitle || data.standfirst || data['sub-title-heading'] || '',
+        'seo-description': seoDescription,
+        '40-word-intro': data.intro40 || data['40-word-intro'] || '',
+        'story-intro': storyIntro,
+        excerpt,
+        'four-line-intro': shortBrief,
+        body,
+        'publish-date': publishDate,
+        'post-image': imageUrl,
+        writer: data.writer || data.writerName || '',
       });
     };
 
@@ -306,6 +361,58 @@ export default {
 
     // /proxy — RSS proxy
     // /reddit - public Reddit JSON scan for workplace signals
+    // /webflow-posts - proxy to Webflow THA Posts collection
+    if (url.pathname === '/webflow-posts') {
+      const unauthorized = await requireProtectedRoute(request, env);
+      if (unauthorized) return unauthorized;
+      try {
+        const body = await request.json();
+        const postFieldData = buildPostFieldData(body);
+
+        const webflowRes = await fetch(
+          `https://api.webflow.com/v2/collections/${env.WEBFLOW_POSTS_COLLECTION_ID || POSTS_COLLECTION_ID}/items`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + (env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN),
+              'accept': 'application/json',
+            },
+            body: JSON.stringify({
+              fieldData: postFieldData,
+              isDraft: body.isDraft !== false,
+              isArchived: body.isArchived === true,
+            }),
+          }
+        );
+
+        const webflowText = await webflowRes.text();
+        let webflowData = null;
+
+        try {
+          webflowData = webflowText ? JSON.parse(webflowText) : null;
+        } catch (e) {
+          webflowData = { raw: webflowText };
+        }
+
+        if (!webflowRes.ok) {
+          return jsonResponse(
+            {
+              ok: false,
+              error: 'Webflow THA Posts validation failed',
+              status: webflowRes.status,
+              details: webflowData || webflowText,
+            },
+            400
+          );
+        }
+
+        return jsonResponse(webflowData, webflowRes.status);
+      } catch (e) {
+        return jsonResponse({ ok: false, error: e.message }, e.status || 500);
+      }
+    }
+
     // /webflow-schema - debug Webflow collection field slugs
     if (url.pathname === '/webflow-schema') {
       const unauthorized = await requireProtectedRoute(request, env);

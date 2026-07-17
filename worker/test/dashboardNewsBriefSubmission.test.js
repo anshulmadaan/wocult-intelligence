@@ -26,7 +26,8 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /workerFetchWithFirebaseAuth\('\/webflow-news'/);
   assert.doesNotMatch(createDraft, /fetch\(WORKER \+ '\/webflow-news'/);
   assert.match(createDraft, /existingWebflowMetadata\(docId\)/);
-  assert.match(createDraft, /updateArticleWebflowMetadata\(docId, webflowData\)/);
+  assert.match(createDraft, /updateArticleWebflowMetadata\(docId, webflowData, \{/);
+  assert.match(createDraft, /collectionName: 'News'/);
 });
 
 function loadAuthHarness(overrides = {}) {
@@ -141,5 +142,24 @@ test('Existing LinkedIn, Editorial Calendar, Automated News Brief and long-form 
   assert.match(html, /function showEditorialCalendar/);
   assert.match(html, /function showAutomatedNewsBriefs/);
   assert.match(html, /function submitArticle/);
-  assert.match(html, /var endpoint = docId \? '\/webflow-from-firebase' : '\/webflow'/);
+  assert.match(html, /function createLongViewWebflowDraft/);
+  assert.match(html, /workerFetchWithFirebaseAuth\('\/webflow-posts'/);
+  assert.doesNotMatch(functionBlock('submitArticle'), /webflow-from-firebase/);
+});
+
+test('Manual long-view workflow and shared social success path are present', () => {
+  assert.match(html, /Manual long-view story/);
+  assert.match(html, /function prepareManualLongViewCmsFields/);
+  assert.match(html, /function submitManualLongViewToCms/);
+  assert.match(html, /Submit to Firebase \+ THA Posts/);
+  assert.match(functionBlock('offerNewsBriefSocialWorkflow'), /contentType === 'long_form'/);
+  assert.match(functionBlock('renderLongViewSubmissionSuccess'), /Work on socials/);
+});
+
+test('Long-view Webflow submission uses authenticated Worker fetch and idempotency check', () => {
+  const createDraft = functionBlock('createLongViewWebflowDraft');
+  assert.match(createDraft, /existingWebflowMetadata\(docId\)/);
+  assert.match(createDraft, /workerFetchWithFirebaseAuth\('\/webflow-posts'/);
+  assert.match(createDraft, /collectionName: 'THA Posts'/);
+  assert.match(createDraft, /collectionId: THA_POSTS_COLLECTION_ID/);
 });

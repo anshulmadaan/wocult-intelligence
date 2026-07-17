@@ -1,3 +1,6 @@
 name = "wocult-news-proxy"
 main = "src/index.js"
 compatibility_date = "2026-04-26"
+
+[vars]
+NEWS_BRIEF_MAX_ITEMS_PER_RUN = "1"
