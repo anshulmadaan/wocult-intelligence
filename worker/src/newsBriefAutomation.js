@@ -1127,7 +1127,15 @@ function requireWorkerAdminTokenOnly(request, env) {
 
 export async function requireProtectedRoute(request, env, deps = {}) {
   const auth = await requireWorkerAdmin(request, env, deps);
-  if (!auth.ok) return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+  if (!auth.ok) return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), {
+    status: 401,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+      'Content-Type': 'application/json',
+    },
+  });
   return null;
 }
 
