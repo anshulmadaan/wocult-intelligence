@@ -921,6 +921,14 @@ test('coordinator fetches archives once, creates independent candidate workflows
   const items = Array.from({ length: 5 }, (_, i) => trackerItem(i + 1));
   const mocks = makeRunMocks(items);
   const created = [];
+  const stepOutputs = new Map();
+  const workflowStep = {
+    do: async (name, config, fn) => {
+      const output = await fn({ attempt: 1, step: { name, count: 1 }, config });
+      stepOutputs.set(name, output);
+      return output;
+    },
+  };
   const result = await runNewsBriefCoordinatorWorkflow({
     NEWS_TRACKER_API: 'https://tracker.example.test/current',
     NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
@@ -933,8 +941,10 @@ test('coordinator fetches archives once, creates independent candidate workflows
     dryRun: true,
     requestRunId: 'run_fanout_12345678',
     coordinatorWorkflowInstanceId: 'run_fanout_12345678',
-  }, mocks);
+  }, { ...mocks, workflowStep });
   const parent = mocks.runMap.get('run_fanout_12345678');
+  const firstChild = mocks.childMap.get(`run_fanout_12345678/${parent.selectedCandidates[0].candidateId}`);
+  const firstSpawn = stepOutputs.get('spawn-candidate-1');
   assert.equal(result.selectedCandidates, 5);
   assert.equal(created.length, 5);
   assert.equal(new Set(created.map((entry) => entry.id)).size, 5);
@@ -946,6 +956,14 @@ test('coordinator fetches archives once, creates independent candidate workflows
   assert.equal(parent.completedItems, 0);
   assert.equal(parent.percentComplete, 0);
   assert.equal(parent.candidateWorkflowIds.length, 5);
+  assert.equal(firstSpawn.candidateId, parent.selectedCandidates[0].candidateId);
+  assert.equal(firstSpawn.candidateIndex, 1);
+  assert.equal(firstSpawn.workflowInstanceId, created[0].id);
+  assert.equal(firstSpawn.workflowCreated, true);
+  assert.equal(firstSpawn.headline, parent.selectedCandidates[0].headline);
+  assert.equal(firstChild.candidateIndex, 1);
+  assert.equal(firstChild.headline, parent.selectedCandidates[0].headline);
+  assert.equal(firstChild.workflowInstanceId, created[0].id);
 });
 
 test('coordinator compact selection excludes raw tracker payload and Webflow body HTML', async () => {
@@ -1024,6 +1042,61 @@ test('candidate workflow finalises one candidate and triggers finalizer without 
   assert.equal(mocks.saved.length, 1);
 });
 
+test('candidate finalizer marker update preserves finalised child metadata', async () => {
+  const candidate = {
+    candidateId: 'nt_candidate_merge',
+    candidateIndex: 1,
+    headline: trackerItem(1).headline,
+    sourceName: trackerItem(1).source,
+    sourceUrl: trackerItem(1).link,
+    dateFound: recent,
+    theme: trackerItem(1).theme,
+    whyItMatters: trackerItem(1).whyItMatters,
+    verification: trackerItem(1).verification,
+  };
+  const mocks = makeRunMocks([], {
+    qualificationFor: () => ({ ...goodQualification, qualifies: false, overallScore: 45, rejectionReasons: ['No Wocult angle'], recommendedPriority: null }),
+  });
+  mocks.runMap.set('run_child_merge_12345678', {
+    runId: 'run_child_merge_12345678',
+    applicationState: 'running',
+    state: 'running',
+    targetItems: 1,
+    selectedCandidates: [candidate],
+    activeRun: true,
+  });
+  await runNewsBriefCandidateWorkflow({
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_FINALIZER_WORKFLOW: { create: async ({ id }) => ({ id }) },
+  }, { runId: 'run_child_merge_12345678', candidate, dryRun: true, workflowInstanceId: 'nbc-child-merge' }, mocks);
+  const child = mocks.childMap.get('run_child_merge_12345678/nt_candidate_merge');
+  assert.equal(child.finalised, true);
+  assert.equal(child.finalStatus, 'rejected_by_filter');
+  assert.equal(child.candidateIndex, 1);
+  assert.equal(child.headline, candidate.headline);
+  assert.equal(child.workflowInstanceId, 'nbc-child-merge');
+  assert.match(child.finalizerWorkflowInstanceId, /^nbf-/);
+});
+
+test('child Workflow creation failure produces terminal child outcome', async () => {
+  const items = [trackerItem(1)];
+  const mocks = makeRunMocks(items);
+  await runNewsBriefCoordinatorWorkflow({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+    NEWS_BRIEF_CANDIDATE_WORKFLOW: { create: async () => { throw new Error('create failed'); } },
+    NEWS_BRIEF_FINALIZER_WORKFLOW: { create: async ({ id }) => ({ id }) },
+  }, { dryRun: true, requestRunId: 'run_spawn_fail_12345678', coordinatorWorkflowInstanceId: 'run_spawn_fail_12345678' }, mocks);
+  const parent = mocks.runMap.get('run_spawn_fail_12345678');
+  const child = mocks.childMap.get(`run_spawn_fail_12345678/${parent.selectedCandidates[0].candidateId}`);
+  assert.equal(child.finalised, true);
+  assert.equal(child.finalStatus, 'failed');
+  assert.equal(child.applicationState, 'failed');
+  assert.equal(child.failureStage, 'spawn_candidate_workflow');
+  assert.equal(child.failureCode, 'candidate_workflow_create_failed');
+});
+
 test('finalizer completes parent only after all selected children are finalised', async () => {
   const mocks = makeRunMocks([]);
   const runId = 'run_finalizer_12345678';
@@ -1047,6 +1120,40 @@ test('finalizer completes parent only after all selected children are finalised'
   assert.equal(mocks.runMap.get(runId).completedItems, 2);
   assert.equal(mocks.runMap.get(runId).percentComplete, 100);
   assert.equal(mocks.runMap.get(runId).activeRun, false);
+});
+
+test('finalizer completes parent at 1 of 1 after finalised child is visible', async () => {
+  const mocks = makeRunMocks([]);
+  const runId = 'run_finalizer_one_12345678';
+  mocks.runMap.set(runId, {
+    runId,
+    applicationState: 'running',
+    state: 'running',
+    targetItems: 1,
+    completedItems: 0,
+    activeRun: true,
+    selectedCandidates: [{ candidateId: 'c1', candidateIndex: 1, headline: 'One selected story' }],
+    candidateWorkflowIds: [{ candidateId: 'c1', candidateIndex: 1, headline: 'One selected story', workflowInstanceId: 'nbc-one' }],
+  });
+  await mocks.store.saveChildRun(runId, 'c1', {
+    candidateId: 'c1',
+    candidateIndex: 1,
+    headline: 'One selected story',
+    workflowInstanceId: 'nbc-one',
+    finalised: true,
+    finalStatus: 'rejected_by_filter',
+    applicationState: 'completed',
+    attemptedItem: { candidateId: 'c1', headline: 'One selected story', outcome: 'rejected_by_filter' },
+    usage: { ...goodUsage(), inputTokens: 10 },
+  });
+  await runNewsBriefFinalizerWorkflow({ NEWS_BRIEF_DRY_RUN: 'true' }, { runId, dryRun: true }, mocks);
+  const parent = mocks.runMap.get(runId);
+  assert.equal(parent.applicationState, 'completed');
+  assert.equal(parent.completedItems, 1);
+  assert.equal(parent.percentComplete, 100);
+  assert.equal(parent.activeRun, false);
+  assert.equal(parent.childWorkflowSummaries[0].headline, 'One selected story');
+  assert.equal(parent.childWorkflowSummaries[0].workflowInstanceId, 'nbc-one');
 });
 
 test('status keeps coordinator-complete parent running while child workflows are active', async () => {
@@ -1080,6 +1187,213 @@ test('status keeps coordinator-complete parent running while child workflows are
   assert.equal(data.run.percentComplete, 50);
   assert.equal(data.run.activeRun, true);
   assert.equal(data.run.childWorkflowSummaries.length, 2);
+});
+
+test('status returns selected-candidate fallback metadata for incomplete child records', async () => {
+  const runId = 'run_status_fallback_12345678';
+  const mocks = makeRunMocks([]);
+  mocks.runMap.set(runId, {
+    runId,
+    coordinatorWorkflowState: 'completed',
+    workflowState: 'completed',
+    orchestrationState: 'fanout_completed',
+    applicationState: 'running',
+    state: 'running',
+    selectedCandidates: [{ candidateId: 'c1', candidateIndex: 1, headline: 'Fallback headline', sourceName: 'Tracker', sourceUrl: 'https://source.test/story' }],
+    candidateWorkflowIds: [{ candidateId: 'c1', candidateIndex: 1, headline: 'Fallback headline', workflowInstanceId: 'nbc-fallback' }],
+    targetItems: 1,
+    completedItems: 0,
+    activeRun: true,
+  });
+  await mocks.store.saveChildRun(runId, 'c1', {
+    candidateId: 'c1',
+    finalised: false,
+    externalRequestUsage: { totalExternalFetches: 12, firebaseAuth: 1, firestoreReads: 3, firestoreWrites: 7, anthropic: 1, softLimit: 32, finalisationReserve: 6 },
+  });
+  const response = await handleAutomationRequest(new Request(`https://worker.test/automation/news-briefs/status?runId=${runId}`, {
+    headers: { Authorization: 'Bearer admin' },
+  }), {
+    WORKER_ADMIN_TOKEN: 'admin',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_WORKFLOW: { get: async () => ({ status: async () => ({ status: 'completed' }) }) },
+  }, null, {}, mocks);
+  const data = await response.json();
+  const child = data.run.childWorkflowSummaries[0];
+  assert.equal(child.candidateId, 'c1');
+  assert.equal(child.candidateIndex, 1);
+  assert.equal(child.headline, 'Fallback headline');
+  assert.equal(child.workflowInstanceId, 'nbc-fallback');
+  assert.equal(child.finalised, false);
+  assert.equal(child.externalRequestUsage.totalExternalFetches, 12);
+});
+
+function recoveryPayload(overrides = {}) {
+  return {
+    runId: 'run_recover_12345678',
+    candidateId: 'nt_w63f99',
+    workflowInstanceId: 'nbc-schcs4-1-1c0prri',
+    finalStatus: 'rejected_by_filter',
+    confirmation: 'RECOVER_PROVEN_FINALISED_CHILD',
+    ...overrides,
+  };
+}
+
+function makeRecoveryMocks(overrides = {}) {
+  const mocks = makeRunMocks([]);
+  const selected = {
+    candidateId: 'nt_w63f99',
+    candidateIndex: 1,
+    headline: '8th Pay Commission salary calculator',
+    sourceName: 'economictimes.com',
+    sourceUrl: 'https://m.economictimes.com/story',
+    dateFound: recent,
+  };
+  mocks.runMap.set('run_recover_12345678', {
+    runId: 'run_recover_12345678',
+    applicationState: 'running',
+    state: 'running',
+    targetItems: 1,
+    completedItems: 0,
+    percentComplete: 0,
+    activeRun: true,
+    selectedCandidates: [selected],
+    candidateWorkflowIds: [{
+      candidateId: 'nt_w63f99',
+      candidateIndex: 1,
+      headline: selected.headline,
+      workflowInstanceId: 'nbc-schcs4-1-1c0prri',
+      workflowState: 'queued',
+      applicationState: 'queued',
+      currentStage: 'queued',
+      finalStatus: 'pending',
+      finalised: false,
+    }],
+    ...overrides.run,
+  });
+  mocks.childMap.set('run_recover_12345678/nt_w63f99', {
+    runId: 'run_recover_12345678',
+    candidateId: 'nt_w63f99',
+    finalizerWorkflowInstanceId: 'nbf-schcs4-1c0prri',
+    externalRequestUsage: {
+      totalExternalFetches: 12,
+      firebaseAuth: 1,
+      firestoreReads: 3,
+      firestoreWrites: 7,
+      anthropic: 1,
+      articleFetches: 0,
+      primarySourceFetches: 0,
+      softLimit: 32,
+      finalisationReserve: 6,
+    },
+    usage: { ...goodUsage(), anthropicCalls: 1, inputTokens: 120, outputTokens: 20, webSearchRequests: 0, models: ['claude-test'] },
+    ...overrides.child,
+  });
+  return mocks;
+}
+
+async function postRecovery(payload, mocks, envOverrides = {}) {
+  let workflowCreated = 0;
+  let emailOrWebflowFetches = 0;
+  const response = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/recover-finalised-child', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer admin', 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }), {
+    WORKER_ADMIN_TOKEN: 'admin',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_WORKFLOW: { create: async () => { workflowCreated += 1; throw new Error('no workflow expected'); } },
+    NEWS_BRIEF_CANDIDATE_WORKFLOW: { create: async () => { workflowCreated += 1; throw new Error('no workflow expected'); } },
+    NEWS_BRIEF_FINALIZER_WORKFLOW: { create: async () => { workflowCreated += 1; throw new Error('no workflow expected'); } },
+    ...envOverrides,
+  }, null, {}, {
+    ...mocks,
+    fetch: async (url) => {
+      if (/anthropic|resend|webflow/i.test(String(url))) emailOrWebflowFetches += 1;
+      throw new Error(`unexpected fetch ${url}`);
+    },
+  });
+  const data = await response.json();
+  return { response, data, workflowCreated, emailOrWebflowFetches };
+}
+
+test('recover-finalised-child requires Worker admin token and confirmation', async () => {
+  const mocks = makeRecoveryMocks();
+  const getRecovery = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/recover-finalised-child', {
+    method: 'GET',
+  }), { WORKER_ADMIN_TOKEN: 'admin' }, null, {}, mocks);
+  assert.equal(getRecovery.status, 404);
+
+  const unauth = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/recover-finalised-child', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(recoveryPayload()),
+  }), { WORKER_ADMIN_TOKEN: 'admin' }, null, {}, mocks);
+  assert.equal(unauth.status, 401);
+
+  const missingConfirmation = await postRecovery(recoveryPayload({ confirmation: '' }), mocks);
+  assert.equal(missingConfirmation.response.status, 400);
+  assert.equal(missingConfirmation.data.error, 'missing_confirmation');
+});
+
+test('recover-finalised-child rejects wrong run, candidate, workflow and arbitrary status', async () => {
+  assert.equal((await postRecovery(recoveryPayload({ runId: 'run_missing_12345678' }), makeRecoveryMocks())).data.error, 'run_not_found');
+  assert.equal((await postRecovery(recoveryPayload({ candidateId: 'nt_other' }), makeRecoveryMocks())).data.error, 'candidate_not_selected');
+  assert.equal((await postRecovery(recoveryPayload({ workflowInstanceId: 'nbc-wrong' }), makeRecoveryMocks())).data.error, 'workflow_instance_mismatch');
+  assert.equal((await postRecovery(recoveryPayload({ finalStatus: 'verifying' }), makeRecoveryMocks())).data.error, 'invalid_finalStatus');
+});
+
+test('recover-finalised-child restores child metadata and re-aggregates parent to 1 of 1', async () => {
+  const mocks = makeRecoveryMocks();
+  const result = await postRecovery(recoveryPayload(), mocks);
+  assert.equal(result.response.status, 200);
+  assert.equal(result.data.ok, true);
+  assert.equal(result.workflowCreated, 0);
+  assert.equal(result.emailOrWebflowFetches, 0);
+  const child = mocks.childMap.get('run_recover_12345678/nt_w63f99');
+  assert.equal(child.candidateIndex, 1);
+  assert.equal(child.headline, '8th Pay Commission salary calculator');
+  assert.equal(child.workflowInstanceId, 'nbc-schcs4-1-1c0prri');
+  assert.equal(child.workflowState, 'errored');
+  assert.equal(child.applicationState, 'completed');
+  assert.equal(child.workflowFailureCode, 'candidate_workflow_completion_invariant_failed');
+  assert.equal(child.finalised, true);
+  assert.equal(child.finalStatus, 'rejected_by_filter');
+  assert.equal(child.recovered, true);
+  assert.equal(child.recoveryCode, 'child_document_overwritten_after_finalisation');
+  const parent = mocks.runMap.get('run_recover_12345678');
+  assert.equal(parent.completedItems, 1);
+  assert.equal(parent.targetItems, 1);
+  assert.equal(parent.percentComplete, 100);
+  assert.equal(parent.activeRun, false);
+  assert.equal(parent.applicationState, 'completed');
+  assert.equal(parent.itemsRejected, 1);
+  assert.equal(parent.failures, 0);
+  assert.equal(parent.recoveredItems, 1);
+  assert.equal(parent.recoveryWarning, true);
+  assert.equal(parent.attemptedItems.length, 1);
+  assert.equal(parent.attemptedItems[0].candidateId, 'nt_w63f99');
+  assert.equal(parent.usage.inputTokens, 120);
+});
+
+test('recover-finalised-child is idempotent and does not double-count usage or attempted items', async () => {
+  const mocks = makeRecoveryMocks();
+  const first = await postRecovery(recoveryPayload(), mocks);
+  assert.equal(first.data.alreadyRecovered, false);
+  const second = await postRecovery(recoveryPayload(), mocks);
+  assert.equal(second.response.status, 200);
+  assert.equal(second.data.alreadyRecovered, true);
+  const parent = mocks.runMap.get('run_recover_12345678');
+  assert.equal(parent.completedItems, 1);
+  assert.equal(parent.attemptedItems.length, 1);
+  assert.equal(parent.usage.inputTokens, 120);
+  assert.equal(parent.externalRequestUsage.totalExternalFetches, 12);
+});
+
+test('recover-finalised-child requires selected candidate and parent workflow metadata', async () => {
+  const missingCandidate = makeRecoveryMocks({ run: { selectedCandidates: [] } });
+  assert.equal((await postRecovery(recoveryPayload(), missingCandidate)).data.error, 'candidate_not_selected');
+  const missingWorkflow = makeRecoveryMocks({ run: { candidateWorkflowIds: [] } });
+  assert.equal((await postRecovery(recoveryPayload(), missingWorkflow)).data.error, 'candidate_workflow_missing');
 });
 
 test('historical complete Workflow with 0 of 5 reconciles to failed instead of 100 percent', async () => {
