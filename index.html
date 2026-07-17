@@ -5986,6 +5986,10 @@ function automatedNewsBriefWorkflowStateLabel(state, runState) {
   return value ? value.replace(/[_-]+/g, ' ') : 'State unavailable';
 }
 
+function automatedNewsBriefApplicationState(run) {
+  return String((run && (run.applicationState || run.state)) || '').toLowerCase();
+}
+
 function automatedNewsBriefRunDurableStep(run) {
   run = run || {};
   return run.currentWorkflowStep || run.currentAnthropicStage || run.phase || '';
@@ -6017,6 +6021,58 @@ function automatedNewsBriefClaudeCallDetailsHtml(run) {
     + '</div></details>';
 }
 
+function automatedNewsBriefChildStageLabel(stage) {
+  return automatedNewsBriefPhaseLabel(stage || 'queued');
+}
+
+function automatedNewsBriefChildSummaries(run) {
+  return Array.isArray(run && run.childWorkflowSummaries) ? run.childWorkflowSummaries.slice().sort(function(a, b) {
+    return Number(a.candidateIndex || 0) - Number(b.candidateIndex || 0);
+  }) : [];
+}
+
+function automatedNewsBriefChildWorkflowDetailsHtml(run) {
+  var children = automatedNewsBriefChildSummaries(run);
+  if (!children.length) return '<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700">Candidate Workflow status</summary><div class="hint" style="margin-top:8px">No candidate Workflow records were captured for this run.</div></details>';
+  return '<details style="margin-top:14px" open><summary style="cursor:pointer;font-weight:700">Candidate Workflow status</summary>'
+    + '<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">'
+    + children.map(function(child) {
+      var usage = child.usage || {};
+      var requests = child.externalRequestUsage || {};
+      return '<div style="border:1px solid var(--bdr);border-radius:8px;padding:10px;background:#fff">'
+        + '<strong style="color:var(--blk);font-size:14px">Candidate '+escapeHtml(String(child.candidateIndex || '?'))+': '+escapeHtml(child.headline || 'Headline unavailable')+'</strong>'
+        + '<div class="hint" style="margin-top:6px">Workflow: '+escapeHtml(child.workflowInstanceId || 'unavailable')+' · '+escapeHtml(child.workflowState || 'unknown')+'</div>'
+        + '<div class="hint">Stage: '+escapeHtml(automatedNewsBriefChildStageLabel(child.currentStage))+' · Final status: '+escapeHtml(child.finalStatus || 'pending')+' · Finalised: '+escapeHtml(String(child.finalised === true))+'</div>'
+        + '<div class="hint">External requests: '+escapeHtml(String(requests.totalExternalFetches || 0))+' · Claude calls: '+escapeHtml(String(usage.anthropicCalls || 0))+' · Input: '+escapeHtml(String(usage.inputTokens || 0))+' · Output: '+escapeHtml(String(usage.outputTokens || 0))+' · Web searches: '+escapeHtml(String(usage.webSearchRequests || 0))+'</div>'
+        + (child.failureCode || child.failureMessage ? '<details style="margin-top:6px"><summary>Failure</summary><div class="hint">'+escapeHtml(child.failureStage || '')+' · '+escapeHtml(child.failureCode || '')+'<br>'+escapeHtml(child.failureMessage || '')+'</div></details>' : '')
+        + '</div>';
+    }).join('')
+    + '</div></details>';
+}
+
+function automatedNewsBriefRequestUsageHtml(run) {
+  var children = automatedNewsBriefChildSummaries(run);
+  if (!children.length) return '<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700">Free-plan request usage</summary><div class="hint" style="margin-top:8px">Per-candidate request usage was not recorded for this run.</div></details>';
+  return '<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700">Free-plan request usage</summary>'
+    + '<div class="hint" style="margin-top:8px">Tracked counts are an application-level safety estimate and may not exactly match Cloudflare internal accounting.</div>'
+    + '<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">'
+    + children.map(function(child) {
+      var usage = child.externalRequestUsage || {};
+      var soft = Number(usage.softLimit || 0);
+      var total = Number(usage.totalExternalFetches || 0);
+      var warning = soft && total >= Math.floor(soft * 0.8);
+      return '<div style="border:1px solid '+(warning ? 'var(--red)' : 'var(--bdr)')+';border-radius:8px;padding:10px;background:#fff">'
+        + '<strong style="color:var(--blk)">Candidate '+escapeHtml(String(child.candidateIndex || '?'))+'</strong>'
+        + '<div class="hint" style="margin-top:6px">Total tracked external fetches: '+escapeHtml(String(total))+' / soft limit '+escapeHtml(String(soft || 'not recorded'))+'</div>'
+        + '<div class="hint">Firebase auth: '+escapeHtml(String(usage.firebaseAuth || 0))+' · Firestore reads: '+escapeHtml(String(usage.firestoreReads || 0))+' · Firestore writes: '+escapeHtml(String(usage.firestoreWrites || 0))+' · Anthropic: '+escapeHtml(String(usage.anthropic || 0))+'</div>'
+        + '<div class="hint">Article fetches: '+escapeHtml(String(usage.articleFetches || 0))+' · Primary-source fetches: '+escapeHtml(String(usage.primarySourceFetches || 0))+' · Finalisation reserve: '+escapeHtml(String(usage.finalisationReserve || 0))+'</div>'
+        + (usage.stoppedEarly ? '<div class="hint" style="color:var(--red);margin-top:6px">Processing stopped early to preserve finalisation capacity.</div>' : '')
+        + (warning ? '<div class="hint" style="color:var(--red);margin-top:6px">Approaching the configured Free-plan soft limit.</div>' : '')
+        + '</div>';
+    }).join('')
+    + '</div></details>';
+}
+
 function setAutomatedNewsBriefDryRunButton(disabled, label) {
   var btn = document.getElementById('automated-news-brief-dry-run-btn');
   if (!btn) return;
@@ -6026,9 +6082,11 @@ function setAutomatedNewsBriefDryRunButton(disabled, label) {
 
 function automatedNewsBriefRunIsActive(run) {
   if (!run) return false;
+  var appState = automatedNewsBriefApplicationState(run);
+  if (appState === 'running' || appState === 'preparing') return true;
   var workflowState = String(run.workflowState || '').toLowerCase();
   if (workflowState === 'queued' || workflowState === 'running' || workflowState === 'retrying') return true;
-  return run.state === 'preparing' || run.state === 'running';
+  return false;
 }
 
 function stopAutomatedNewsBriefElapsedTimer() {
@@ -6062,29 +6120,44 @@ function renderAutomatedNewsBriefProgress(run, message) {
   }
   automatedNewsBriefRenderedRun = run;
   var targetKnown = run.targetItems !== null && run.targetItems !== undefined;
-  var percent = targetKnown ? Math.max(0, Math.min(100, Number(run.percentComplete || 0))) : null;
-  var terminalFailed = run.state === 'failed';
+  var children = automatedNewsBriefChildSummaries(run);
+  var finalisedChildren = children.filter(function(child) { return child.finalised === true; }).length;
+  var logicalCompleted = children.length ? finalisedChildren : Number(run.completedItems || 0);
+  var logicalTarget = targetKnown ? Number(run.targetItems || 0) : null;
+  var appState = automatedNewsBriefApplicationState(run);
+  var inconsistent = logicalTarget > logicalCompleted && String(run.workflowState || '').toLowerCase() === 'completed' && appState !== 'running' && appState !== 'failed';
+  var percent = targetKnown ? Math.max(0, Math.min(100, logicalTarget ? Math.round((logicalCompleted / logicalTarget) * 100) : Number(run.percentComplete || 0))) : null;
+  if (targetKnown && logicalTarget === 0) percent = 100;
+  if (inconsistent) percent = logicalTarget ? Math.round((logicalCompleted / logicalTarget) * 100) : 0;
+  var terminalFailed = appState === 'failed' || inconsistent;
   var durableStep = automatedNewsBriefRunDurableStep(run);
-  var workflowLabel = automatedNewsBriefWorkflowStateLabel(run.workflowState, run.state);
-  var phase = terminalFailed ? 'Dry run stopped' : automatedNewsBriefPhaseLabel(durableStep);
+  var workflowLabel = automatedNewsBriefWorkflowStateLabel(run.coordinatorWorkflowState || run.workflowState, run.applicationState || run.state);
+  var phase = terminalFailed ? (inconsistent ? 'Run state inconsistent' : 'Dry run stopped') : automatedNewsBriefPhaseLabel(durableStep);
+  if (!terminalFailed && String(run.coordinatorWorkflowState || '').toLowerCase() === 'completed' && automatedNewsBriefApplicationState(run) === 'running') phase = 'Processing candidates independently';
   if (String(run.workflowState || '').toLowerCase() === 'retrying') phase = 'Retrying ' + automatedNewsBriefPhaseLabel(durableStep).toLowerCase();
-  var headline = run.currentHeadline ? '<div class="hint" style="margin-top:6px">'+escapeHtml(run.currentHeadline)+'</div>' : '';
+  var activeChildren = children.filter(function(child) { return child.finalised !== true; }).slice(0, 3);
+  var childActivity = activeChildren.length ? '<div class="hint" style="margin-top:6px">'+activeChildren.map(function(child) {
+    return 'Candidate '+escapeHtml(String(child.candidateIndex || '?'))+': '+escapeHtml(automatedNewsBriefChildStageLabel(child.currentStage || child.workflowState || 'queued'));
+  }).join('<br>')+'</div>' : '';
+  var headline = run.currentHeadline ? '<div class="hint" style="margin-top:6px">'+escapeHtml(run.currentHeadline)+'</div>' : childActivity;
   var lastUpdate = run.heartbeatAt || run.updatedAt || '';
-  var unprocessed = targetKnown ? Math.max(0, Number(run.targetItems || 0) - Number(run.completedItems || 0)) : null;
+  var unprocessed = targetKnown ? Math.max(0, Number(logicalTarget || 0) - Number(logicalCompleted || 0)) : null;
   var bar = targetKnown
     ? '<div style="height:10px;background:var(--gray);border-radius:999px;overflow:hidden;margin-top:10px"><div style="height:100%;width:'+escapeAttr(String(percent))+'%;background:var(--y);transition:width .25s"></div></div>'
     : '<div style="height:10px;background:var(--gray);border-radius:999px;overflow:hidden;margin-top:10px"><div style="height:100%;width:38%;background:var(--y);border-radius:999px;animation:newsBriefIndeterminate 1.2s ease-in-out infinite"></div></div>';
   var countLine = targetKnown
     ? (terminalFailed
-      ? 'Stopped after ' + escapeHtml(String(run.completedItems || 0)) + ' of ' + escapeHtml(String(run.targetItems || 0)) + ' candidates · ' + escapeHtml(String(percent)) + '% complete'
-      : escapeHtml(String(run.completedItems || 0)) + ' / ' + escapeHtml(String(run.targetItems || 0)) + ' candidates · ' + escapeHtml(String(percent)) + '% complete')
+      ? 'Stopped after ' + escapeHtml(String(logicalCompleted || 0)) + ' of ' + escapeHtml(String(logicalTarget || 0)) + ' candidates · ' + escapeHtml(String(percent)) + '% complete'
+      : escapeHtml(String(logicalCompleted || 0)) + ' of ' + escapeHtml(String(logicalTarget || 0)) + ' candidates completed · ' + escapeHtml(String(percent)) + '% complete')
     : 'Working. Progress percentage will appear after candidate selection.';
   var failure = terminalFailed
     ? '<div class="hint" style="margin-top:8px;color:var(--red)">Failure stage: '+escapeHtml(run.failureStage || run.phase || 'unknown')+'<br>Reason: '+escapeHtml(run.failureMessage || (run.errorSummary && run.errorSummary[0] && (run.errorSummary[0].run || run.errorSummary[0].error)) || 'Run stopped before finalisation.')+'</div>'
       + '<details style="margin-top:8px"><summary style="cursor:pointer">Technical details</summary><div class="hint">Failure code: '+escapeHtml(run.failureCode || 'unknown')+'<br>Unprocessed candidates: '+escapeHtml(String(unprocessed === null ? 'unknown' : unprocessed))+'</div></details>'
     : '';
-  var technical = '<details style="margin-top:10px"><summary style="cursor:pointer">Durable run details</summary><div class="hint" style="margin-top:6px">Workflow instance: '+escapeHtml(run.workflowInstanceId || 'unavailable')+'<br>Workflow state: '+escapeHtml(run.workflowState || 'unavailable')+'<br>Current durable step: '+escapeHtml(durableStep || 'unavailable')+'<br>Active lock: '+escapeHtml(String(run.activeRun === undefined ? automatedNewsBriefRunIsActive(run) : !!run.activeRun))+'</div></details>';
-  el.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><strong>'+escapeHtml(phase)+'</strong><div class="hint" style="margin-top:4px">'+escapeHtml(workflowLabel)+' · '+countLine+'</div>'+headline+failure+'</div><div class="hint">Elapsed: '+escapeHtml(automatedNewsBriefElapsed(run))+'<br>Last update: '+escapeHtml(formatAutomatedNewsBriefDate(lastUpdate))+'</div></div>' + bar + technical + (terminalFailed ? '<div style="margin-top:10px"><strong>Accumulated usage</strong>'+automatedNewsBriefUsageHtml(run.usage)+'</div>' : '');
+  var continuation = !terminalFailed && String(run.coordinatorWorkflowState || '').toLowerCase() === 'completed' && automatedNewsBriefApplicationState(run) === 'running'
+    ? '<div class="hint" style="margin-top:8px">Candidate selection completed. Independent candidate processing continues.</div>' : '';
+  var technical = '<details style="margin-top:10px"><summary style="cursor:pointer">Durable run details</summary><div class="hint" style="margin-top:6px">Coordinator Workflow: '+escapeHtml(run.coordinatorWorkflowInstanceId || run.workflowInstanceId || 'unavailable')+'<br>Coordinator state: '+escapeHtml(run.coordinatorWorkflowState || run.workflowState || 'unavailable')+'<br>Application state: '+escapeHtml(run.applicationState || run.state || 'unavailable')+'<br>Current durable step: '+escapeHtml(durableStep || 'unavailable')+'<br>Active lock: '+escapeHtml(String(run.activeRun === undefined ? automatedNewsBriefRunIsActive(run) : !!run.activeRun))+'</div></details>';
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><strong>'+escapeHtml(phase)+'</strong><div class="hint" style="margin-top:4px">'+escapeHtml(workflowLabel)+' · '+countLine+'</div>'+headline+continuation+failure+'</div><div class="hint">Elapsed: '+escapeHtml(automatedNewsBriefElapsed(run))+'<br>Last update: '+escapeHtml(formatAutomatedNewsBriefDate(lastUpdate))+'</div></div>' + bar + technical + (terminalFailed ? '<div style="margin-top:10px"><strong>Accumulated usage</strong>'+automatedNewsBriefUsageHtml(run.usage)+'</div>' : '');
   if (automatedNewsBriefRunIsActive(run)) startAutomatedNewsBriefElapsedTimer();
   else stopAutomatedNewsBriefElapsedTimer();
 }
@@ -6092,14 +6165,19 @@ function renderAutomatedNewsBriefProgress(run, message) {
 function automatedNewsBriefRunSummaryHtml(run) {
   if (!run) return '<div class="empty" style="padding:18px">No run data loaded.</div>';
   var attempted = (run.attemptedItems || []).length;
-  var workflowState = automatedNewsBriefWorkflowStateLabel(run.workflowState, run.state);
+  var workflowState = automatedNewsBriefWorkflowStateLabel(run.coordinatorWorkflowState || run.workflowState, run.applicationState || run.state);
   var durableStep = automatedNewsBriefRunDurableStep(run);
+  var coordinatorInstance = run.coordinatorWorkflowInstanceId || run.workflowInstanceId || 'Unavailable';
+  var coordinatorState = run.coordinatorWorkflowState || run.workflowState || 'Unavailable';
+  var applicationState = run.applicationState || run.state || 'Unavailable';
   return '<div style="background:#fff;border:1px solid var(--bdr);border-radius:8px;padding:14px">'
     + '<h3 style="font-size:18px;font-family:Georgia,serif;margin:0 0 8px;color:var(--blk)">Latest run</h3>'
-    + '<div class="hint">'+escapeHtml(run.runId || '')+' · '+escapeHtml(workflowState)+' · '+escapeHtml(run.state || '')+' · '+escapeHtml(run.dryRun ? 'Dry run' : 'Live run')+'</div>'
+    + '<div class="hint">'+escapeHtml(run.runId || '')+' · '+escapeHtml(workflowState)+' · '+escapeHtml(applicationState)+' · '+escapeHtml(run.dryRun ? 'Dry run' : 'Live run')+'</div>'
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:12px">'
-    + '<div><strong>'+escapeHtml(run.workflowInstanceId || 'Unavailable')+'</strong><br><span class="hint">Workflow instance</span></div>'
-    + '<div><strong>'+escapeHtml(run.workflowState || 'Unavailable')+'</strong><br><span class="hint">Workflow state</span></div>'
+    + '<div><strong>'+escapeHtml(coordinatorInstance)+'</strong><br><span class="hint">Coordinator Workflow</span></div>'
+    + '<div><strong>'+escapeHtml(coordinatorState)+'</strong><br><span class="hint">Coordinator state</span></div>'
+    + '<div><strong>'+escapeHtml(run.orchestrationState || 'Unavailable')+'</strong><br><span class="hint">Orchestration state</span></div>'
+    + '<div><strong>'+escapeHtml(applicationState)+'</strong><br><span class="hint">Application state</span></div>'
     + '<div><strong>'+escapeHtml(automatedNewsBriefPhaseLabel(durableStep))+'</strong><br><span class="hint">Durable step</span></div>'
     + '<div><strong>'+escapeHtml(formatAutomatedNewsBriefDate(run.startTime))+'</strong><br><span class="hint">Started</span></div>'
     + '<div><strong>'+escapeHtml(formatAutomatedNewsBriefDate(run.endTime))+'</strong><br><span class="hint">Finished</span></div>'
@@ -6120,8 +6198,10 @@ function automatedNewsBriefRunSummaryHtml(run) {
     + '<div><strong>'+escapeHtml(String(run.failures || 0))+'</strong><br><span class="hint">Failures</span></div>'
     + '</div>'
     + '<div style="margin-top:14px"><strong>Usage</strong>'+automatedNewsBriefUsageHtml(run.usage)+'</div>'
-    + automatedNewsBriefClaudeCallDetailsHtml(run)
     + automatedNewsBriefPreflightSectionHtml(run)
+    + automatedNewsBriefChildWorkflowDetailsHtml(run)
+    + automatedNewsBriefRequestUsageHtml(run)
+    + automatedNewsBriefClaudeCallDetailsHtml(run)
     + '</div>';
 }
 
@@ -6147,7 +6227,11 @@ function renderAutomatedNewsBriefLatestRun() {
     detail.innerHTML = 'No run data loaded.';
     return;
   }
-  var attempts = run.attemptedItems || [];
+  var attempts = (run.attemptedItems || []).slice().sort(function(a, b) {
+    var ai = Number(a.candidateIndex || 0);
+    var bi = Number(b.candidateIndex || 0);
+    return ai - bi;
+  });
   list.innerHTML = '<div style="font-weight:700;color:var(--blk);font-size:14px">Candidates assessed by AI</div>'
     + (attempts.length
       ? attempts.map(automatedNewsBriefAttemptCardHtml).join('')
@@ -6801,9 +6885,12 @@ function runAutomatedNewsBriefDryRun() {
   renderAutomatedNewsBriefProgress({
     runId: requestRunId,
     workflowState: 'queued',
+    coordinatorWorkflowState: 'queued',
     workflowInstanceId: '',
+    coordinatorWorkflowInstanceId: '',
     currentWorkflowStep: 'initialise-run',
     state: 'preparing',
+    applicationState: 'preparing',
     phase: 'fetching_tracker',
     startTime: new Date().toISOString(),
     targetItems: null,
@@ -6821,10 +6908,13 @@ function runAutomatedNewsBriefDryRun() {
           setAutomatedNewsBriefDryRunButton(true, 'Running...');
           renderAutomatedNewsBriefProgress({
             runId: automatedNewsBriefActiveRunId,
-            workflowInstanceId: (res.data && res.data.workflowInstanceId) || '',
+            workflowInstanceId: (res.data && (res.data.workflowInstanceId || res.data.coordinatorWorkflowInstanceId)) || '',
+            coordinatorWorkflowInstanceId: (res.data && (res.data.coordinatorWorkflowInstanceId || res.data.workflowInstanceId)) || '',
             workflowState: (res.data && res.data.state) || 'queued',
+            coordinatorWorkflowState: (res.data && res.data.state) || 'queued',
             currentWorkflowStep: 'initialise-run',
             state: 'preparing',
+            applicationState: 'preparing',
             phase: 'fetching_tracker',
             startTime: new Date().toISOString(),
             targetItems: null,
