@@ -3019,13 +3019,17 @@ export async function recoverFinalisedChild(body = {}, env, deps = {}) {
   if (!child) return recoveryError('child_not_found', 'Child record was not found.', 404);
 
   const parentRecoverable = ['running', 'preparing'].includes(logicalRunState(run)) || run.activeRun === true || Number(run.completedItems || 0) < Number(run.targetItems || 0);
+  const staleRecoveredParentRecoverable = run.activeRun !== true
+    && (logicalRunState(run) === 'failed' || run.state === 'failed')
+    && run.failureCode === 'stale_run_timeout'
+    && Number(run.completedItems || 0) < Number(run.targetItems || 0);
   const alreadyRecovered = child.finalised === true
     && child.finalStatus === finalStatus
     && child.workflowInstanceId === workflowInstanceId
     && child.recoveryCode === 'child_document_overwritten_after_finalisation';
   if (!alreadyRecovered) {
     if (!parentRecoverable) return recoveryError('parent_not_recoverable', 'Parent run is not in a recoverable state.');
-    if (run.activeRun !== true) return recoveryError('active_run_required', 'Parent activeRun is not true.');
+    if (run.activeRun !== true && !staleRecoveredParentRecoverable) return recoveryError('active_run_required', 'Parent activeRun is not true.');
   }
 
   const recoveredAt = new Date().toISOString();

@@ -16,3 +16,6 @@ class_name = "NewsBriefCandidateWorkflow"
 name = "wocult-news-brief-finalizer"
 binding = "NEWS_BRIEF_FINALIZER_WORKFLOW"
 class_name = "NewsBriefRunFinalizerWorkflow"
+
+[vars]
+NEWS_BRIEF_MAX_ITEMS_PER_RUN = "1"
