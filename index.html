@@ -7834,6 +7834,12 @@ var pendingDraftCard = null;
 var pendingDraftWorkflowSource = 'main';
 var pendingNewsBriefCard = null;
 var manualNewsBriefCmsData = null;
+var newsBriefSubmissionState = {
+  inFlight: false,
+  firebaseDocId: '',
+  articleData: null,
+  webflowResult: null
+};
 var currentCard = null;
 var generatedContent = {};
 window._memoryNotesLoaded = false;
@@ -10712,6 +10718,158 @@ function collectManualNewsBriefReviewData() {
   };
 }
 
+function parseWorkerResponse(response) {
+  return response.text().then(function(text) {
+    var data = null;
+    if (text) {
+      try { data = JSON.parse(text); }
+      catch (err) {
+        var parseError = new Error('Worker returned an invalid JSON response.');
+        parseError.safeDetails = text.slice(0, 300);
+        throw parseError;
+      }
+    }
+    if (!response.ok) {
+      var message = (data && (data.message || data.error)) || (text ? text.slice(0, 300) : ('Worker returned HTTP ' + response.status));
+      var error = new Error(message);
+      error.status = response.status;
+      error.data = data;
+      throw error;
+    }
+    return data || {};
+  });
+}
+
+function webflowItemIdFromResponse(data) {
+  data = data || {};
+  var item = data.item || data.data || {};
+  return data.id || data._id || data.itemId || data.webflowItemId || item.id || item._id || '';
+}
+
+function updateArticleWebflowMetadata(docId, webflowData) {
+  if (!db || !docId) return Promise.resolve();
+  var itemId = webflowItemIdFromResponse(webflowData);
+  var patch = {
+    webflowDraftCreated: true,
+    webflowSubmissionState: 'draft_created',
+    webflowDraftCreatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if (itemId) patch.webflowItemId = itemId;
+  var url = getSubmittedStoryUrl(webflowData, {});
+  if (url) {
+    patch.webflowUrl = url;
+    patch.publishedUrl = url;
+  }
+  return db.collection('articles').doc(docId).set(patch, {merge:true});
+}
+
+function existingWebflowMetadata(docId) {
+  if (!db || !docId) return Promise.resolve(null);
+  return db.collection('articles').doc(docId).get().then(function(snap) {
+    if (!snap.exists) return null;
+    var data = snap.data() || {};
+    if (!(data.webflowItemId || data.webflowDraftCreated || data.webflowSubmissionState === 'draft_created')) return null;
+    return {
+      id: data.webflowItemId || '',
+      webflowItemId: data.webflowItemId || '',
+      webflowUrl: data.webflowUrl || data.publishedUrl || '',
+      publishedUrl: data.publishedUrl || data.webflowUrl || '',
+      alreadyCreated: true,
+      fieldData: {}
+    };
+  }).catch(function(err) {
+    console.warn('Could not check existing Webflow metadata:', err);
+    return null;
+  });
+}
+
+function createNewsBriefWebflowDraft(docId, data) {
+  if (!docId) return Promise.reject(new Error('Missing Firebase article ID for Webflow draft creation.'));
+  return existingWebflowMetadata(docId).then(function(existing) {
+    if (existing) return existing;
+    return workerFetch('/webflow-news', {
+      method:'POST',
+      body:JSON.stringify({docId:docId, fieldData:buildNewsBriefFieldData(data), isDraft:true, isArchived:false})
+    }).then(parseWorkerResponse).then(function(webflowData) {
+      return updateArticleWebflowMetadata(docId, webflowData).then(function() {
+        return webflowData;
+      });
+    });
+  });
+}
+
+function newsBriefTechnicalMessage(err) {
+  if (!err) return 'Unknown error';
+  if (err.status) return 'Worker HTTP ' + err.status + ': ' + String(err.message || '').slice(0, 220);
+  if (/Failed to fetch/i.test(err.message || '')) return 'Network or CORS failure while contacting the Worker.';
+  return String(err.message || err).slice(0, 260);
+}
+
+function renderNewsBriefWebflowFailure(docId, data, err) {
+  var result = document.getElementById('publish-result');
+  if (!result) return;
+  result.style.display = 'block';
+  result.innerHTML = '<div class="publish-success">'
+    + '<div class="publish-icon">!</div>'
+    + '<div class="publish-title">News brief saved to Firebase</div>'
+    + '<div class="publish-sub">The Webflow News draft could not be created. The Firebase article is saved and can be retried without creating another Firebase record.</div>'
+    + '<details style="margin-top:12px;text-align:left"><summary style="cursor:pointer;font-size:13px;color:var(--g3)">Technical details</summary><div style="font-size:12px;color:var(--g3);line-height:1.6;margin-top:8px;word-break:break-word">'+escapeHtml(newsBriefTechnicalMessage(err))+'</div></details>'
+    + '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px">'
+    + '<button class="btn-lg btn-y" onclick="retryNewsBriefWebflowSubmission()">Retry Webflow</button>'
+    + '<button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button>'
+    + '</div></div>';
+}
+
+function renderNewsBriefSubmissionSuccess(docId, data, webflowData) {
+  var publishedUrl = getSubmittedStoryUrl(webflowData, data);
+  offerNewsBriefSocialWorkflow({
+    articleId: docId,
+    title: data.title || '',
+    standfirst: data.standfirst || data.shortIntro || '',
+    body: data.body || '',
+    sourceUrl: data.sourceUrl || '',
+    publishedUrl: publishedUrl || '',
+    submittedStoryUrl: publishedUrl || '',
+    imageUrl: data.imageUrl || data.newsImage || '',
+    newsImage: data.newsImage || data.imageUrl || '',
+    publishDate: data.publishedDate || data.publishDate || '',
+    publishedDate: data.publishedDate || data.publishDate || '',
+    contentType: 'news_brief',
+    cmsType: 'news',
+    sourceType: data.sourceType || 'news_brief',
+    firebaseData: Object.assign({}, data)
+  });
+  var result = document.getElementById('publish-result');
+  if (result) {
+    result.style.display = 'block';
+    result.innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief saved</div><div class="publish-sub">Saved to Firebase and created as a Webflow News draft.</div><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()">Work on socials</button><button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Not now</button><button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button></div></div>';
+  }
+  var actions = document.getElementById('publish-actions');
+  if (actions) actions.style.display = 'none';
+}
+
+function retryNewsBriefWebflowSubmission() {
+  if (!newsBriefSubmissionState.firebaseDocId || !newsBriefSubmissionState.articleData) {
+    fbToast('No saved News Brief is available for Webflow retry.', false);
+    return;
+  }
+  if (newsBriefSubmissionState.inFlight) return;
+  var btn = document.getElementById('publish-btn');
+  newsBriefSubmissionState.inFlight = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating Webflow draft...'; }
+  createNewsBriefWebflowDraft(newsBriefSubmissionState.firebaseDocId, newsBriefSubmissionState.articleData).then(function(webflowData) {
+    newsBriefSubmissionState.webflowResult = webflowData;
+    renderNewsBriefSubmissionSuccess(newsBriefSubmissionState.firebaseDocId, newsBriefSubmissionState.articleData, webflowData);
+  }).catch(function(err) {
+    console.error('News brief Webflow retry failed', err);
+    renderNewsBriefWebflowFailure(newsBriefSubmissionState.firebaseDocId, newsBriefSubmissionState.articleData, err);
+  }).finally(function() {
+    newsBriefSubmissionState.inFlight = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit news brief'; }
+  });
+}
+
 function submitManualNewsBriefToCms() {
   var btn = document.getElementById('manual-news-submit-btn');
   var status = document.getElementById('manual-review-status');
@@ -10723,19 +10881,15 @@ function submitManualNewsBriefToCms() {
   if (status) status.textContent = 'Submitting to Firebase and CMS...';
   saveArticleToFirebase(Object.assign({}, data, {sourceType:'manual_news_brief'}), 'submitted').then(function(docId) {
     savedDocId = docId || '';
-    return fetch(WORKER + '/webflow-news', {
-      method:'POST',
-      body:JSON.stringify({docId:docId, fieldData:buildNewsBriefFieldData(data), isDraft:true, isArchived:false})
-    });
-  }).then(function(r){ return r.json().then(function(d){return {ok:r.ok,data:d};}); }).then(function(res) {
-    if (!res.ok) throw new Error((res.data&&res.data.message)||JSON.stringify(res.data).substring(0,300));
+    return createNewsBriefWebflowDraft(savedDocId, Object.assign({}, data, {sourceType:'manual_news_brief'}));
+  }).then(function(webflowData) {
     if (status) status.textContent = 'News brief saved and submitted to CMS.';
     offerNewsBriefSocialWorkflow(Object.assign({}, data, {
       articleId:savedDocId,
       contentType:'news_brief',
       cmsType:'news',
-      publishedUrl:getSubmittedStoryUrl(res.data, data),
-      submittedStoryUrl:getSubmittedStoryUrl(res.data, data),
+      publishedUrl:getSubmittedStoryUrl(webflowData, data),
+      submittedStoryUrl:getSubmittedStoryUrl(webflowData, data),
       publishDate:data.publishedDate || data.publishDate || '',
       firebaseData:data,
       sourceType:'manual_news_brief'
@@ -10751,54 +10905,35 @@ function submitManualNewsBriefToCms() {
 
 function submitNewsBriefArticle(writerName) {
   var btn = document.getElementById('publish-btn');
+  if (newsBriefSubmissionState.inFlight) return;
+  newsBriefSubmissionState.inFlight = true;
   btn.disabled = true;
-  btn.textContent = 'Submitting...';
-  var newsData = collectNewsBriefData(writerName);
+  btn.textContent = 'Saving to Firebase...';
+  var newsData = Object.assign({}, collectNewsBriefData(writerName), {sourceType:'news_brief'});
+  newsBriefSubmissionState.firebaseDocId = '';
+  newsBriefSubmissionState.articleData = newsData;
+  newsBriefSubmissionState.webflowResult = null;
   var submittedDocId = '';
-  var submittedWebflowResult = null;
-  return saveArticleToFirebase(Object.assign({}, newsData, {sourceType:'news_brief'}), 'submitted').then(function(docId) {
+  return saveArticleToFirebase(newsData, 'submitted').then(function(docId) {
     submittedDocId = docId || '';
+    newsBriefSubmissionState.firebaseDocId = submittedDocId;
     console.log('[social] news brief Firebase saved', {docId: submittedDocId});
-    return fetch(WORKER + '/webflow-news', {
-      method:'POST',
-      body:JSON.stringify({docId:docId, fieldData:buildNewsBriefFieldData(newsData), isDraft:true, isArchived:false})
-    });
-  }).then(function(response) {
-    return response.json().then(function(data) {
-      return {ok:response.ok, data:data};
-    });
-  }).then(function(result) {
-    if (!result.ok) throw new Error((result.data&&result.data.message)||JSON.stringify(result.data).substring(0,200));
-    submittedWebflowResult = result.data;
+    btn.textContent = 'Creating Webflow draft...';
+    return createNewsBriefWebflowDraft(submittedDocId, newsData);
+  }).then(function(webflowData) {
+    newsBriefSubmissionState.webflowResult = webflowData;
     console.log('[social] Webflow News succeeded');
-    var publishedUrl = getSubmittedStoryUrl(submittedWebflowResult, newsData);
     console.log('[social] offering workflow', {
       articleId: submittedDocId,
       contentType: newsData.contentType
     });
-    offerNewsBriefSocialWorkflow({
-      articleId: submittedDocId,
-      title: newsData.title || '',
-      standfirst: newsData.standfirst || newsData.shortIntro || '',
-      body: newsData.body || '',
-      sourceUrl: newsData.sourceUrl || '',
-      publishedUrl: publishedUrl || '',
-      submittedStoryUrl: publishedUrl || '',
-      imageUrl: newsData.imageUrl || newsData.newsImage || '',
-      newsImage: newsData.newsImage || newsData.imageUrl || '',
-      publishDate: newsData.publishedDate || newsData.publishDate || '',
-      publishedDate: newsData.publishedDate || newsData.publishDate || '',
-      contentType: 'news_brief',
-      cmsType: 'news',
-      sourceType: 'news_brief',
-      firebaseData: Object.assign({}, newsData)
-    });
-    document.getElementById('publish-result').style.display = 'block';
-    document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief submitted</div><div class="publish-sub">Saved to Firebase and submitted to Webflow News. Choose whether to produce LinkedIn post copy.</div><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()">Produce LinkedIn copy</button><button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Not now</button></div></div>';
-    document.getElementById('publish-actions').style.display = 'none';
+    renderNewsBriefSubmissionSuccess(submittedDocId, newsData, webflowData);
   }).catch(function(e) {
-    fbToast('Error: '+e.message.substring(0,60), false);
+    console.error('News brief submission failed', e);
+    if (submittedDocId) renderNewsBriefWebflowFailure(submittedDocId, newsData, e);
+    else fbToast('Error: '+e.message.substring(0,60), false);
   }).finally(function() {
+    newsBriefSubmissionState.inFlight = false;
     btn.disabled = false;
     btn.textContent = 'Submit news brief';
   });
