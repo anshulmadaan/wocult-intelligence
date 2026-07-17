@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
 
@@ -22,10 +23,84 @@ function functionBlock(name) {
 
 test('News Brief submission uses authenticated Worker fetch for Webflow draft creation', () => {
   const createDraft = functionBlock('createNewsBriefWebflowDraft');
-  assert.match(createDraft, /workerFetch\('\/webflow-news'/);
+  assert.match(createDraft, /workerFetchWithFirebaseAuth\('\/webflow-news'/);
   assert.doesNotMatch(createDraft, /fetch\(WORKER \+ '\/webflow-news'/);
   assert.match(createDraft, /existingWebflowMetadata\(docId\)/);
   assert.match(createDraft, /updateArticleWebflowMetadata\(docId, webflowData\)/);
+});
+
+function loadAuthHarness(overrides = {}) {
+  const calls = [];
+  const context = {
+    WORKER: 'https://worker.test',
+    currentUser: {
+      getIdToken: async (forceRefresh) => (forceRefresh ? 'firebase-id-token-refreshed' : 'firebase-id-token'),
+    },
+    Headers,
+    Response,
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return new Response(JSON.stringify({ id: 'wf-item-1' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    },
+    console: { warn() {} },
+    existingWebflowMetadata: async () => null,
+    buildNewsBriefFieldData: () => ({ name: 'Test headline', slug: 'test-headline', body: '<p>Body</p>' }),
+    updateArticleWebflowMetadata: async () => {},
+    ...overrides,
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    functionBlock('plainHeaders'),
+    functionBlock('getCurrentUserIdToken'),
+    functionBlock('workerFetchWithFirebaseAuth'),
+    functionBlock('parseWorkerResponse'),
+    functionBlock('createNewsBriefWebflowDraft'),
+  ].join('\n'), context);
+  return { context, calls };
+}
+
+test('createNewsBriefWebflowDraft sends Firebase bearer token and JSON content type', async () => {
+  const { context, calls } = loadAuthHarness();
+  await context.createNewsBriefWebflowDraft('article-1', { title: 'Test headline' });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://worker.test/webflow-news');
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer firebase-id-token');
+  assert.equal(calls[0].options.headers['Content-Type'], 'application/json');
+});
+
+test('Webflow auth retry refreshes token once after 401 without changing Firebase state', async () => {
+  let tokenCalls = 0;
+  const calls = [];
+  const { context } = loadAuthHarness({
+    currentUser: {
+      getIdToken: async (forceRefresh) => {
+        tokenCalls += 1;
+        return forceRefresh ? 'fresh-token' : 'stale-token';
+      },
+    },
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      const status = calls.length === 1 ? 401 : 200;
+      return new Response(JSON.stringify(status === 401 ? { ok: false, error: 'Unauthorized' } : { id: 'wf-item-1' }), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
+  await context.createNewsBriefWebflowDraft('article-1', { title: 'Test headline' });
+  assert.equal(tokenCalls, 2);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer stale-token');
+  assert.equal(calls[1].options.headers.Authorization, 'Bearer fresh-token');
+});
+
+test('Missing Firebase user fails before Webflow request with session message', async () => {
+  const { context, calls } = loadAuthHarness({ currentUser: null });
+  await assert.rejects(
+    context.createNewsBriefWebflowDraft('article-1', { title: 'Test headline' }),
+    /Your session has expired\. Please sign in again\./
+  );
+  assert.equal(calls.length, 0);
 });
 
 test('News Brief submit path records Firebase success before Webflow and prevents double submit', () => {
