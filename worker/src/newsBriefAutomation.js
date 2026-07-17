@@ -1189,12 +1189,18 @@ const MAX_PRIOR_RESPONSE_CHARS = 1200;
 const MAX_TOTAL_SOURCE_CONTEXT_CHARS = 6000;
 const DEFAULT_WEB_SEARCH_MAX_USES_PER_CALL = 2;
 const NEWS_BRIEF_WORKFLOW_BINDING = 'NEWS_BRIEF_WORKFLOW';
+const NEWS_BRIEF_CANDIDATE_WORKFLOW_BINDING = 'NEWS_BRIEF_CANDIDATE_WORKFLOW';
+const NEWS_BRIEF_FINALIZER_WORKFLOW_BINDING = 'NEWS_BRIEF_FINALIZER_WORKFLOW';
 const WORKFLOW_STATES = ['queued', 'running', 'retrying', 'completed', 'failed'];
 const NEWS_BRIEF_WORKFLOW_STEP_CONFIG = {
   default: { retries: { limit: 1, delay: '10 seconds', backoff: 'exponential' }, timeout: '3 minutes' },
   anthropic: { retries: { limit: 1, delay: '15 seconds', backoff: 'exponential' }, timeout: '3 minutes' },
   noRetry: { retries: { limit: 0, delay: '1 second', backoff: 'constant' }, timeout: '2 minutes' },
 };
+export const FREE_PLAN_EXTERNAL_REQUEST_LIMIT = 50;
+export const CANDIDATE_REQUEST_SOFT_LIMIT = 32;
+export const CANDIDATE_FINALISATION_RESERVE = 6;
+const COORDINATOR_OUTPUT_SOFT_LIMIT_BYTES = 1024 * 1024;
 
 function createEmptyUsage() {
   return {
@@ -1251,14 +1257,18 @@ function progressPercent(completed, target) {
   return Math.min(100, Math.round((Number(completed || 0) / Number(target)) * 100));
 }
 
+function logicalRunState(run = {}) {
+  return run.applicationState || run.state || '';
+}
+
 function activeRunIsRecent(run, now = Date.now()) {
-  if (!run || !['preparing', 'running'].includes(run.state)) return false;
+  if (!run || !['preparing', 'running'].includes(logicalRunState(run))) return false;
   const heartbeat = Date.parse(run.heartbeatAt || run.updatedAt || run.startTime || '');
   return Number.isFinite(heartbeat) && now - heartbeat < ACTIVE_RUN_STALE_MS;
 }
 
 function activeRunIsStale(run, now = Date.now()) {
-  return !!run && ['preparing', 'running'].includes(run.state) && !activeRunIsRecent(run, now);
+  return !!run && ['preparing', 'running'].includes(logicalRunState(run)) && !activeRunIsRecent(run, now);
 }
 
 function workflowStateIsActive(state) {
@@ -1334,18 +1344,87 @@ export async function startNewsBriefAutomationWorkflow(env, options = {}, deps =
   const instanceId = instance?.id || workflowInstanceId;
   await store.saveRun({
     ...summary,
+    coordinatorWorkflowInstanceId: instanceId,
+    coordinatorWorkflowState: 'queued',
     workflowInstanceId: instanceId,
     workflowState: 'queued',
     workflowCreatedAt: summary.workflowCreatedAt,
     updatedAt: new Date().toISOString(),
-  }, { dryRun }).catch(() => {});
+  }, { dryRun });
   return {
     ok: true,
     accepted: true,
     status: 202,
     runId,
+    coordinatorWorkflowInstanceId: instanceId,
     workflowInstanceId: instanceId,
     state: 'queued',
+  };
+}
+
+function createEmptyExternalRequestUsage() {
+  return {
+    totalExternalFetches: 0,
+    firebaseAuth: 0,
+    firestoreReads: 0,
+    firestoreWrites: 0,
+    anthropic: 0,
+    articleFetches: 0,
+    primarySourceFetches: 0,
+    workflowBindingCalls: 0,
+    newsTracker: 0,
+    webflow: 0,
+    otherExternal: 0,
+    softLimit: CANDIDATE_REQUEST_SOFT_LIMIT,
+    finalisationReserve: CANDIDATE_FINALISATION_RESERVE,
+    stoppedEarly: false,
+  };
+}
+
+function addExternalUsage(target, increment = {}) {
+  const out = target || createEmptyExternalRequestUsage();
+  for (const key of Object.keys(createEmptyExternalRequestUsage())) {
+    if (typeof out[key] === 'number') out[key] += Number(increment[key] || 0);
+  }
+  out.stoppedEarly = !!(out.stoppedEarly || increment.stoppedEarly);
+  return out;
+}
+
+function classifyExternalRequest(url, init = {}) {
+  const href = String(url || '');
+  const method = String(init.method || 'GET').toUpperCase();
+  if (href.includes('oauth2.googleapis.com')) return 'firebaseAuth';
+  if (href.includes('firestore.googleapis.com')) return method === 'GET' || href.includes(':runQuery') ? 'firestoreReads' : 'firestoreWrites';
+  if (href.includes('api.anthropic.com')) return 'anthropic';
+  if (href.includes('api.webflow.com')) return 'webflow';
+  if (href.includes('script.google.com') || href.includes('tracker')) return 'newsTracker';
+  return 'otherExternal';
+}
+
+function budgetedFetch(fetchImpl, usage, options = {}) {
+  return async (url, init = {}) => {
+    const category = options.category || classifyExternalRequest(url, init);
+    const reserve = Number(usage.finalisationReserve || CANDIDATE_FINALISATION_RESERVE);
+    const softLimit = Number(usage.softLimit || CANDIDATE_REQUEST_SOFT_LIMIT);
+    if (usage.totalExternalFetches >= Math.max(0, softLimit - reserve)) {
+      usage.stoppedEarly = true;
+      const err = new Error('candidate_request_budget_reached');
+      err.failureCode = 'candidate_request_budget_reached';
+      err.failureStage = options.stage || 'unknown';
+      throw err;
+    }
+    usage.totalExternalFetches += 1;
+    if (category === 'firebaseAuth') usage.firebaseAuth += 1;
+    else if (category === 'firestoreReads') usage.firestoreReads += 1;
+    else if (category === 'firestoreWrites') usage.firestoreWrites += 1;
+    else if (category === 'anthropic') usage.anthropic += 1;
+    else if (category === 'articleFetch') usage.articleFetches += 1;
+    else if (category === 'primarySourceFetch') usage.primarySourceFetches += 1;
+    else if (category === 'workflowBinding') usage.workflowBindingCalls += 1;
+    else if (category === 'newsTracker') usage.newsTracker += 1;
+    else if (category === 'webflow') usage.webflow += 1;
+    else usage.otherExternal += 1;
+    return fetchImpl(url, init);
   };
 }
 
@@ -1376,25 +1455,47 @@ async function getWorkflowInstanceState(env, workflowInstanceId) {
 }
 
 async function reconcileWorkflowRunState(env, store, run, dryRun = true) {
-  if (!run?.workflowInstanceId) return run;
-  const workflowState = await getWorkflowInstanceState(env, run.workflowInstanceId);
-  if (!workflowState || workflowState === run.workflowState) return run;
+  if (!run?.workflowInstanceId && !run?.coordinatorWorkflowInstanceId) return run;
+  const workflowState = await getWorkflowInstanceState(env, run.coordinatorWorkflowInstanceId || run.workflowInstanceId);
+  if (!workflowState || workflowState === run.workflowState && (!run.coordinatorWorkflowInstanceId || workflowState === run.coordinatorWorkflowState)) return run;
   const now = new Date().toISOString();
   const patch = {
     ...run,
+    coordinatorWorkflowState: workflowState,
     workflowState,
     updatedAt: now,
   };
-  if (workflowState === 'completed' && ['preparing', 'running'].includes(run.state)) {
-    patch.state = run.failures ? 'completed_with_failures' : 'completed';
-    patch.phase = 'completed';
-    patch.percentComplete = 100;
-    patch.endTime = run.endTime || now;
-    patch.activeRun = false;
+  const appState = logicalRunState(run);
+  if (workflowState === 'completed' && ['preparing', 'running'].includes(appState)) {
+    if (Array.isArray(run.selectedCandidates) || Array.isArray(run.candidateWorkflowIds)) {
+      patch.orchestrationState = 'fanout_completed';
+      patch.applicationState = appState === 'preparing' ? 'running' : appState;
+      patch.state = patch.applicationState;
+      patch.percentComplete = progressPercent(Number(run.completedItems || 0), Number(run.targetItems || 0)) ?? run.percentComplete ?? null;
+      patch.activeRun = true;
+    } else if (Number(run.targetItems || 0) > Number(run.completedItems || 0)) {
+      patch.applicationState = 'failed';
+      patch.state = 'failed';
+      patch.percentComplete = progressPercent(Number(run.completedItems || 0), Number(run.targetItems || 0));
+      patch.endTime = run.endTime || now;
+      patch.activeRun = false;
+      patch.failureCode = run.failureCode || 'workflow_ended_before_pipeline_completion';
+      patch.failureStage = run.failureStage || run.phase || 'unknown';
+      patch.failureMessage = run.failureMessage || 'Cloudflare Workflow completed before the News Brief pipeline reached all selected candidates.';
+    } else {
+      patch.applicationState = run.failures ? 'completed_with_failures' : 'completed';
+      patch.state = patch.applicationState;
+      patch.phase = 'completed';
+      patch.percentComplete = Number(run.targetItems || 0) === 0 ? 100 : progressPercent(run.completedItems, run.targetItems);
+      patch.endTime = run.endTime || now;
+      patch.activeRun = false;
+    }
   } else if (workflowState === 'failed' && ['preparing', 'running'].includes(run.state)) {
     const failureStage = staleFailureStage(run);
     const target = run.targetItems === null || run.targetItems === undefined ? null : run.targetItems;
     patch.state = 'failed';
+    patch.applicationState = 'failed';
+    patch.orchestrationState = run.orchestrationState || 'failed';
     patch.percentComplete = target ? progressPercent(Number(run.completedItems || 0), target) : run.percentComplete ?? null;
     patch.endTime = run.endTime || now;
     patch.activeRun = false;
@@ -1406,7 +1507,7 @@ async function reconcileWorkflowRunState(env, store, run, dryRun = true) {
       { run: patch.failureMessage, failureStage: patch.failureStage, failureCode: patch.failureCode },
     ];
   }
-  if (store?.saveRun) await store.saveRun(patch, { dryRun }).catch(() => {});
+  if (store?.saveRun) await store.saveRun(patch, { dryRun });
   return patch;
 }
 
@@ -1415,6 +1516,10 @@ function createInitialRunSummary(runId, options, config, workflowInstanceId = ''
   return {
     runId,
     triggerType: options.triggerType || 'manual',
+    coordinatorWorkflowInstanceId: workflowInstanceId,
+    coordinatorWorkflowState: workflowInstanceId ? 'queued' : '',
+    orchestrationState: workflowInstanceId ? 'queued' : '',
+    applicationState: 'preparing',
     workflowInstanceId,
     workflowState: workflowInstanceId ? 'queued' : '',
     workflowCreatedAt: workflowInstanceId ? now : '',
@@ -1448,6 +1553,10 @@ function createInitialRunSummary(runId, options, config, workflowInstanceId = ''
     currentAnthropicCandidateId: '',
     lastCompletedAnthropicCallId: '',
     usage: createEmptyUsage(),
+    externalRequestUsage: createEmptyExternalRequestUsage(),
+    selectedCandidates: [],
+    candidateWorkflowIds: [],
+    childWorkflowSummaries: [],
     itemsAlreadyPublishedOnWocult: 0,
     itemsAlreadyInWebflowDraft: 0,
     itemsPossibleWocultDuplicates: 0,
@@ -1777,6 +1886,278 @@ function attemptedItemFrom(item, candidate, usage, outcome, failure = null) {
     failureMessage: safeShortText(failure?.failureMessage || '', 1000),
     usage,
   });
+}
+
+function compactTrackerCandidate(item, candidateIndex) {
+  const fingerprint = createStoryFingerprint(item);
+  return stripEmptyOptionalFields({
+    candidateId: `nt_${fingerprint}`,
+    candidateIndex,
+    headline: item.headline,
+    sourceName: item.source,
+    source: item.source,
+    sourceUrl: item.sourceUrl,
+    dateFound: item.dateFound,
+    publicationDate: item.publicationDate,
+    category: item.theme,
+    theme: item.theme,
+    priority: item.priority,
+    suggestedFormat: item.suggestedFormat,
+    whyItMatters: item.whyItMatters,
+    verification: item.verification,
+    status: item.status,
+    owner: item.owner,
+    publishedLink: item.publishedLink,
+    imageUrl: item.imageUrl,
+    primarySourceUrl: item.primarySourceUrl,
+    primarySourceUrls: item.primarySourceUrls || [],
+    emailSubject: item.emailSubject,
+    parsedFrom: item.parsedFrom,
+    trackerFingerprint: fingerprint,
+    sourceId: item.sourceId,
+    rowIndex: item.rowIndex,
+  });
+}
+
+function itemFromCompactCandidate(candidate = {}) {
+  return normalizeNewsTrackerItem({
+    id: candidate.sourceId || candidate.candidateId,
+    dateFound: candidate.dateFound,
+    source: candidate.sourceName || candidate.source,
+    headline: candidate.headline,
+    link: candidate.sourceUrl,
+    publicationDate: candidate.publicationDate,
+    theme: candidate.theme || candidate.category,
+    priority: candidate.priority,
+    suggestedFormat: candidate.suggestedFormat,
+    whyItMatters: candidate.whyItMatters,
+    verification: candidate.verification,
+    status: candidate.status,
+    owner: candidate.owner,
+    publishedLink: candidate.publishedLink,
+    imageUrl: candidate.imageUrl,
+    primarySourceUrl: candidate.primarySourceUrl,
+    primarySourceUrls: candidate.primarySourceUrls,
+    emailSubject: candidate.emailSubject,
+    parsedFrom: candidate.parsedFrom,
+  }, candidate.rowIndex || 0);
+}
+
+function candidateWorkflowInstanceId(runId, candidate) {
+  const shortRun = stableHash(runId).slice(0, 12);
+  const hash = stableHash(candidate.candidateId || candidate.headline || '').slice(0, 12);
+  return `nbc-${shortRun}-${candidate.candidateIndex || 0}-${hash}`.slice(0, 96);
+}
+
+function finalizerWorkflowInstanceId(runId, candidateId) {
+  return `nbf-${stableHash(runId).slice(0, 12)}-${stableHash(candidateId || 'run').slice(0, 16)}`.slice(0, 96);
+}
+
+function coordinatorWorkflowInstanceIdForRun(runId) {
+  return workflowInstanceIdForRun(runId);
+}
+
+async function workflowStep(deps, name, configName, fn) {
+  const stepConfig = NEWS_BRIEF_WORKFLOW_STEP_CONFIG[configName] || NEWS_BRIEF_WORKFLOW_STEP_CONFIG.default;
+  if (deps.workflowStep?.do) return deps.workflowStep.do(name, stepConfig, async (ctx) => fn(ctx || { attempt: 1, step: { name, count: 1 }, config: stepConfig }));
+  return fn({ attempt: 1, step: { name, count: 1 }, config: stepConfig });
+}
+
+async function existingFingerprintSet(store, items) {
+  const fingerprints = [...new Set(items.map(createStoryFingerprint))];
+  if (store.existingFingerprints) return new Set(await store.existingFingerprints(fingerprints));
+  const out = new Set();
+  for (const fingerprint of fingerprints.slice(0, 30)) {
+    if (await store.existsByFingerprint(fingerprint)) out.add(fingerprint);
+  }
+  return out;
+}
+
+async function suppressedClusterSet(store, items) {
+  const clusters = [...new Set(items.map(clusterKey))];
+  if (store.suppressedClusterKeys) return new Set(await store.suppressedClusterKeys(clusters));
+  const out = new Set();
+  for (const cKey of clusters.slice(0, 30)) {
+    if (await store.isDeclinedSuppressed(cKey)) out.add(cKey);
+  }
+  return out;
+}
+
+function selectedPayloadSizeBytes(payload) {
+  return new TextEncoder().encode(JSON.stringify(payload)).length;
+}
+
+export async function runNewsBriefCoordinatorWorkflow(env, options = {}, deps = {}) {
+  const config = getAutomationConfig(env);
+  const dryRun = options.dryRun !== undefined ? !!options.dryRun : config.dryRun;
+  const runId = options.requestRunId || '';
+  if (!safeRunId(runId)) return { ok: false, status: 400, error: 'invalid_requestRunId' };
+  const store = getStore(env, deps);
+  const now = () => new Date().toISOString();
+  let summary = await store.getRun?.(runId);
+  if (!summary) summary = createInitialRunSummary(runId, { ...options, dryRun }, config, options.coordinatorWorkflowInstanceId || coordinatorWorkflowInstanceIdForRun(runId));
+  const saveRunCritical = async (patch = {}) => {
+    summary = { ...summary, ...patch, updatedAt: now(), heartbeatAt: patch.phase || patch.state || patch.applicationState ? now() : (summary.heartbeatAt || now()) };
+    await store.saveRun(summary, { dryRun });
+  };
+  try {
+    await workflowStep(deps, 'initialise-run', 'noRetry', async () => saveRunCritical({
+      coordinatorWorkflowState: 'running',
+      workflowState: 'running',
+      orchestrationState: 'selecting_candidates',
+      applicationState: 'preparing',
+      state: 'preparing',
+      phase: 'fetching_tracker',
+      activeRun: true,
+    }));
+    const trackerInfo = await workflowStep(deps, 'fetch-news-tracker', 'default', async () => {
+      const tracker = await fetchNewsTracker(config, deps);
+      return { items: tracker.items.map((item, index) => compactTrackerCandidate(item, index + 1)), itemsReceived: tracker.items.length };
+    });
+    const trackerItems = (trackerInfo.items || []).map(itemFromCompactCandidate);
+    await saveRunCritical({ itemsReceived: trackerInfo.itemsReceived || trackerItems.length, phase: 'checking_wocult_archive' });
+    const webflowIndex = await workflowStep(deps, 'fetch-and-index-webflow-news-archive', 'default', async () => {
+      const webflowItems = await fetchWebflowNewsArchive(env, deps);
+      return buildWocultDuplicateIndex(webflowItems);
+    });
+    await saveRunCritical({
+      webflowItemsChecked: webflowIndex.length,
+      wocultDuplicateCheckCompleted: true,
+      wocultDuplicateCheckAt: now(),
+      wocultDuplicateCheckError: '',
+      phase: 'selecting_candidates',
+    });
+    const selection = await workflowStep(deps, 'select-candidates', 'default', async () => {
+      const scanWindow = trackerItems.slice(0, Math.max(config.maxItemsPerRun * 12, config.maxItemsPerRun));
+      const existing = await existingFingerprintSet(store, scanWindow);
+      const suppressed = await suppressedClusterSet(store, scanWindow);
+      const selectedCandidates = [];
+      const preflightSkippedItems = [];
+      const seenClusters = new Set();
+      const duplicateCounts = { itemsSkipped: 0, itemsSkippedBeforeClaude: 0, itemsAlreadyPublishedOnWocult: 0, itemsAlreadyInWebflowDraft: 0, itemsPossibleWocultDuplicates: 0 };
+      for (const item of scanWindow) {
+        if (selectedCandidates.length >= config.maxItemsPerRun) break;
+        const fingerprint = createStoryFingerprint(item);
+        const cKey = clusterKey(item);
+        if (seenClusters.has(cKey) || existing.has(fingerprint) || suppressed.has(cKey)) {
+          duplicateCounts.itemsSkipped += 1;
+          continue;
+        }
+        const duplicateCheck = checkWocultDuplicate(item, webflowIndex);
+        if (duplicateCheck.status !== 'no_wocult_match') {
+          const duplicateCandidate = withCandidateMetadata({
+            ...candidateFromTrackerItem(item),
+            candidateId: `nt_${fingerprint}`,
+            status: duplicateCheck.status === 'possible_wocult_duplicate' ? 'needs_editorial_check' : duplicateCheck.status,
+            dryRun,
+            duplicateCheck,
+            usage: createEmptyUsage(),
+          }, null, { runId });
+          await store.saveCandidate(duplicateCandidate, { dryRun, runId });
+          duplicateCounts.itemsSkippedBeforeClaude += 1;
+          if (duplicateCheck.status === 'already_published_on_wocult') duplicateCounts.itemsAlreadyPublishedOnWocult += 1;
+          if (duplicateCheck.status === 'already_in_webflow_draft') duplicateCounts.itemsAlreadyInWebflowDraft += 1;
+          if (duplicateCheck.status === 'possible_wocult_duplicate') duplicateCounts.itemsPossibleWocultDuplicates += 1;
+          preflightSkippedItems.push(preflightSkippedItemFrom(item, duplicateCheck));
+          continue;
+        }
+        seenClusters.add(cKey);
+        selectedCandidates.push(compactTrackerCandidate(item, selectedCandidates.length + 1));
+      }
+      return {
+        selectedCandidates,
+        preflightSkippedItems,
+        itemsReceived: trackerItems.length,
+        webflowItemsChecked: webflowIndex.length,
+        duplicateCounts,
+      };
+    });
+    if (selectedPayloadSizeBytes(selection) > COORDINATOR_OUTPUT_SOFT_LIMIT_BYTES) throw Object.assign(new Error('Coordinator selection payload exceeded safe size'), { failureCode: 'workflow_payload_too_large', failureStage: 'selecting_candidates' });
+    const targetItems = selection.selectedCandidates.length;
+    await saveRunCritical({
+      selectedCandidates: selection.selectedCandidates,
+      preflightSkippedItems: selection.preflightSkippedItems,
+      itemsSkipped: selection.duplicateCounts.itemsSkipped,
+      itemsSkippedBeforeClaude: selection.duplicateCounts.itemsSkippedBeforeClaude,
+      itemsAlreadyPublishedOnWocult: selection.duplicateCounts.itemsAlreadyPublishedOnWocult,
+      itemsAlreadyInWebflowDraft: selection.duplicateCounts.itemsAlreadyInWebflowDraft,
+      itemsPossibleWocultDuplicates: selection.duplicateCounts.itemsPossibleWocultDuplicates,
+      candidatesEligibleForClaude: targetItems,
+      targetItems,
+      completedItems: 0,
+      percentComplete: targetItems ? 0 : 100,
+      applicationState: targetItems ? 'running' : 'completed',
+      state: targetItems ? 'running' : 'completed',
+      activeRun: targetItems > 0,
+      phase: targetItems ? 'selecting_candidates' : 'completed',
+      orchestrationState: targetItems ? 'spawning_candidates' : 'fanout_completed',
+      endTime: targetItems ? '' : now(),
+      reason: targetItems ? '' : 'no eligible unprocessed candidates',
+    });
+    const childIds = [];
+    for (const candidate of selection.selectedCandidates) {
+      const instanceId = candidateWorkflowInstanceId(runId, candidate);
+      childIds.push({ candidateId: candidate.candidateId, workflowInstanceId: instanceId, candidateIndex: candidate.candidateIndex });
+      await workflowStep(deps, `spawn-candidate-${candidate.candidateIndex}`, 'default', async () => {
+        await store.saveChildRun(runId, candidate.candidateId, {
+          ...candidate,
+          runId,
+          workflowInstanceId: instanceId,
+          workflowState: 'queued',
+          applicationState: 'queued',
+          currentStage: 'queued',
+          finalised: false,
+          usage: createEmptyUsage(),
+          externalRequestUsage: createEmptyExternalRequestUsage(),
+          updatedAt: now(),
+        }, { dryRun });
+        if (!env[NEWS_BRIEF_CANDIDATE_WORKFLOW_BINDING]?.create) throw Object.assign(new Error('candidate workflow binding unavailable'), { failureCode: 'candidate_workflow_binding_unavailable', failureStage: 'spawning_candidates' });
+        try {
+          await env[NEWS_BRIEF_CANDIDATE_WORKFLOW_BINDING].create({
+            id: instanceId,
+            params: { runId, candidate, dryRun, workflowInstanceId: instanceId },
+          });
+        } catch (e) {
+          if (!/already|exist|duplicate/i.test(e.message || '')) throw e;
+        }
+        return { candidateId: candidate.candidateId, workflowInstanceId: instanceId };
+      });
+    }
+    await saveRunCritical({
+      candidateWorkflowIds: childIds,
+      childWorkflowSummaries: childIds,
+      coordinatorWorkflowState: 'completed',
+      workflowState: 'completed',
+      orchestrationState: 'fanout_completed',
+      applicationState: targetItems ? 'running' : 'completed',
+      state: targetItems ? 'running' : 'completed',
+      activeRun: targetItems > 0,
+      currentWorkflowStep: 'fanout-completed',
+      phase: targetItems ? 'qualifying' : 'completed',
+      percentComplete: targetItems ? 0 : 100,
+    });
+    return { ok: true, runId, selectedCandidates: targetItems, coordinatorCompleted: true };
+  } catch (e) {
+    const failure = createFailureMetadata(e, e.failureStage || summary.phase || 'unknown', runId);
+    await store.saveRun({
+      ...summary,
+      applicationState: 'failed',
+      state: 'failed',
+      orchestrationState: 'failed',
+      coordinatorWorkflowState: 'failed',
+      workflowState: 'failed',
+      activeRun: false,
+      endTime: now(),
+      updatedAt: now(),
+      heartbeatAt: now(),
+      failureStage: failure.failureStage,
+      failureCode: failure.failureCode,
+      failureMessage: failure.failureMessage,
+      percentComplete: progressPercent(Number(summary.completedItems || 0), Number(summary.targetItems || 0)),
+      errorSummary: [...(summary.errorSummary || []), { run: failure.failureMessage, failureStage: failure.failureStage, failureCode: failure.failureCode }],
+    }, { dryRun });
+    throw e;
+  }
 }
 
 export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
@@ -2164,6 +2545,305 @@ export async function runNewsBriefAutomation(env, options = {}, deps = {}) {
   return { ok: summary.failures === 0, summary };
 }
 
+async function saveChildCritical(store, runId, candidateId, patch, dryRun) {
+  await store.saveChildRun(runId, candidateId, { ...patch, updatedAt: new Date().toISOString() }, { dryRun });
+}
+
+async function triggerFinalizerWorkflow(env, runId, candidateId, dryRun, store, externalUsage) {
+  const instanceId = finalizerWorkflowInstanceId(runId, candidateId);
+  if (!env[NEWS_BRIEF_FINALIZER_WORKFLOW_BINDING]?.create) return { workflowInstanceId: '', triggered: false };
+  externalUsage.workflowBindingCalls += 1;
+  try {
+    await env[NEWS_BRIEF_FINALIZER_WORKFLOW_BINDING].create({
+      id: instanceId,
+      params: { runId, candidateId, dryRun, workflowInstanceId: instanceId },
+    });
+  } catch (e) {
+    if (!/already|exist|duplicate/i.test(e.message || '')) throw e;
+  }
+  await store.saveChildRun(runId, candidateId, { finalizerWorkflowInstanceId: instanceId, externalRequestUsage: externalUsage }, { dryRun });
+  return { workflowInstanceId: instanceId, triggered: true };
+}
+
+export async function runNewsBriefCandidateWorkflow(env, options = {}, deps = {}) {
+  const config = getAutomationConfig(env);
+  const dryRun = options.dryRun !== undefined ? !!options.dryRun : config.dryRun;
+  const runId = options.runId || '';
+  const compact = options.candidate || {};
+  const candidateId = compact.candidateId || '';
+  if (!safeRunId(runId) || !candidateId) return { ok: false, error: 'invalid_candidate_workflow_payload' };
+  const externalRequestUsage = createEmptyExternalRequestUsage();
+  const fetchImpl = budgetedFetch(deps.fetch || fetch, externalRequestUsage);
+  const candidateDeps = { ...deps, fetch: fetchImpl };
+  const store = getStore(env, candidateDeps);
+  const item = itemFromCompactCandidate(compact);
+  let child = await store.getChildRun?.(runId, candidateId) || {};
+  let qualification = child.qualificationResult || null;
+  let primaryDiscovery = child.primarySourceDiscoveryResult || null;
+  let verification = child.verificationResult || null;
+  let draft = child.draftResult || null;
+  let finalStatus = child.finalStatus || '';
+  const usage = child.usage || createEmptyUsage();
+  const anthropicCallLog = child.anthropicCallLog || [];
+  let currentStage = child.currentStage || 'queued';
+  let finalCandidate = null;
+  const saveChild = async (patch) => {
+    child = { ...child, ...patch, runId, candidateId, headline: compact.headline, sourceName: compact.sourceName, sourceUrl: compact.sourceUrl, dateFound: compact.dateFound };
+    await saveChildCritical(store, runId, candidateId, child, dryRun);
+  };
+  let currentWorkflowAttempt = 1;
+  const stageDeps = {
+    ...candidateDeps,
+    beforeAnthropicCall: async ({ model, stage }) => {
+      const callId = `${stableHash(`${runId}:${candidateId}:${stage}:${Date.now()}:${Math.random()}`).slice(0, 18)}`;
+      const entry = {
+        callId,
+        candidateId,
+        headline: item.headline,
+        stage,
+        model,
+        startedAt: new Date().toISOString(),
+        completedAt: '',
+        status: 'started',
+        attempt: currentWorkflowAttempt,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        webSearchRequests: 0,
+        durationMs: 0,
+        failureCode: '',
+      };
+      anthropicCallLog.push(entry);
+      await saveChild({ currentStage: stage, anthropicCallLog, currentAnthropicCallId: callId, currentAnthropicStage: stage, workflowState: 'running', applicationState: 'running' });
+      return { callId };
+    },
+    afterAnthropicCall: async (result = {}) => {
+      const callId = result.callId || child.currentAnthropicCallId;
+      const increment = result.usage || {};
+      anthropicCallLog.splice(0, anthropicCallLog.length, ...anthropicCallLog.map((entry) => entry.callId === callId ? {
+        ...entry,
+        completedAt: new Date().toISOString(),
+        status: ['completed', 'timed_out', 'failed'].includes(result.status) ? result.status : 'failed',
+        inputTokens: Number(increment.inputTokens || entry.inputTokens || 0),
+        outputTokens: Number(increment.outputTokens || entry.outputTokens || 0),
+        cacheCreationInputTokens: Number(increment.cacheCreationInputTokens || entry.cacheCreationInputTokens || 0),
+        cacheReadInputTokens: Number(increment.cacheReadInputTokens || entry.cacheReadInputTokens || 0),
+        webSearchRequests: Number(increment.webSearchRequests || entry.webSearchRequests || 0),
+        durationMs: Number(result.durationMs || entry.durationMs || 0),
+        failureCode: result.failureCode || entry.failureCode || '',
+      } : entry));
+      await saveChild({ anthropicCallLog, currentAnthropicCallId: '', currentAnthropicStage: '', lastCompletedAnthropicCallId: result.status === 'completed' ? callId : child.lastCompletedAnthropicCallId });
+    },
+    recordAnthropicUsage: (increment) => addUsage(usage, increment),
+  };
+  const runCandidateStep = async (name, fn) => workflowStep(deps, name, 'default', async (ctx) => {
+    currentWorkflowAttempt = Number(ctx?.attempt || ctx?.step?.count || 1);
+    return fn(ctx);
+  });
+  try {
+    await runCandidateStep('initialise-candidate', async () => saveChild({
+      workflowInstanceId: options.workflowInstanceId || child.workflowInstanceId || '',
+      workflowState: 'running',
+      applicationState: 'running',
+      currentStage: 'qualification',
+      candidateIndex: compact.candidateIndex,
+      finalised: false,
+      usage,
+      externalRequestUsage,
+    }));
+    await runCandidateStep('process-candidate', async () => {
+      const deterministic = deterministicEligibility(item);
+      if (!deterministic.eligible) {
+        finalStatus = 'rejected_by_filter';
+        finalCandidate = withCandidateMetadata({
+          ...candidateFromTrackerItem(item),
+          candidateId,
+          status: finalStatus,
+          rejectionReasons: deterministic.reasons,
+          dryRun,
+          usage,
+        }, null, { runId });
+        await saveChild({ currentStage: 'finalise-candidate', finalStatus, qualificationResult: { deterministicRejection: true, rejectionReasons: deterministic.reasons }, usage, externalRequestUsage });
+        return;
+      }
+      currentStage = 'qualification';
+      await saveChild({ currentStage });
+      if (!qualification) {
+        qualification = normalizeQualificationResponse(await callClaudeJson(env, buildQualificationPrompt(item), 1400, { ...stageDeps, failureStage: 'qualification', stage: 'qualification' }));
+      }
+      const qValid = validateQualification(qualification);
+      if (!qValid.ok) {
+        const err = new Error(`Invalid qualification JSON: ${qValid.errors.join(',')}`);
+        err.failureStage = 'qualification';
+        err.failureCode = 'qualification_json_invalid';
+        err.failureStatus = 'qualification_failed';
+        throw err;
+      }
+      let status = qualificationStatus(qualification, config.minScore);
+      await saveChild({ qualificationResult: sanitizeQualificationForStorage(qualification), currentStage: status === 'rejected_by_filter' ? 'finalise-candidate' : 'primary_source_discovery', usage, anthropicCallLog });
+      if (status === 'rejected_by_filter') {
+        finalStatus = status;
+        finalCandidate = withCandidateMetadata({ ...candidateFromTrackerItem(item, qualification), candidateId, status, dryRun, usage }, null, { runId });
+        return;
+      }
+      currentStage = 'primary_source_discovery';
+      if (!primaryDiscovery) primaryDiscovery = await discoverPrimarySources(item, qualification, env, { ...stageDeps, failureStage: currentStage, stage: currentStage }, { runId });
+      if (primaryDiscovery.status === 'failed' || (['not_found', 'ambiguous'].includes(primaryDiscovery.status) && primarySourceDiscoveryRequired(item, qualification)) || status === 'needs_editorial_check') {
+        finalStatus = 'needs_editorial_check';
+        finalCandidate = withCandidateMetadata(applyPrimarySourceDiscovery({ ...candidateFromTrackerItem(item, qualification), candidateId, status: finalStatus, dryRun, usage }, primaryDiscovery), null, { runId });
+        await saveChild({ primarySourceDiscoveryResult: primaryDiscovery, primarySourceDiscoveryStatus: primaryDiscovery.status, primarySources: primaryDiscovery.primarySources || [], finalStatus, currentStage: 'finalise-candidate', usage, externalRequestUsage });
+        return;
+      }
+      if (status === 'verifying') {
+        currentStage = 'verification';
+        await saveChild({ currentStage, primarySourceDiscoveryResult: primaryDiscovery, primarySourceDiscoveryStatus: primaryDiscovery.status, primarySources: primaryDiscovery.primarySources || [] });
+        if (!verification) verification = await verifyCandidateSources(item, { ...stageDeps, failureStage: 'verification' }, primaryDiscovery);
+        if (!verification.ok) {
+          finalStatus = 'verification_failed';
+          finalCandidate = withCandidateMetadata(applyPrimarySourceDiscovery({ ...candidateFromTrackerItem(item, qualification, verification), candidateId, status: finalStatus, dryRun, usage }, primaryDiscovery), null, { runId });
+          await saveChild({ verificationResult: verification, finalStatus, currentStage: 'finalise-candidate', usage, externalRequestUsage });
+          return;
+        }
+        currentStage = 'drafting';
+        await saveChild({ currentStage, verificationResult: verification });
+        if (!draft) draft = await callClaudeJson(env, buildDraftPrompt({ item, qualification, verification, primarySources: primaryDiscovery?.primarySources || [] }), 1800, { ...stageDeps, failureStage: 'drafting', stage: 'drafting' });
+        const dValid = validateDraft(draft);
+        if (!dValid.ok) {
+          const err = new Error(`Invalid draft JSON: ${dValid.errors.join(',')}`);
+          err.failureStage = 'drafting_parse';
+          err.failureCode = 'drafting_json_invalid';
+          err.failureStatus = 'drafting_failed';
+          throw err;
+        }
+        finalStatus = 'awaiting_approval';
+        finalCandidate = withCandidateMetadata(applyPrimarySourceDiscovery({ ...candidateFromTrackerItem(item, qualification, verification, draft), candidateId, status: finalStatus, dryRun, usage }, primaryDiscovery), null, { runId });
+        await saveChild({ draftResult: draft, finalStatus, currentStage: 'finalise-candidate', usage, externalRequestUsage });
+        return;
+      }
+      finalStatus = status;
+      finalCandidate = withCandidateMetadata(primaryDiscovery ? applyPrimarySourceDiscovery({ ...candidateFromTrackerItem(item, qualification), candidateId, status, dryRun, usage }, primaryDiscovery) : { ...candidateFromTrackerItem(item, qualification), candidateId, status, dryRun, usage }, null, { runId });
+    });
+  } catch (e) {
+    const code = e.failureCode || failureCodeForError(e, currentStage);
+    const failure = createFailureMetadata({ ...e, failureCode: code }, currentStage, runId);
+    finalStatus = e.failureStatus || (code === 'candidate_request_budget_reached' && qualification ? 'needs_editorial_check' : 'failed');
+    finalCandidate = withCandidateMetadata(primaryDiscovery
+      ? applyPrimarySourceDiscovery({ ...candidateFromTrackerItem(item, qualification), candidateId, status: finalStatus, dryRun, usage, ...failure }, primaryDiscovery)
+      : { ...candidateFromTrackerItem(item, qualification), candidateId, status: finalStatus, dryRun, usage, ...failure }, null, { runId });
+    await saveChild({ failureStage: failure.failureStage, failureCode: failure.failureCode, failureMessage: failure.failureMessage, retryable: failure.retryable, finalStatus, currentStage: 'finalise-candidate', usage, externalRequestUsage, qualificationResult: qualification ? sanitizeQualificationForStorage(qualification) : child.qualificationResult });
+  }
+  await runCandidateStep('finalise-candidate', async () => {
+    const latest = await store.getChildRun?.(runId, candidateId);
+    if (latest?.finalised) return latest;
+    if (!finalCandidate) {
+      const failure = createFailureMetadata(Object.assign(new Error('Candidate workflow reached finalisation without a final candidate outcome.'), { failureCode: 'candidate_workflow_completion_invariant_failed' }), currentStage, runId);
+      finalStatus = 'failed';
+      finalCandidate = withCandidateMetadata({ ...candidateFromTrackerItem(item, qualification), candidateId, status: finalStatus, dryRun, usage, ...failure }, null, { runId });
+    }
+    await store.saveCandidate(finalCandidate, { dryRun, runId });
+    const attempted = attemptedItemFrom(item, finalCandidate, usage, finalStatus, finalCandidate.failureCode ? finalCandidate : null);
+    await saveChild({
+      workflowState: 'completed',
+      applicationState: finalStatus === 'failed' || /_failed$/.test(finalStatus) ? 'failed' : 'completed',
+      currentStage: 'completed',
+      finalStatus,
+      finalised: true,
+      finalisedAt: new Date().toISOString(),
+      attemptedItem: attempted,
+      usage,
+      externalRequestUsage,
+      qualificationResult: qualification ? sanitizeQualificationForStorage(qualification) : child.qualificationResult,
+      primarySourceDiscoveryResult: primaryDiscovery || child.primarySourceDiscoveryResult,
+      primarySourceDiscoveryStatus: primaryDiscovery?.status || child.primarySourceDiscoveryStatus || '',
+      primarySources: primaryDiscovery?.primarySources || child.primarySources || [],
+      verificationResult: verification || child.verificationResult,
+      draftResult: draft || child.draftResult,
+    });
+    return { finalised: true, finalStatus };
+  });
+  await runCandidateStep('trigger-run-finalizer', async () => triggerFinalizerWorkflow(env, runId, candidateId, dryRun, store, externalRequestUsage));
+  const finalChild = await store.getChildRun?.(runId, candidateId);
+  if (!finalChild?.finalised) throw new Error('candidate_workflow_completion_invariant_failed');
+  return { ok: true, runId, candidateId, finalStatus };
+}
+
+export async function runNewsBriefFinalizerWorkflow(env, options = {}, deps = {}) {
+  const config = getAutomationConfig(env);
+  const dryRun = options.dryRun !== undefined ? !!options.dryRun : config.dryRun;
+  const runId = options.runId || '';
+  if (!safeRunId(runId)) return { ok: false, error: 'invalid_runId' };
+  const store = getStore(env, deps);
+  return workflowStep(deps, 'finalise-run', 'default', async () => {
+    const run = await store.getRun(runId);
+    if (!run) return { ok: false, error: 'run_not_found' };
+    const children = (await store.listChildRuns(runId)).sort((a, b) => Number(a.candidateIndex || 0) - Number(b.candidateIndex || 0));
+    const target = Number(run.targetItems ?? children.length ?? 0);
+    const finalised = children.filter((child) => child.finalised === true);
+    const usage = createEmptyUsage();
+    const externalRequestUsage = createEmptyExternalRequestUsage();
+    for (const child of finalised) {
+      addUsage(usage, child.usage || {});
+      addExternalUsage(externalRequestUsage, child.externalRequestUsage || {});
+    }
+    const completedItems = finalised.length;
+    const percentComplete = target ? progressPercent(completedItems, target) : 100;
+    const childWorkflowSummaries = children.map((child) => stripEmptyOptionalFields({
+      candidateId: child.candidateId,
+      candidateIndex: child.candidateIndex,
+      headline: child.headline,
+      workflowInstanceId: child.workflowInstanceId,
+      workflowState: child.workflowState,
+      applicationState: child.applicationState,
+      currentStage: child.currentStage,
+      finalStatus: child.finalStatus,
+      finalised: child.finalised === true,
+      usage: child.usage || createEmptyUsage(),
+      externalRequestUsage: child.externalRequestUsage || createEmptyExternalRequestUsage(),
+      failureStage: child.failureStage,
+      failureCode: child.failureCode,
+      failureMessage: child.failureMessage,
+      updatedAt: child.updatedAt,
+    }));
+    const attemptedItems = finalised.map((child) => child.attemptedItem).filter(Boolean);
+    const allTerminal = target === 0 || (target > 0 && completedItems === target && attemptedItems.length === target);
+    const terminalState = allTerminal
+      ? finalised.some((child) => child.applicationState === 'failed' || child.finalStatus === 'failed' || /_failed$/.test(child.finalStatus || '')) ? 'completed_with_failures' : 'completed'
+      : 'running';
+    const patch = {
+      ...run,
+      childWorkflowSummaries,
+      completedItems,
+      percentComplete,
+      usage,
+      externalRequestUsage,
+      attemptedItems,
+      updatedAt: new Date().toISOString(),
+      heartbeatAt: new Date().toISOString(),
+      applicationState: terminalState,
+      state: terminalState,
+      activeRun: !allTerminal,
+      phase: allTerminal ? 'completed' : run.phase,
+      currentWorkflowStep: allTerminal ? 'completed' : run.currentWorkflowStep,
+      currentCandidateId: allTerminal ? '' : run.currentCandidateId,
+      currentHeadline: allTerminal ? '' : run.currentHeadline,
+      endTime: allTerminal ? (run.endTime || new Date().toISOString()) : run.endTime,
+      itemsRejected: finalised.filter((child) => child.finalStatus === 'rejected_by_filter').length,
+      itemsNeedingEditorialCheck: finalised.filter((child) => child.finalStatus === 'needs_editorial_check').length,
+      itemsVerified: finalised.filter((child) => child.verificationResult?.ok).length,
+      draftsGenerated: finalised.filter((child) => child.finalStatus === 'awaiting_approval').length,
+      failures: finalised.filter((child) => child.applicationState === 'failed' || child.finalStatus === 'failed' || /_failed$/.test(child.finalStatus || '')).length,
+    };
+    if (target > 0 && completedItems < target) {
+      patch.applicationState = 'running';
+      patch.state = 'running';
+      patch.activeRun = true;
+    }
+    await store.saveRun(patch, { dryRun });
+    return { ok: true, runId, completedItems, targetItems: target, completed: allTerminal };
+  });
+}
+
 async function verifyCandidateSources(item, deps = {}, primaryDiscovery = null) {
   const fetchImpl = deps.fetch || fetch;
   const sources = [];
@@ -2393,18 +3073,61 @@ export async function createWebflowNewsDraft(draft, env, deps = {}) {
 async function getAutomationStatus(env, deps = {}, runId = '') {
   const store = getStore(env, deps);
   const config = getAutomationConfig(env);
+  const attachChildren = async (run) => {
+    if (!run) return run;
+    if (!store.listChildRuns || !(Array.isArray(run.selectedCandidates) || Array.isArray(run.candidateWorkflowIds))) return run;
+    const children = (await store.listChildRuns(run.runId)).sort((a, b) => Number(a.candidateIndex || 0) - Number(b.candidateIndex || 0));
+    const target = Number(run.targetItems ?? children.length ?? 0);
+    const finalised = children.filter((child) => child.finalised === true);
+    const completedItems = finalised.length;
+    const percentComplete = target ? progressPercent(completedItems, target) : (target === 0 ? 100 : null);
+    const usage = createEmptyUsage();
+    const externalRequestUsage = createEmptyExternalRequestUsage();
+    for (const child of finalised) {
+      addUsage(usage, child.usage || {});
+      addExternalUsage(externalRequestUsage, child.externalRequestUsage || {});
+    }
+    const childWorkflowSummaries = children.map((child) => stripEmptyOptionalFields({
+      candidateId: child.candidateId,
+      candidateIndex: child.candidateIndex,
+      headline: child.headline,
+      workflowInstanceId: child.workflowInstanceId,
+      workflowState: child.workflowState,
+      applicationState: child.applicationState,
+      currentStage: child.currentStage,
+      finalStatus: child.finalStatus,
+      finalised: child.finalised === true,
+      usage: child.usage || createEmptyUsage(),
+      externalRequestUsage: child.externalRequestUsage || createEmptyExternalRequestUsage(),
+      failureStage: child.failureStage,
+      failureCode: child.failureCode,
+      failureMessage: child.failureMessage,
+      updatedAt: child.updatedAt,
+    }));
+    return {
+      ...run,
+      childWorkflowSummaries,
+      completedItems,
+      percentComplete,
+      usage,
+      externalRequestUsage,
+      activeRun: ['preparing', 'running'].includes(logicalRunState(run)) && completedItems < target,
+    };
+  };
   if (runId) {
     let run = await store.getRun(runId);
     run = await reconcileWorkflowRunState(env, store, run, config.dryRun);
     if (activeRunIsStale(run) && !workflowStateIsActive(run?.workflowState)) run = await recoverStaleRun(store, run, config.dryRun);
+    run = await attachChildren(run);
     return { ok: !!run, run: run || null };
   }
   let activeRun = store.activeRun ? await store.activeRun() : null;
   activeRun = await reconcileWorkflowRunState(env, store, activeRun, config.dryRun);
+  activeRun = await attachChildren(activeRun);
   if (activeRunIsStale(activeRun) && !workflowStateIsActive(activeRun?.workflowState)) {
     await recoverStaleRun(store, activeRun, config.dryRun);
     activeRun = null;
-  } else if (workflowStateIsTerminal(activeRun?.workflowState) && !['preparing', 'running'].includes(activeRun?.state)) {
+  } else if (workflowStateIsTerminal(activeRun?.workflowState) && !['preparing', 'running'].includes(logicalRunState(activeRun))) {
     activeRun = null;
   }
   return {
@@ -2505,6 +3228,39 @@ function createFirestoreStore(env, deps = {}) {
       const rows = await res.json();
       return rows.some((r) => r.document);
     },
+    async existingFingerprints(fingerprints = []) {
+      const found = [];
+      for (let i = 0; i < fingerprints.length; i += 30) {
+        const chunk = fingerprints.slice(i, i + 30);
+        if (!chunk.length) continue;
+        const body = structuredQuery('news_brief_automation', [{ field: 'storyFingerprint', op: 'IN', value: chunk }], chunk.length);
+        const res = await firestoreFetch(`${root}:runQuery`, env, fetchImpl, { method: 'POST', body: JSON.stringify(body) });
+        const rows = await res.json();
+        rows.filter((r) => r.document).map((r) => fromFirestoreDoc(r.document)).forEach((doc) => {
+          if (doc.storyFingerprint) found.push(doc.storyFingerprint);
+        });
+      }
+      return found;
+    },
+    async suppressedClusterKeys(clusterKeys = []) {
+      const found = [];
+      const cutoff = new Date(Date.now() - 30 * 24 * 3600000).toISOString();
+      for (let i = 0; i < clusterKeys.length; i += 30) {
+        const chunk = clusterKeys.slice(i, i + 30);
+        if (!chunk.length) continue;
+        const body = structuredQuery('news_brief_automation', [
+          { field: 'clusterKey', op: 'IN', value: chunk },
+          { field: 'status', op: 'EQUAL', value: 'declined' },
+          { field: 'decisionTimestamp', op: 'GREATER_THAN', value: cutoff },
+        ], chunk.length);
+        const res = await firestoreFetch(`${root}:runQuery`, env, fetchImpl, { method: 'POST', body: JSON.stringify(body) });
+        const rows = await res.json();
+        rows.filter((r) => r.document).map((r) => fromFirestoreDoc(r.document)).forEach((doc) => {
+          if (doc.clusterKey) found.push(doc.clusterKey);
+        });
+      }
+      return found;
+    },
     async saveCandidate(candidate, options = {}) {
       const id = candidate.candidateId || candidate.id;
       const target = new URL(`${root}/news_brief_automation/${encodeURIComponent(id)}`);
@@ -2535,6 +3291,23 @@ function createFirestoreStore(env, deps = {}) {
       const res = await firestoreFetch(`${root}/news_brief_automation_runs/${encodeURIComponent(id)}`, env, fetchImpl);
       if (res.status === 404) return null;
       return fromFirestoreDoc(await res.json());
+    },
+    async getChildRun(runId, candidateId) {
+      const res = await firestoreFetch(`${root}/news_brief_automation_runs/${encodeURIComponent(runId)}/children/${encodeURIComponent(candidateId)}`, env, fetchImpl);
+      if (res.status === 404) return null;
+      return fromFirestoreDoc(await res.json());
+    },
+    async saveChildRun(runId, candidateId, child) {
+      await firestoreFetch(`${root}/news_brief_automation_runs/${encodeURIComponent(runId)}/children/${encodeURIComponent(candidateId)}`, env, fetchImpl, {
+        method: 'PATCH',
+        body: JSON.stringify({ fields: toFirestoreFields({ ...child, runId, candidateId }) }),
+      });
+    },
+    async listChildRuns(runId) {
+      const res = await firestoreFetch(`${root}/news_brief_automation_runs/${encodeURIComponent(runId)}/children`, env, fetchImpl);
+      if (res.status === 404) return [];
+      const data = await res.json();
+      return (data.documents || []).map(fromFirestoreDoc);
     },
     async saveRun(summary, options = {}) {
       const target = new URL(`${root}/news_brief_automation_runs/${encodeURIComponent(summary.runId)}`);

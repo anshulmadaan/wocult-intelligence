@@ -1,5 +1,8 @@
 import {
   handleAutomationRequest,
+  runNewsBriefCandidateWorkflow,
+  runNewsBriefFinalizerWorkflow,
+  runNewsBriefCoordinatorWorkflow,
   runNewsBriefAutomation,
   requireProtectedRoute,
   scheduledNewsBriefAutomation,
@@ -12,12 +15,30 @@ export class NewsBriefAutomationWorkflow extends CloudflareWorkflowEntrypoint {
   async run(event, step) {
     const payload = event?.payload || {};
     const runId = payload.runId || '';
-    return runNewsBriefAutomation(this.env, {
+    return runNewsBriefCoordinatorWorkflow(this.env, {
       triggerType: payload.triggerType || 'dashboard_dry_run',
       dryRun: payload.dryRun,
       requestRunId: runId,
-      workflowInstanceId: event?.instanceId || runId,
+      coordinatorWorkflowInstanceId: event?.instanceId || runId,
       fromWorkflow: true,
+    }, { workflowStep: step });
+  }
+}
+
+export class NewsBriefCandidateWorkflow extends CloudflareWorkflowEntrypoint {
+  async run(event, step) {
+    return runNewsBriefCandidateWorkflow(this.env, {
+      ...(event?.payload || {}),
+      workflowInstanceId: event?.instanceId || event?.payload?.workflowInstanceId || '',
+    }, { workflowStep: step });
+  }
+}
+
+export class NewsBriefRunFinalizerWorkflow extends CloudflareWorkflowEntrypoint {
+  async run(event, step) {
+    return runNewsBriefFinalizerWorkflow(this.env, {
+      ...(event?.payload || {}),
+      workflowInstanceId: event?.instanceId || event?.payload?.workflowInstanceId || '',
     }, { workflowStep: step });
   }
 }

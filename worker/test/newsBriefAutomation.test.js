@@ -20,6 +20,9 @@ import {
   qualificationStatus,
   renderApprovalEmail,
   runNewsBriefAutomation,
+  runNewsBriefCandidateWorkflow,
+  runNewsBriefCoordinatorWorkflow,
+  runNewsBriefFinalizerWorkflow,
   signApprovalToken,
   startNewsBriefAutomationWorkflow,
   sortNewsTrackerItemsNewestFirst,
@@ -98,6 +101,7 @@ function makeRunMocks(items, options = {}) {
   const activities = [];
   const runs = [];
   const runMap = new Map(options.existingRuns || []);
+  const childMap = new Map();
   const calls = { anthropic: 0, source: 0, draft: 0, webflowArchive: 0 };
   const existingLinks = new Set(options.existingLinks || []);
   const declinedLinks = new Set(options.declinedLinks || []);
@@ -105,9 +109,19 @@ function makeRunMocks(items, options = {}) {
   const store = {
     existsByFingerprint: async (fingerprint) => existingLinks.has(fingerprint),
     isDeclinedSuppressed: async (cKey) => declinedLinks.has(cKey),
+    existingFingerprints: async (fingerprints) => fingerprints.filter((fingerprint) => existingLinks.has(fingerprint)),
+    suppressedClusterKeys: async (clusters) => clusters.filter((cKey) => declinedLinks.has(cKey)),
     saveCandidate: async (candidate) => { saved.push(candidate); return candidate; },
     addActivity: async (id, type, data) => { activities.push({ id, type, data }); },
     getRun: async (id) => runMap.get(id) || null,
+    getChildRun: async (runId, candidateId) => childMap.get(`${runId}/${candidateId}`) || null,
+    saveChildRun: async (runId, candidateId, child) => {
+      const key = `${runId}/${candidateId}`;
+      const copy = JSON.parse(JSON.stringify({ ...(childMap.get(key) || {}), ...child, runId, candidateId }));
+      childMap.set(key, copy);
+      return copy;
+    },
+    listChildRuns: async (runId) => [...childMap.entries()].filter(([key]) => key.startsWith(`${runId}/`)).map(([, value]) => JSON.parse(JSON.stringify(value))),
     activeRun: async () => options.activeRun || null,
     latestCompletedRun: async () => null,
     latestRuns: async () => [...runMap.values()].reverse(),
@@ -152,6 +166,7 @@ function makeRunMocks(items, options = {}) {
     calls,
     runs,
     runMap,
+    childMap,
     store,
     fetch,
     primarySourceSearch: options.primarySourceSearch,
@@ -901,6 +916,207 @@ test('workflow execution records durable steps and workflow terminal state', asy
   assert.ok(stepNames.some((entry) => entry.name === 'candidate-1-qualification'));
   assert.ok(stepNames.every((entry) => entry.config?.timeout));
 });
+
+test('coordinator fetches archives once, creates independent candidate workflows and leaves parent running', async () => {
+  const items = Array.from({ length: 5 }, (_, i) => trackerItem(i + 1));
+  const mocks = makeRunMocks(items);
+  const created = [];
+  const result = await runNewsBriefCoordinatorWorkflow({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_AUTOMATION_ENABLED: 'true',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+    NEWS_BRIEF_CANDIDATE_WORKFLOW: {
+      create: async ({ id, params }) => { created.push({ id, params }); return { id }; },
+    },
+  }, {
+    dryRun: true,
+    requestRunId: 'run_fanout_12345678',
+    coordinatorWorkflowInstanceId: 'run_fanout_12345678',
+  }, mocks);
+  const parent = mocks.runMap.get('run_fanout_12345678');
+  assert.equal(result.selectedCandidates, 5);
+  assert.equal(created.length, 5);
+  assert.equal(new Set(created.map((entry) => entry.id)).size, 5);
+  assert.equal(mocks.calls.webflowArchive, 1);
+  assert.equal(mocks.calls.anthropic, 0);
+  assert.equal(parent.orchestrationState, 'fanout_completed');
+  assert.equal(parent.applicationState, 'running');
+  assert.equal(parent.activeRun, true);
+  assert.equal(parent.completedItems, 0);
+  assert.equal(parent.percentComplete, 0);
+  assert.equal(parent.candidateWorkflowIds.length, 5);
+});
+
+test('coordinator compact selection excludes raw tracker payload and Webflow body HTML', async () => {
+  const items = [trackerItem(1, { rawMarker: 'RAW_TRACKER_PAYLOAD_SHOULD_NOT_APPEAR' })];
+  const mocks = makeRunMocks(items, {
+    webflowArchive: [webflowNewsItem('1', { fieldData: { body: '<p>WEBFLOW_BODY_SHOULD_NOT_APPEAR</p>' } })],
+  });
+  await runNewsBriefCoordinatorWorkflow({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
+    NEWS_BRIEF_CANDIDATE_WORKFLOW: { create: async ({ id }) => ({ id }) },
+  }, { dryRun: true, requestRunId: 'run_compact_12345678', coordinatorWorkflowInstanceId: 'run_compact_12345678' }, mocks);
+  const parent = mocks.runMap.get('run_compact_12345678');
+  const payload = JSON.stringify(parent.selectedCandidates);
+  assert.doesNotMatch(payload, /RAW_TRACKER_PAYLOAD_SHOULD_NOT_APPEAR|WEBFLOW_BODY_SHOULD_NOT_APPEAR/);
+  assert.ok(new TextEncoder().encode(JSON.stringify({
+    selectedCandidates: parent.selectedCandidates,
+    preflightSkippedItems: parent.preflightSkippedItems,
+  })).length < 1024 * 1024);
+});
+
+test('zero-candidate coordinator completes as valid 0-of-0 without child workflows', async () => {
+  const old = trackerItem(1, { dateFound: '2026-01-01T00:00:00.000Z' });
+  const mocks = makeRunMocks([old], { existingLinks: [createStoryFingerprint(normalizeNewsTrackerResponse({ items: [old] }).items[0])] });
+  let created = 0;
+  await runNewsBriefCoordinatorWorkflow({
+    NEWS_TRACKER_API: 'https://tracker.example.test/current',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_MAX_ITEMS_PER_RUN: '5',
+    NEWS_BRIEF_CANDIDATE_WORKFLOW: { create: async () => { created += 1; } },
+  }, { dryRun: true, requestRunId: 'run_zero_12345678', coordinatorWorkflowInstanceId: 'run_zero_12345678' }, mocks);
+  const parent = mocks.runMap.get('run_zero_12345678');
+  assert.equal(created, 0);
+  assert.equal(parent.targetItems, 0);
+  assert.equal(parent.completedItems, 0);
+  assert.equal(parent.percentComplete, 100);
+  assert.equal(parent.applicationState, 'completed');
+  assert.equal(parent.activeRun, false);
+});
+
+test('candidate workflow finalises one candidate and triggers finalizer without completing siblings', async () => {
+  const candidate = {
+    candidateId: 'nt_candidate_one',
+    candidateIndex: 1,
+    headline: trackerItem(1).headline,
+    sourceName: trackerItem(1).source,
+    sourceUrl: trackerItem(1).link,
+    dateFound: recent,
+    theme: trackerItem(1).theme,
+    whyItMatters: trackerItem(1).whyItMatters,
+    verification: trackerItem(1).verification,
+  };
+  const mocks = makeRunMocks([], {
+    qualificationFor: () => ({ ...goodQualification, qualifies: false, overallScore: 45, rejectionReasons: ['No Wocult angle'], recommendedPriority: null }),
+  });
+  mocks.runMap.set('run_child_12345678', {
+    runId: 'run_child_12345678',
+    applicationState: 'running',
+    state: 'running',
+    targetItems: 5,
+    completedItems: 0,
+    selectedCandidates: [candidate],
+    activeRun: true,
+  });
+  const finalizers = [];
+  const result = await runNewsBriefCandidateWorkflow({
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_FINALIZER_WORKFLOW: { create: async ({ id, params }) => { finalizers.push({ id, params }); return { id }; } },
+  }, { runId: 'run_child_12345678', candidate, dryRun: true, workflowInstanceId: 'nbc-child-1' }, mocks);
+  const child = mocks.childMap.get('run_child_12345678/nt_candidate_one');
+  assert.equal(result.finalStatus, 'rejected_by_filter');
+  assert.equal(child.finalised, true);
+  assert.equal(child.workflowState, 'completed');
+  assert.equal(finalizers.length, 1);
+  assert.equal(mocks.saved.length, 1);
+});
+
+test('finalizer completes parent only after all selected children are finalised', async () => {
+  const mocks = makeRunMocks([]);
+  const runId = 'run_finalizer_12345678';
+  mocks.runMap.set(runId, {
+    runId,
+    applicationState: 'running',
+    state: 'running',
+    targetItems: 2,
+    completedItems: 0,
+    activeRun: true,
+    selectedCandidates: [{ candidateId: 'c1' }, { candidateId: 'c2' }],
+  });
+  await mocks.store.saveChildRun(runId, 'c1', { candidateId: 'c1', candidateIndex: 1, finalised: true, finalStatus: 'rejected_by_filter', applicationState: 'completed', attemptedItem: { candidateId: 'c1' }, usage: { ...goodUsage(), inputTokens: 10 } });
+  await runNewsBriefFinalizerWorkflow({ NEWS_BRIEF_DRY_RUN: 'true' }, { runId, dryRun: true }, mocks);
+  assert.equal(mocks.runMap.get(runId).applicationState, 'running');
+  assert.equal(mocks.runMap.get(runId).completedItems, 1);
+  assert.equal(mocks.runMap.get(runId).percentComplete, 50);
+  await mocks.store.saveChildRun(runId, 'c2', { candidateId: 'c2', candidateIndex: 2, finalised: true, finalStatus: 'failed', applicationState: 'failed', attemptedItem: { candidateId: 'c2' }, usage: { ...goodUsage(), outputTokens: 4 } });
+  await runNewsBriefFinalizerWorkflow({ NEWS_BRIEF_DRY_RUN: 'true' }, { runId, dryRun: true }, mocks);
+  assert.equal(mocks.runMap.get(runId).applicationState, 'completed_with_failures');
+  assert.equal(mocks.runMap.get(runId).completedItems, 2);
+  assert.equal(mocks.runMap.get(runId).percentComplete, 100);
+  assert.equal(mocks.runMap.get(runId).activeRun, false);
+});
+
+test('status keeps coordinator-complete parent running while child workflows are active', async () => {
+  const runId = 'run_status_children_12345678';
+  const mocks = makeRunMocks([]);
+  mocks.runMap.set(runId, {
+    runId,
+    coordinatorWorkflowInstanceId: runId,
+    coordinatorWorkflowState: 'completed',
+    workflowState: 'completed',
+    orchestrationState: 'fanout_completed',
+    applicationState: 'running',
+    state: 'running',
+    selectedCandidates: [{ candidateId: 'c1' }, { candidateId: 'c2' }],
+    targetItems: 2,
+    completedItems: 0,
+    activeRun: true,
+  });
+  await mocks.store.saveChildRun(runId, 'c1', { candidateId: 'c1', candidateIndex: 1, finalised: true, finalStatus: 'rejected_by_filter', applicationState: 'completed', attemptedItem: { candidateId: 'c1' } });
+  await mocks.store.saveChildRun(runId, 'c2', { candidateId: 'c2', candidateIndex: 2, finalised: false, applicationState: 'running', currentStage: 'qualification' });
+  const response = await handleAutomationRequest(new Request(`https://worker.test/automation/news-briefs/status?runId=${runId}`, {
+    headers: { Authorization: 'Bearer admin' },
+  }), {
+    WORKER_ADMIN_TOKEN: 'admin',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_WORKFLOW: { get: async () => ({ status: async () => ({ status: 'completed' }) }) },
+  }, null, {}, mocks);
+  const data = await response.json();
+  assert.equal(data.run.applicationState, 'running');
+  assert.equal(data.run.completedItems, 1);
+  assert.equal(data.run.percentComplete, 50);
+  assert.equal(data.run.activeRun, true);
+  assert.equal(data.run.childWorkflowSummaries.length, 2);
+});
+
+test('historical complete Workflow with 0 of 5 reconciles to failed instead of 100 percent', async () => {
+  const historical = {
+    runId: 'run_historical_12345678',
+    state: 'running',
+    workflowState: 'running',
+    workflowInstanceId: 'run_historical_12345678',
+    targetItems: 5,
+    completedItems: 0,
+    percentComplete: 0,
+    activeRun: true,
+  };
+  let saved = null;
+  const response = await handleAutomationRequest(new Request('https://worker.test/automation/news-briefs/status?runId=run_historical_12345678', {
+    headers: { Authorization: 'Bearer admin' },
+  }), {
+    WORKER_ADMIN_TOKEN: 'admin',
+    NEWS_BRIEF_DRY_RUN: 'true',
+    NEWS_BRIEF_WORKFLOW: { get: async () => ({ status: async () => ({ status: 'completed' }) }) },
+  }, null, {}, {
+    store: {
+      getRun: async () => historical,
+      saveRun: async (run) => { saved = run; },
+    },
+  });
+  const data = await response.json();
+  assert.equal(data.run.state, 'failed');
+  assert.equal(data.run.applicationState, 'failed');
+  assert.equal(data.run.percentComplete, 0);
+  assert.equal(data.run.failureCode, 'workflow_ended_before_pipeline_completion');
+  assert.equal(saved.activeRun, false);
+});
+
+function goodUsage() {
+  return { anthropicCalls: 0, inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, webSearchRequests: 0, models: [] };
+}
 
 test('status endpoint returns durable Workflow state without marking stale running workflow failed', async () => {
   const staleWorkflowRun = {
