@@ -19,6 +19,17 @@ function authedRequest(path, body) {
   });
 }
 
+function unauthenticatedBrowserPost(path) {
+  return new Request('https://worker.test' + path, {
+    method: 'POST',
+    headers: {
+      Origin: 'https://intelligence.wocult.com',
+      'Content-Type': 'application/json',
+    },
+    body: '{}',
+  });
+}
+
 function validPostBody(overrides = {}) {
   return {
     fieldData: {
@@ -43,6 +54,36 @@ function validPostBody(overrides = {}) {
     ...overrides,
   };
 }
+
+test('/webflow-posts unauthorized browser-origin request includes CORS headers', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url: String(url), options });
+    return new Response('{}', { status: 200 });
+  });
+
+  const response = await worker.fetch(unauthenticatedBrowserPost('/webflow-posts'), env);
+  assert.equal(response.status, 401);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*');
+  assert.match(response.headers.get('Access-Control-Allow-Methods') || '', /\bPOST\b/);
+  assert.match(response.headers.get('Access-Control-Allow-Headers') || '', /Authorization/i);
+  assert.equal(calls.length, 0);
+});
+
+test('/webflow-news unauthorized browser-origin request includes CORS headers', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url: String(url), options });
+    return new Response('{}', { status: 200 });
+  });
+
+  const response = await worker.fetch(unauthenticatedBrowserPost('/webflow-news'), env);
+  assert.equal(response.status, 401);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*');
+  assert.match(response.headers.get('Access-Control-Allow-Methods') || '', /\bPOST\b/);
+  assert.match(response.headers.get('Access-Control-Allow-Headers') || '', /Authorization/i);
+  assert.equal(calls.length, 0);
+});
 
 test('/webflow-posts maps only approved THA Posts field slugs and creates a draft', async (t) => {
   const calls = [];

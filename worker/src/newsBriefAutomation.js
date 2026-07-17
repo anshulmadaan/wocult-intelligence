@@ -534,7 +534,12 @@ export async function requireWorkerAdmin(request, env, deps = {}) {
 
 export async function requireProtectedRoute(request, env, deps = {}) {
   const auth = await requireWorkerAdmin(request, env, deps);
-  if (!auth.ok) return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+  if (!auth.ok) {
+    return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...(deps.cors || {}), 'Content-Type': 'application/json' },
+    });
+  }
   return null;
 }
 
@@ -567,7 +572,7 @@ export async function handleAutomationRequest(request, env, ctx, shared = {}, de
     if (body.token) {
       result = await confirmDecision(body.token, body.note || body.reason || '', env, deps);
     } else {
-      const protectedResponse = await requireProtectedRoute(request, env, deps);
+      const protectedResponse = await requireProtectedRoute(request, env, { ...deps, cors: shared.cors });
       if (protectedResponse) return protectedResponse;
       result = await dashboardDecision(body.candidateId, body.action, body.actorEmail || '', body.note || body.reason || '', env, deps);
     }
@@ -580,7 +585,7 @@ export async function handleAutomationRequest(request, env, ctx, shared = {}, de
     return new Response(createMessageHtml(message, result.detail || ''), { status: result.ok ? 200 : 409, headers: { 'Content-Type': 'text/html' } });
   }
 
-  const protectedResponse = await requireProtectedRoute(request, env, deps);
+  const protectedResponse = await requireProtectedRoute(request, env, { ...deps, cors: shared.cors });
   if (protectedResponse) return protectedResponse;
 
   if (url.pathname === '/automation/news-briefs/run' && request.method === 'POST') {
