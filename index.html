@@ -496,6 +496,12 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         <div class="lcard-desc">Already have the story? Paste the headline and body. Wocult will prepare the CMS fields and let you submit directly.</div>
         <div class="lcard-cta">Prepare CMS fields</div>
       </div>
+      <div class="lcard" onclick="showManualLongView()">
+        <div class="lcard-icon">LV</div>
+        <div class="lcard-title">Manual long-view story</div>
+        <div class="lcard-desc">Already have the complete story? Paste it here and Wocult will prepare the THA Posts CMS fields for review and submission.</div>
+        <div class="lcard-cta">Prepare CMS fields</div>
+      </div>
       <div class="lcard" onclick="showAutomatedNewsBriefs()">
         <div class="lcard-icon">AN</div>
         <div class="lcard-title">Automated News Briefs</div>
@@ -625,12 +631,49 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     </div>
   </div>
 
+  <div id="landing-manual-long-view" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen">
+      <h2>Manual long-view story</h2>
+      <p class="sub">Paste the completed story. Wocult will preserve the original writing and prepare editable THA Posts fields.</p>
+      <div class="sfield"><label>Story title</label><input id="manual-long-title" /></div>
+      <div class="sfield"><label>Complete story body</label><textarea id="manual-long-body" rows="16"></textarea></div>
+      <div id="manual-long-status" class="hint"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-lg" onclick="backToCards()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Cancel</button>
+        <button class="btn-lg btn-y" id="manual-long-prepare-btn" onclick="prepareManualLongViewCmsFields()" style="flex:1">Prepare CMS fields</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="landing-manual-long-review" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:960px">
+      <h2>Review THA Posts fields</h2>
+      <div class="sfield"><label>Post Title</label><input id="manual-long-review-title" oninput="updateManualLongViewCounters()" /></div>
+      <div class="sfield"><label>Slug</label><input id="manual-long-review-slug" /></div>
+      <div class="sfield"><label>Subtitle</label><textarea id="manual-long-review-subtitle" rows="2"></textarea></div>
+      <div class="sfield"><label>SEO Description <span id="manual-long-seo-count" class="hint">0 / 250</span></label><textarea id="manual-long-review-seo" rows="3" oninput="updateManualLongViewCounters()"></textarea></div>
+      <div class="sfield"><label>40 word intro <span id="manual-long-intro40-count" class="hint">0 words</span></label><textarea id="manual-long-review-intro40" rows="3" oninput="updateManualLongViewCounters()"></textarea></div>
+      <div class="sfield"><label>Story Intro Para <span id="manual-long-story-intro-count" class="hint">0 / 500</span></label><textarea id="manual-long-review-story-intro" rows="4" oninput="updateManualLongViewCounters()"></textarea></div>
+      <div class="sfield"><label>Excerpt <span id="manual-long-excerpt-count" class="hint">0 / 500</span></label><textarea id="manual-long-review-excerpt" rows="4" oninput="updateManualLongViewCounters()"></textarea></div>
+      <div class="sfield"><label>Short Brief <span id="manual-long-short-brief-count" class="hint">0 / 150-180</span></label><textarea id="manual-long-review-short-brief" rows="3" oninput="updateManualLongViewCounters()"></textarea></div>
+      <div class="sfield"><label>Body</label><textarea id="manual-long-review-body" rows="16"></textarea></div>
+      <div class="sfield"><label>Publish date</label><input id="manual-long-review-publish-date" type="date" /></div>
+      <div class="sfield"><label>Post Image</label><input id="manual-long-review-image" placeholder="https://..." /></div>
+      <div class="sfield"><label>Writer</label><input id="manual-long-review-writer" /></div>
+      <div id="manual-long-review-status" class="hint"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-lg" onclick="showManualLongView()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Back</button>
+        <button class="btn-lg btn-y" id="manual-long-submit-btn" onclick="submitManualLongViewToCms()" style="flex:1">Submit to Firebase + THA Posts</button>
+      </div>
+    </div>
+  </div>
+
   <div id="news-brief-social-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:10050;align-items:center;justify-content:center;padding:24px">
     <div style="background:#fff;border:1px solid var(--bdr);border-radius:10px;width:min(460px,100%);padding:22px;box-shadow:0 18px 60px rgba(0,0,0,0.25)">
-      <h2 style="font-size:20px;margin-bottom:8px;font-family:Georgia,serif;color:var(--blk)">News brief submitted</h2>
-      <p style="font-size:14px;color:var(--g3);line-height:1.6;margin-bottom:18px">Would you like to produce LinkedIn post copy for this story?</p>
+      <h2 style="font-size:20px;margin-bottom:8px;font-family:Georgia,serif;color:var(--blk)">Story submitted</h2>
+      <p style="font-size:14px;color:var(--g3);line-height:1.6;margin-bottom:18px">Would you like to create LinkedIn post copy for this story?</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()" style="flex:1">Produce LinkedIn copy</button>
+        <button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()" style="flex:1">Work on socials</button>
         <button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Not now</button>
       </div>
     </div>
@@ -643,7 +686,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         <button class="btn" id="news-social-regenerate-btn" onclick="regenerateNewsBriefSocialOptions()">Regenerate options</button>
       </div>
       <h2>LinkedIn post</h2>
-      <p class="sub">Prepare a LinkedIn post for the submitted news brief. Choose an option, edit freely, then add it to the Editorial Calendar.</p>
+      <p class="sub">Prepare a LinkedIn post for the submitted story. Choose an option, edit freely, then add it to the Editorial Calendar.</p>
       <div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-bottom:18px">
         <div id="news-social-headline" style="font-size:17px;font-weight:700;line-height:1.35;color:var(--blk)"></div>
         <div id="news-social-context" style="font-size:13px;color:var(--g3);line-height:1.6;margin-top:8px"></div>
@@ -1307,7 +1350,10 @@ There are no right or wrong answers here. Please answer openly and in your own v
     <div id="cms-review-fields">
     <div class="wf-field"><label class="wf-label">Post Title</label><input class="wf-input" id="r-title" /></div>
     <div class="wf-field"><label class="wf-label">Slug</label><input class="wf-input" id="r-slug" /></div>
+    <div class="wf-field"><label class="wf-label">Subtitle</label><textarea class="wf-textarea" id="r-subtitle" style="min-height:70px"></textarea></div>
+    <div class="wf-field"><label class="wf-label">SEO Description <span class="field-badge">max 250 chars</span></label><textarea class="wf-textarea" id="r-seo-description" style="min-height:70px"></textarea></div>
     <div class="wf-field"><label class="wf-label">Short Story Intro <span class="field-badge">15-20 words</span></label><input class="wf-input" id="r-short" /></div>
+    <div class="wf-field"><label class="wf-label">Short Brief <span class="field-badge">150-180 chars</span></label><textarea class="wf-textarea" id="r-short-brief" style="min-height:70px"></textarea></div>
     <div class="wf-field"><label class="wf-label">40 Word Intro</label><textarea class="wf-textarea" id="r-40" style="min-height:60px"></textarea></div>
     <div class="wf-field"><label class="wf-label">Excerpt <span class="field-badge">100 words</span></label><textarea class="wf-textarea" id="r-excerpt"></textarea></div>
     <div class="wf-field">
@@ -5648,6 +5694,8 @@ function hideStaffLandingPanels() {
     'landing-url',
     'landing-manual-news-brief',
     'landing-manual-news-review',
+    'landing-manual-long-view',
+    'landing-manual-long-review',
     'landing-scratch',
     'landing-scratch-choice',
     'landing-existing-draft',
@@ -5692,6 +5740,19 @@ function showManualNewsBrief() {
   var status = document.getElementById('manual-news-status');
   if (status) status.textContent = '';
   setTimeout(function(){ document.getElementById('manual-news-headline').focus(); }, 100);
+}
+
+function showManualLongView() {
+  if (!guardStaffScreen()) return;
+  resetNewsBriefSocialState();
+  workflowMode = 'manual_long_view';
+  window._workflowMode = 'manual_long_view';
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-manual-long-view').style.display = 'flex';
+  var status = document.getElementById('manual-long-status');
+  if (status) status.textContent = '';
+  setTimeout(function(){ document.getElementById('manual-long-title').focus(); }, 100);
 }
 
 function plainHeaders(headers) {
@@ -7880,6 +7941,13 @@ var newsBriefSubmissionState = {
   articleData: null,
   webflowResult: null
 };
+var manualLongViewCmsData = null;
+var longViewSubmissionState = {
+  inFlight: false,
+  firebaseDocId: '',
+  articleData: null,
+  webflowResult: null
+};
 var currentCard = null;
 var generatedContent = {};
 window._memoryNotesLoaded = false;
@@ -9114,7 +9182,10 @@ function populateLongFormCmsReviewFields(content) {
   content = content || {};
   setCmsFieldValue('r-title', content.title || '');
   setCmsFieldValue('r-slug', content.slug || '');
+  setCmsFieldValue('r-subtitle', content.subtitle || content.standfirst || content.shortIntro || '');
+  setCmsFieldValue('r-seo-description', content.seoDescription || content.excerpt || content.shortIntro || '');
   setCmsFieldValue('r-short', content.shortIntro || '');
+  setCmsFieldValue('r-short-brief', content.shortBrief || ensureShortBriefRange(content.shortIntro || content.excerpt || '', content.title || ''));
   setCmsFieldValue('r-40', content.intro40 || '');
   setCmsFieldValue('r-excerpt', content.excerpt || '');
   setCmsFieldValue('r-intro-rt', content.introRichText || '');
@@ -10100,12 +10171,16 @@ function offerNewsBriefSocialWorkflow(articleContext) {
     fbToast('News brief submitted, but social workflow needs the Firebase article ID.', false);
     return;
   }
-  var isNewsBrief = articleContext.contentType === 'news_brief' ||
+  var isSupportedSubmittedContent = articleContext.contentType === 'news_brief' ||
+    articleContext.contentType === 'long_form' ||
     articleContext.cmsType === 'news' ||
+    articleContext.cmsType === 'post' ||
     articleContext.sourceType === 'news_brief' ||
-    articleContext.sourceType === 'manual_news_brief';
-  if (!isNewsBrief) {
-    console.warn('News brief social workflow skipped: submitted item is not a news brief.');
+    articleContext.sourceType === 'manual_news_brief' ||
+    articleContext.sourceType === 'manual_long_view' ||
+    articleContext.sourceType === 'generated_long_view';
+  if (!isSupportedSubmittedContent) {
+    console.warn('Submitted-content social workflow skipped: unsupported item type.');
     return;
   }
   newsBriefSocialState.articleId = articleContext.articleId;
@@ -10227,13 +10302,14 @@ function newsBriefSocialLoadExistingCalendarEntry() {
 
 function populateNewsBriefSocialScreen() {
   var article = newsBriefSocialState.article || {};
-  var headline = article.title || 'Untitled news brief';
+  var isLongForm = article.contentType === 'long_form' || article.cmsType === 'post';
+  var headline = article.title || (isLongForm ? 'Untitled long-view story' : 'Untitled news brief');
   var headlineEl = document.getElementById('news-social-headline');
   var contextEl = document.getElementById('news-social-context');
   if (headlineEl) headlineEl.textContent = headline;
   if (contextEl) {
     var bits = [];
-    if (article.standfirst || article.shortIntro) bits.push(article.standfirst || article.shortIntro);
+    if (article.standfirst || article.shortIntro || article.subtitle) bits.push(article.standfirst || article.shortIntro || article.subtitle);
     if (newsBriefSocialArticleUrl()) bits.push('Link: ' + newsBriefSocialArticleUrl());
     contextEl.textContent = bits.join(' · ');
   }
@@ -10263,8 +10339,9 @@ function populateNewsBriefSocialScreen() {
 function fallbackNewsBriefSocialOption() {
   var article = newsBriefSocialState.article || {};
   var url = newsBriefSocialArticleUrl();
-  var text = (article.title || 'New Wocult news brief') + '\n\n'
-    + (article.standfirst || article.shortIntro || stripHtml(article.body || '') || 'Here is the latest Wocult news brief for working professionals.')
+  var isLongForm = article.contentType === 'long_form' || article.cmsType === 'post';
+  var text = (article.title || (isLongForm ? 'New Wocult story' : 'New Wocult news brief')) + '\n\n'
+    + (article.standfirst || article.shortIntro || article.subtitle || stripHtml(article.body || '') || 'Here is the latest Wocult story for working professionals.')
     + (url ? '\n\nRead the full story: ' + url : '');
   return [{label:'Straight news', text:text}];
 }
@@ -10325,7 +10402,9 @@ function generateNewsBriefSocialOptions() {
   if (status) status.textContent = 'Generating LinkedIn options...';
   if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
   renderNewsBriefSocialOptions();
-  var prompt = 'Generate three distinct LinkedIn post options for the Wocult LinkedIn page from this submitted news brief. Return structured JSON only in this shape: {"linkedinOptions":[{"label":"Straight news","text":"..."},{"label":"Why it matters","text":"..."},{"label":"Sharp perspective","text":"..."}]}. Requirements: British English; professional but human; avoid jargon; avoid excessive hashtags; avoid emojis unless genuinely useful; include a clear reading prompt; use the submitted story link when available; never invent quotes, numbers or facts. Option 1 Straight news: clear factual summary. Option 2 Why it matters: connect the story to working professionals, leadership, careers or workplace culture. Option 3 Sharp perspective: stronger editorial observation, thought-provoking but fact-based.\n\nHeadline:\n' + (article.title || '') + '\n\nStandfirst:\n' + (article.standfirst || article.shortIntro || '') + '\n\nBody or summary:\n' + stripHtml(article.body || article.summary || '') + '\n\nSource URL:\n' + (article.sourceUrl || '') + '\n\nSubmitted story link:\n' + newsBriefSocialArticleUrl();
+  var isLongForm = article.contentType === 'long_form' || article.cmsType === 'post';
+  var contentLabel = isLongForm ? 'submitted long-view story' : 'submitted news brief';
+  var prompt = 'Generate three distinct LinkedIn post options for the Wocult LinkedIn page from this '+contentLabel+'. Return structured JSON only in this shape: {"linkedinOptions":[{"label":"Straight news","text":"..."},{"label":"Why it matters","text":"..."},{"label":"Sharp perspective","text":"..."}]}. Requirements: British English; professional but human; avoid jargon; avoid excessive hashtags; avoid emojis unless genuinely useful; include a clear reading prompt; use the submitted story link when available; never invent quotes, numbers or facts. Option 1 Straight news: clear factual summary. Option 2 Why it matters: connect the story to working professionals, leadership, careers or workplace culture. Option 3 Sharp perspective: stronger editorial observation, thought-provoking but fact-based.\n\nHeadline:\n' + (article.title || '') + '\n\nStandfirst or subtitle:\n' + (article.standfirst || article.shortIntro || article.subtitle || '') + '\n\nBody or summary:\n' + stripHtml(article.body || article.summary || '') + '\n\nSource URL:\n' + (article.sourceUrl || '') + '\n\nSubmitted story link:\n' + newsBriefSocialArticleUrl();
   return fetch(WORKER+'/generate', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -10388,8 +10467,8 @@ function newsBriefSocialSummary() {
   var article = newsBriefSocialState.article || {};
   var link = newsBriefSocialArticleUrl();
   return [
-    article.title ? 'Original news brief: ' + article.title : '',
-    article.standfirst || article.shortIntro || '',
+    article.title ? 'Original story: ' + article.title : '',
+    article.standfirst || article.shortIntro || article.subtitle || '',
     link ? 'Story link: ' + link : '',
     article.sourceUrl && article.sourceUrl !== link ? 'Source: ' + article.sourceUrl : ''
   ].filter(Boolean).join('\n');
@@ -10538,45 +10617,34 @@ function submitArticle() {
     return;
   }
   var btn = document.getElementById('publish-btn');
-  btn.disabled = true; btn.textContent = 'Submitting...';
-  var bodyHtml = document.getElementById('r-body-render').innerHTML;
-  var introHtml = document.getElementById('r-intro-render').innerHTML;
-  document.getElementById('r-body').value = bodyHtml;
-  document.getElementById('r-intro-rt').value = introHtml;
-  var articleData = {
-    title: document.getElementById('r-title').value,
-    slug: document.getElementById('r-slug').value,
-    shortIntro: document.getElementById('r-short').value,
-    intro40: document.getElementById('r-40').value,
-    excerpt: document.getElementById('r-excerpt').value,
-    introRichText: introHtml,
-    body: bodyHtml,
-    readTime: document.getElementById('r-readtime').value,
-    publishDate: document.getElementById('r-date').value,
-    writerName: writerName,
-    imageUrl: document.getElementById('r-img-url').value||'',
-    imageName: _reviewImgFile ? _reviewImgFile.name : '',
-    status: 'submitted'
-  };
-  // 1. Auto-download CSV backup immediately
+  if (longViewSubmissionState.inFlight) return;
+  var articleData = collectLongViewReviewData(writerName);
+  var errors = validateLongViewCmsData(articleData);
+  if (errors.length) { alert(errors.join('\n')); return; }
+  longViewSubmissionState.inFlight = true;
+  longViewSubmissionState.firebaseDocId = '';
+  longViewSubmissionState.articleData = articleData;
+  longViewSubmissionState.webflowResult = null;
+  btn.disabled = true; btn.textContent = 'Saving to Firebase...';
   autoDownloadCSV(articleData);
-  // 2. Save to Firebase, get docId, trigger Webflow
+  var submittedDocId = '';
   saveArticleToFirebase(articleData, 'submitted').then(function(docId) {
-    var endpoint = docId ? '/webflow-from-firebase' : '/webflow';
-    var body = docId
-      ? JSON.stringify({docId: docId})
-      : JSON.stringify({fieldData: buildFieldData(articleData), isDraft:true, isArchived:false});
-    return workerFetch(endpoint, {method:'POST', body:body});
-  }).then(function(r){ return r.json().then(function(d){return {ok:r.ok,data:d};}); }).then(function(res){
-    if (res.ok && (res.data.id || res.data._id || res.data.fieldData)) {
-      document.getElementById('publish-result').style.display = 'block';
-      document.getElementById('publish-result').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Submitted!</div><div class="publish-sub">Saved to Firebase · Published to Webflow as draft · CSV downloaded.</div><button class="btn-lg btn-y" onclick="closeWorkflow()">Back to dashboard</button></div>';
-      document.getElementById('publish-actions').style.display = 'none';
-      alert('Story saved.');
-      navigateHome();
-    } else { throw new Error((res.data&&res.data.message)||JSON.stringify(res.data).substring(0,200)); }
-    btn.disabled=false; btn.textContent='Submit';
-  }).catch(function(e){ btn.disabled=false; btn.textContent='Submit'; fbToast('Error: '+e.message.substring(0,60), false); });
+    submittedDocId = docId || '';
+    longViewSubmissionState.firebaseDocId = submittedDocId;
+    btn.textContent = 'Creating THA Posts draft...';
+    return createLongViewWebflowDraft(submittedDocId, articleData);
+  }).then(function(webflowData) {
+    longViewSubmissionState.webflowResult = webflowData;
+    renderLongViewSubmissionSuccess(submittedDocId, articleData, webflowData);
+  }).catch(function(e) {
+    console.error('Long-view submission failed', e);
+    if (submittedDocId) renderLongViewWebflowFailure(submittedDocId, articleData, e);
+    else fbToast('Error: '+e.message.substring(0,60), false);
+  }).finally(function() {
+    longViewSubmissionState.inFlight = false;
+    btn.disabled = false;
+    btn.textContent = 'Submit';
+  });
 }
 
 function collectNewsBriefData(writerName) {
@@ -10786,8 +10854,9 @@ function webflowItemIdFromResponse(data) {
   return data.id || data._id || data.itemId || data.webflowItemId || item.id || item._id || '';
 }
 
-function updateArticleWebflowMetadata(docId, webflowData) {
+function updateArticleWebflowMetadata(docId, webflowData, meta) {
   if (!db || !docId) return Promise.resolve();
+  meta = meta || {};
   var itemId = webflowItemIdFromResponse(webflowData);
   var patch = {
     webflowDraftCreated: true,
@@ -10801,6 +10870,13 @@ function updateArticleWebflowMetadata(docId, webflowData) {
     patch.webflowUrl = url;
     patch.publishedUrl = url;
   }
+  if (meta.collectionName) patch.webflowCollection = meta.collectionName;
+  if (meta.collectionId) patch.webflowCollectionId = meta.collectionId;
+  if (meta.cmsType) patch.cmsType = meta.cmsType;
+  if (meta.contentType) patch.contentType = meta.contentType;
+  if (meta.sourceWorkflow) patch.sourceWorkflow = meta.sourceWorkflow;
+  if (meta.slug) patch.webflowSlug = meta.slug;
+  if (meta.status) patch.webflowStatus = meta.status;
   return db.collection('articles').doc(docId).set(patch, {merge:true});
 }
 
@@ -10832,7 +10908,418 @@ function createNewsBriefWebflowDraft(docId, data) {
       method:'POST',
       body:JSON.stringify({docId:docId, fieldData:buildNewsBriefFieldData(data), isDraft:true, isArchived:false})
     }).then(parseWorkerResponse).then(function(webflowData) {
-      return updateArticleWebflowMetadata(docId, webflowData).then(function() {
+      return updateArticleWebflowMetadata(docId, webflowData, {
+        collectionName: 'News',
+        cmsType: 'news',
+        contentType: 'news_brief',
+        sourceWorkflow: data.sourceType || 'news_brief',
+        slug: data.slug,
+        status: 'draft_created'
+      }).then(function() {
+        return webflowData;
+      });
+    });
+  });
+}
+
+var THA_POSTS_COLLECTION_ID = '695be252bae2cf37c3a4b17b';
+var THA_POSTS_FIELD_SLUGS = {
+  title: 'name',
+  slug: 'slug',
+  subtitle: 'sub-title-heading',
+  seoDescription: 'seo-description',
+  intro40: '40-word-intro',
+  storyIntro: 'story-intro',
+  excerpt: 'excerpt',
+  shortBrief: 'four-line-intro',
+  body: 'body',
+  publishDate: 'publish-date',
+  postImage: 'post-image',
+  writer: 'writer'
+};
+
+function validateSlugValue(slug) {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(slug || '').trim());
+}
+
+function validateOptionalUrl(value) {
+  if (!String(value || '').trim()) return true;
+  try {
+    var parsed = new URL(String(value || '').trim());
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch(e) {
+    return false;
+  }
+}
+
+function validateLongViewCmsData(data) {
+  var errors = [];
+  if (!String(data.title || '').trim()) errors.push('Post Title is required.');
+  if (!validateSlugValue(data.slug)) errors.push('Slug is required and may contain lowercase letters, numbers and hyphens only.');
+  if (!stripHtml(data.body || '').trim()) errors.push('Body is required.');
+  if (String(data.seoDescription || '').length > 250) errors.push('SEO Description must be 250 characters or fewer.');
+  if (String(data.storyIntro || '').length > 500) errors.push('Story Intro Para must be 500 characters or fewer.');
+  if (String(data.excerpt || '').length > 500) errors.push('Excerpt must be 500 characters or fewer.');
+  var shortBriefLength = String(data.shortBrief || '').trim().length;
+  if (shortBriefLength < 150 || shortBriefLength > 180) errors.push('Short Brief must be between 150 and 180 characters.');
+  var date = new Date(data.publishDate || data.publishedDate || '');
+  if (!date || isNaN(date.getTime())) errors.push('Publish date must be a valid date.');
+  if (!validateOptionalUrl(data.imageUrl)) errors.push('Post Image must be a valid URL.');
+  return errors;
+}
+
+function buildLongViewPostPayload(data) {
+  data = data || {};
+  return {
+    title: toSentenceCaseHeadline(data.title || ''),
+    slug: makeSlug(data.slug || data.title || ''),
+    subtitle: data.subtitle || data.standfirst || '',
+    seoDescription: String(data.seoDescription || '').trim(),
+    intro40: String(data.intro40 || '').trim(),
+    storyIntro: String(data.storyIntro || data.introPlainText || '').trim(),
+    excerpt: String(data.excerpt || '').trim(),
+    shortBrief: String(data.shortBrief || '').trim(),
+    body: data.body || '',
+    publishDate: toWebflowDateTime(data.publishDate || data.publishedDate || new Date()),
+    imageUrl: String(data.imageUrl || '').trim(),
+    writer: data.writer || data.writerName || 'Wocult Team'
+  };
+}
+
+function wordsFromText(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean);
+}
+
+function trimToWords(text, maxWords) {
+  var words = wordsFromText(text);
+  return words.slice(0, maxWords).join(' ');
+}
+
+function splitPlainStory(text) {
+  return String(text || '').replace(/\r\n/g, '\n').split(/\n{2,}/).map(function(p) {
+    return p.trim();
+  }).filter(Boolean);
+}
+
+function safeSentenceLimit(text, maxChars) {
+  var clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxChars) return clean;
+  var cut = clean.slice(0, maxChars + 1);
+  var sentenceEnd = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '), cut.lastIndexOf('! '));
+  if (sentenceEnd > 80) return clean.slice(0, sentenceEnd + 1).trim();
+  var lastSpace = cut.lastIndexOf(' ');
+  if (lastSpace > 40) cut = cut.slice(0, lastSpace);
+  return cut.replace(/[.,;:!?-]+$/,'').trim() + '...';
+}
+
+function ensureShortBriefRange(text, title) {
+  var base = String(text || '').replace(/\s+/g, ' ').trim();
+  if (base.length < 150) {
+    base = (base + ' ' + String(title || '') + ' The story is prepared for Wocult readers with the central context intact.').replace(/\s+/g, ' ').trim();
+  }
+  if (base.length > 180) base = safeSentenceLimit(base, 180);
+  if (base.length < 150) base = (base + ' Read the full Wocult story for the complete context.').slice(0, 180).trim();
+  return base;
+}
+
+function paragraphHtmlFromText(text) {
+  return splitPlainStory(text).map(function(p) {
+    if (/^#{1,6}\s+/.test(p)) return '<h3>' + escapeHtml(p.replace(/^#{1,6}\s+/, '')) + '</h3>';
+    if (/^[-*]\s+/m.test(p)) {
+      var items = p.split(/\n/).map(function(line) { return line.replace(/^[-*]\s+/, '').trim(); }).filter(Boolean);
+      return '<ul>' + items.map(function(item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul>';
+    }
+    return '<p>' + escapeHtml(p).replace(/\n/g, '<br>') + '</p>';
+  }).join('');
+}
+
+function prepareLongViewFieldsFromCompletedStory(title, storyText, sourceType) {
+  var cleanTitle = toSentenceCaseHeadline(title);
+  var paragraphs = splitPlainStory(storyText);
+  var firstParagraph = paragraphs[0] || storyText;
+  var firstSentences = String(firstParagraph || '').match(/[^.!?]+[.!?]+/g) || [];
+  var storyIntro = safeSentenceLimit(firstSentences.length ? firstSentences[0] : firstParagraph, 500);
+  var remainder = paragraphs.slice(1).join('\n\n');
+  if (!remainder && firstParagraph.length > storyIntro.length) remainder = firstParagraph.slice(storyIntro.length).trim();
+  if (!remainder && paragraphs.length > 1) remainder = paragraphs.slice(1).join('\n\n');
+  var fullText = paragraphs.join(' ');
+  var subtitle = safeSentenceLimit((paragraphs[1] || firstParagraph || cleanTitle), 180);
+  if (subtitle.toLowerCase() === cleanTitle.toLowerCase()) subtitle = safeSentenceLimit(fullText, 180);
+  var excerpt = safeSentenceLimit(fullText, 500);
+  if (excerpt.toLowerCase() === storyIntro.toLowerCase()) excerpt = safeSentenceLimit(paragraphs.slice(1).join(' ') || fullText, 500);
+  var intro40 = trimToWords(fullText, 42);
+  var shortBrief = ensureShortBriefRange(excerpt || fullText, cleanTitle);
+  return {
+    title: cleanTitle,
+    slug: makeSlug(cleanTitle),
+    subtitle: subtitle,
+    seoDescription: safeSentenceLimit(excerpt || fullText, 250),
+    intro40: intro40,
+    storyIntro: storyIntro,
+    excerpt: excerpt,
+    shortBrief: shortBrief,
+    body: paragraphHtmlFromText(remainder || paragraphs.slice(1).join('\n\n')),
+    publishDate: new Date().toISOString().split('T')[0],
+    imageUrl: '',
+    writer: (currentUser && (currentUser.displayName || currentUser.email)) || 'Wocult Team',
+    sourceType: sourceType || 'manual_long_view',
+    contentType: 'long_form',
+    cmsType: 'post'
+  };
+}
+
+function updateManualLongViewCounters() {
+  var pairs = [
+    ['manual-long-review-seo', 'manual-long-seo-count', ' / 250'],
+    ['manual-long-review-story-intro', 'manual-long-story-intro-count', ' / 500'],
+    ['manual-long-review-excerpt', 'manual-long-excerpt-count', ' / 500'],
+    ['manual-long-review-short-brief', 'manual-long-short-brief-count', ' / 150-180']
+  ];
+  pairs.forEach(function(pair) {
+    var el = document.getElementById(pair[0]);
+    var count = document.getElementById(pair[1]);
+    if (el && count) count.textContent = String(el.value || '').length + pair[2];
+  });
+  var intro = document.getElementById('manual-long-review-intro40');
+  var introCount = document.getElementById('manual-long-intro40-count');
+  if (intro && introCount) introCount.textContent = wordsFromText(intro.value).length + ' words';
+}
+
+function populateManualLongViewReview(fields) {
+  fields = fields || {};
+  document.getElementById('manual-long-review-title').value = fields.title || '';
+  document.getElementById('manual-long-review-slug').value = fields.slug || '';
+  document.getElementById('manual-long-review-subtitle').value = fields.subtitle || '';
+  document.getElementById('manual-long-review-seo').value = fields.seoDescription || '';
+  document.getElementById('manual-long-review-intro40').value = fields.intro40 || '';
+  document.getElementById('manual-long-review-story-intro').value = fields.storyIntro || '';
+  document.getElementById('manual-long-review-excerpt').value = fields.excerpt || '';
+  document.getElementById('manual-long-review-short-brief').value = fields.shortBrief || '';
+  document.getElementById('manual-long-review-body').value = fields.body || '';
+  document.getElementById('manual-long-review-publish-date').value = (fields.publishDate || new Date().toISOString().split('T')[0]).slice(0, 10);
+  document.getElementById('manual-long-review-image').value = fields.imageUrl || '';
+  document.getElementById('manual-long-review-writer').value = fields.writer || fields.writerName || 'Wocult Team';
+  updateManualLongViewCounters();
+  var status = document.getElementById('manual-long-review-status');
+  if (status) status.textContent = '';
+}
+
+function collectManualLongViewReviewData() {
+  return {
+    title: toSentenceCaseHeadline(document.getElementById('manual-long-review-title').value),
+    slug: makeSlug(document.getElementById('manual-long-review-slug').value || document.getElementById('manual-long-review-title').value),
+    subtitle: document.getElementById('manual-long-review-subtitle').value.trim(),
+    seoDescription: document.getElementById('manual-long-review-seo').value.trim(),
+    intro40: document.getElementById('manual-long-review-intro40').value.trim(),
+    storyIntro: document.getElementById('manual-long-review-story-intro').value.trim(),
+    excerpt: document.getElementById('manual-long-review-excerpt').value.trim(),
+    shortBrief: document.getElementById('manual-long-review-short-brief').value.trim(),
+    body: document.getElementById('manual-long-review-body').value.trim(),
+    publishDate: document.getElementById('manual-long-review-publish-date').value,
+    imageUrl: document.getElementById('manual-long-review-image').value.trim(),
+    writer: document.getElementById('manual-long-review-writer').value.trim() || 'Wocult Team',
+    writerName: document.getElementById('manual-long-review-writer').value.trim() || 'Wocult Team',
+    sourceType: 'manual_long_view',
+    contentType: 'long_form',
+    cmsType: 'post',
+    status: 'submitted'
+  };
+}
+
+function collectLongViewReviewData(writerName) {
+  var bodyRender = document.getElementById('r-body-render');
+  var introRender = document.getElementById('r-intro-render');
+  var bodyHtml = bodyRender ? bodyRender.innerHTML : cmsFieldValue('r-body');
+  var storyIntroHtml = introRender ? introRender.innerHTML : cmsFieldValue('r-intro-rt');
+  var storyIntroText = stripHtml(storyIntroHtml);
+  setCmsFieldValue('r-body', bodyHtml);
+  setCmsFieldValue('r-intro-rt', storyIntroHtml);
+  var title = toSentenceCaseHeadline(cmsFieldValue('r-title'));
+  var fallback = prepareLongViewFieldsFromCompletedStory(title, stripHtml(storyIntroHtml + ' ' + bodyHtml), 'long_form');
+  return {
+    title: title,
+    slug: makeSlug(cmsFieldValue('r-slug') || title),
+    subtitle: cmsFieldValue('r-subtitle') || cmsFieldValue('r-short') || fallback.subtitle,
+    seoDescription: cmsFieldValue('r-seo-description') || fallback.seoDescription,
+    intro40: cmsFieldValue('r-40') || fallback.intro40,
+    storyIntro: storyIntroText || fallback.storyIntro,
+    excerpt: cmsFieldValue('r-excerpt') || fallback.excerpt,
+    shortBrief: cmsFieldValue('r-short-brief') || ensureShortBriefRange(cmsFieldValue('r-short') || cmsFieldValue('r-excerpt'), title),
+    body: bodyHtml,
+    readTime: cmsFieldValue('r-readtime'),
+    publishDate: cmsFieldValue('r-date') || new Date().toISOString().split('T')[0],
+    imageUrl: cmsFieldValue('r-img-url'),
+    writer: writerName || cmsFieldValue('r-writer-name') || 'Wocult Team',
+    writerName: writerName || cmsFieldValue('r-writer-name') || 'Wocult Team',
+    sourceType: workflowMode === 'manual_long_view' ? 'manual_long_view' : 'generated_long_view',
+    contentType: 'long_form',
+    cmsType: 'post',
+    status: 'submitted'
+  };
+}
+
+function prepareManualLongViewCmsFields() {
+  var titleEl = document.getElementById('manual-long-title');
+  var bodyEl = document.getElementById('manual-long-body');
+  var status = document.getElementById('manual-long-status');
+  var btn = document.getElementById('manual-long-prepare-btn');
+  var title = (titleEl && titleEl.value || '').trim();
+  var body = (bodyEl && bodyEl.value || '').trim();
+  if (!title) { alert('Story title is required.'); if (titleEl) titleEl.focus(); return; }
+  if (!body || body.length < 120) { alert('Complete story body should be at least 120 characters.'); if (bodyEl) bodyEl.focus(); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing...'; }
+  if (status) status.textContent = 'Preparing THA Posts fields...';
+  try {
+    workflowMode = 'manual_long_view';
+    window._workflowMode = 'manual_long_view';
+    manualLongViewCmsData = prepareLongViewFieldsFromCompletedStory(title, body, 'manual_long_view');
+    populateManualLongViewReview(manualLongViewCmsData);
+    hideStaffLandingPanels();
+    document.getElementById('landing-cards').style.display = 'none';
+    document.getElementById('landing-manual-long-review').style.display = 'flex';
+  } catch (err) {
+    console.error('Manual long-view preparation failed', err);
+    alert('Could not prepare CMS fields. Please check the pasted story.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Prepare CMS fields'; }
+    if (status) status.textContent = '';
+  }
+}
+
+function longViewTechnicalMessage(err) {
+  if (!err) return 'Unknown error';
+  if (err.status) return 'Worker HTTP ' + err.status + ': ' + String(err.message || '').slice(0, 220);
+  if (/Failed to fetch/i.test(err.message || '')) return 'Network or CORS failure while contacting the Worker.';
+  return String(err.message || err).slice(0, 260);
+}
+
+function renderLongViewWebflowFailure(docId, data, err) {
+  var result = document.getElementById('publish-result');
+  if (!result && document.getElementById('manual-long-review-status')) {
+    document.getElementById('manual-long-review-status').innerHTML =
+      '<div class="publish-success"><div class="publish-title">Long-view story saved to Firebase</div>'
+      + '<div class="publish-sub">The Webflow THA Posts draft could not be created.</div>'
+      + '<details style="margin-top:12px"><summary>Technical details</summary><div>'+escapeHtml(longViewTechnicalMessage(err))+'</div></details>'
+      + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px"><button class="btn-lg btn-y" onclick="retryLongViewWebflowSubmission()">Retry Webflow</button><button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button></div></div>';
+    return;
+  }
+  if (!result) return;
+  result.style.display = 'block';
+  result.innerHTML = '<div class="publish-success">'
+    + '<div class="publish-icon">!</div>'
+    + '<div class="publish-title">Long-view story saved to Firebase</div>'
+    + '<div class="publish-sub">The Webflow THA Posts draft could not be created. The Firebase article is saved and can be retried without creating another Firebase record.</div>'
+    + '<details style="margin-top:12px;text-align:left"><summary style="cursor:pointer;font-size:13px;color:var(--g3)">Technical details</summary><div style="font-size:12px;color:var(--g3);line-height:1.6;margin-top:8px;word-break:break-word">'+escapeHtml(longViewTechnicalMessage(err))+'</div></details>'
+    + '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px">'
+    + '<button class="btn-lg btn-y" onclick="retryLongViewWebflowSubmission()">Retry Webflow</button>'
+    + '<button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button>'
+    + '</div></div>';
+}
+
+function renderLongViewSubmissionSuccess(docId, data, webflowData) {
+  var publishedUrl = getSubmittedStoryUrl(webflowData, data);
+  offerNewsBriefSocialWorkflow({
+    articleId: docId,
+    title: data.title || '',
+    standfirst: data.subtitle || data.shortBrief || '',
+    shortIntro: data.shortBrief || '',
+    body: (data.storyIntro ? '<p>' + escapeHtml(data.storyIntro) + '</p>' : '') + (data.body || ''),
+    sourceUrl: data.sourceUrl || '',
+    publishedUrl: publishedUrl || '',
+    submittedStoryUrl: publishedUrl || '',
+    imageUrl: data.imageUrl || '',
+    publishDate: data.publishDate || '',
+    publishedDate: data.publishDate || '',
+    contentType: 'long_form',
+    cmsType: 'post',
+    sourceType: data.sourceType || 'generated_long_view',
+    webflowItemId: webflowItemIdFromResponse(webflowData),
+    firebaseData: Object.assign({}, data)
+  });
+  var result = document.getElementById('publish-result');
+  if (result) {
+    result.style.display = 'block';
+    result.innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Long-view story saved</div><div class="publish-sub">Saved to Firebase and created as a Webflow THA Posts draft.</div><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()">Work on socials</button><button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Not now</button><button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button></div></div>';
+  } else if (document.getElementById('manual-long-review-status')) {
+    document.getElementById('manual-long-review-status').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">Long-view story saved</div><div class="publish-sub">Saved to Firebase and created as a Webflow THA Posts draft.</div><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()">Work on socials</button><button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Not now</button><button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button></div></div>';
+  }
+  var actions = document.getElementById('publish-actions');
+  if (actions) actions.style.display = 'none';
+}
+
+function retryLongViewWebflowSubmission() {
+  if (!longViewSubmissionState.firebaseDocId || !longViewSubmissionState.articleData) {
+    fbToast('No saved long-view story is available for Webflow retry.', false);
+    return;
+  }
+  if (longViewSubmissionState.inFlight) return;
+  var btn = document.getElementById('publish-btn') || document.getElementById('manual-long-submit-btn');
+  longViewSubmissionState.inFlight = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating Webflow draft...'; }
+  createLongViewWebflowDraft(longViewSubmissionState.firebaseDocId, longViewSubmissionState.articleData).then(function(webflowData) {
+    longViewSubmissionState.webflowResult = webflowData;
+    renderLongViewSubmissionSuccess(longViewSubmissionState.firebaseDocId, longViewSubmissionState.articleData, webflowData);
+  }).catch(function(err) {
+    console.error('Long-view Webflow retry failed', err);
+    renderLongViewWebflowFailure(longViewSubmissionState.firebaseDocId, longViewSubmissionState.articleData, err);
+  }).finally(function() {
+    longViewSubmissionState.inFlight = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit'; }
+  });
+}
+
+function submitManualLongViewToCms() {
+  var btn = document.getElementById('manual-long-submit-btn');
+  var status = document.getElementById('manual-long-review-status');
+  if (longViewSubmissionState.inFlight) return;
+  var data = collectManualLongViewReviewData();
+  var errors = validateLongViewCmsData(data);
+  if (errors.length) { alert(errors.join('\n')); return; }
+  var savedDocId = '';
+  longViewSubmissionState.inFlight = true;
+  longViewSubmissionState.articleData = data;
+  longViewSubmissionState.webflowResult = null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving to Firebase...'; }
+  if (status) status.textContent = 'Saving to Firebase...';
+  saveArticleToFirebase(data, 'submitted').then(function(docId) {
+    savedDocId = docId || '';
+    longViewSubmissionState.firebaseDocId = savedDocId;
+    if (btn) btn.textContent = 'Creating THA Posts draft...';
+    if (status) status.textContent = 'Creating THA Posts draft...';
+    return createLongViewWebflowDraft(savedDocId, data);
+  }).then(function(webflowData) {
+    longViewSubmissionState.webflowResult = webflowData;
+    if (status) status.textContent = 'Long-view story saved and submitted to THA Posts.';
+    renderLongViewSubmissionSuccess(savedDocId, data, webflowData);
+  }).catch(function(err) {
+    console.error('Manual long-view submit failed', err);
+    if (savedDocId) renderLongViewWebflowFailure(savedDocId, data, err);
+    else if (status) status.textContent = 'Could not save to Firebase: ' + err.message;
+  }).finally(function() {
+    longViewSubmissionState.inFlight = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit to Firebase + THA Posts'; }
+  });
+}
+
+function createLongViewWebflowDraft(docId, data) {
+  if (!docId) return Promise.reject(new Error('Missing Firebase article ID for THA Posts draft creation.'));
+  var errors = validateLongViewCmsData(data || {});
+  if (errors.length) return Promise.reject(new Error(errors.join(' ')));
+  return existingWebflowMetadata(docId).then(function(existing) {
+    if (existing) return existing;
+    return workerFetchWithFirebaseAuth('/webflow-posts', {
+      method:'POST',
+      body:JSON.stringify({docId:docId, fieldData:buildLongViewPostPayload(data), isDraft:true, isArchived:false})
+    }).then(parseWorkerResponse).then(function(webflowData) {
+      return updateArticleWebflowMetadata(docId, webflowData, {
+        collectionName: 'THA Posts',
+        collectionId: THA_POSTS_COLLECTION_ID,
+        cmsType: 'post',
+        contentType: 'long_form',
+        sourceWorkflow: data.sourceType || data.sourceWorkflow || 'long_form',
+        slug: data.slug,
+        status: 'draft_created'
+      }).then(function() {
         return webflowData;
       });
     });
@@ -10848,6 +11335,14 @@ function newsBriefTechnicalMessage(err) {
 
 function renderNewsBriefWebflowFailure(docId, data, err) {
   var result = document.getElementById('publish-result');
+  if (!result && document.getElementById('manual-review-status')) {
+    document.getElementById('manual-review-status').innerHTML =
+      '<div class="publish-success"><div class="publish-title">News brief saved to Firebase</div>'
+      + '<div class="publish-sub">The Webflow News draft could not be created.</div>'
+      + '<details style="margin-top:12px"><summary>Technical details</summary><div>'+escapeHtml(newsBriefTechnicalMessage(err))+'</div></details>'
+      + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px"><button class="btn-lg btn-y" onclick="retryNewsBriefWebflowSubmission()">Retry Webflow</button><button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button></div></div>';
+    return;
+  }
   if (!result) return;
   result.style.display = 'block';
   result.innerHTML = '<div class="publish-success">'
@@ -10884,6 +11379,8 @@ function renderNewsBriefSubmissionSuccess(docId, data, webflowData) {
   if (result) {
     result.style.display = 'block';
     result.innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief saved</div><div class="publish-sub">Saved to Firebase and created as a Webflow News draft.</div><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()">Work on socials</button><button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Not now</button><button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button></div></div>';
+  } else if (document.getElementById('manual-review-status')) {
+    document.getElementById('manual-review-status').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief saved</div><div class="publish-sub">Saved to Firebase and created as a Webflow News draft.</div><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()">Work on socials</button><button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Not now</button><button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button></div></div>';
   }
   var actions = document.getElementById('publish-actions');
   if (actions) actions.style.display = 'none';
@@ -10915,30 +11412,31 @@ function submitManualNewsBriefToCms() {
   var status = document.getElementById('manual-review-status');
   var data = collectManualNewsBriefReviewData();
   var savedDocId = '';
+  if (newsBriefSubmissionState.inFlight) return;
   if (!data.title) { alert('Title is required.'); return; }
   if (!stripHtml(data.body) || stripHtml(data.body).length < 50) { alert('Body should be at least 50 characters.'); return; }
+  newsBriefSubmissionState.inFlight = true;
+  newsBriefSubmissionState.firebaseDocId = '';
+  newsBriefSubmissionState.articleData = Object.assign({}, data, {sourceType:'manual_news_brief'});
+  newsBriefSubmissionState.webflowResult = null;
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
   if (status) status.textContent = 'Submitting to Firebase and CMS...';
-  saveArticleToFirebase(Object.assign({}, data, {sourceType:'manual_news_brief'}), 'submitted').then(function(docId) {
+  saveArticleToFirebase(newsBriefSubmissionState.articleData, 'submitted').then(function(docId) {
     savedDocId = docId || '';
-    return createNewsBriefWebflowDraft(savedDocId, Object.assign({}, data, {sourceType:'manual_news_brief'}));
+    newsBriefSubmissionState.firebaseDocId = savedDocId;
+    if (btn) btn.textContent = 'Creating Webflow draft...';
+    if (status) status.textContent = 'Creating Webflow News draft...';
+    return createNewsBriefWebflowDraft(savedDocId, newsBriefSubmissionState.articleData);
   }).then(function(webflowData) {
+    newsBriefSubmissionState.webflowResult = webflowData;
     if (status) status.textContent = 'News brief saved and submitted to CMS.';
-    offerNewsBriefSocialWorkflow(Object.assign({}, data, {
-      articleId:savedDocId,
-      contentType:'news_brief',
-      cmsType:'news',
-      publishedUrl:getSubmittedStoryUrl(webflowData, data),
-      submittedStoryUrl:getSubmittedStoryUrl(webflowData, data),
-      publishDate:data.publishedDate || data.publishDate || '',
-      firebaseData:data,
-      sourceType:'manual_news_brief'
-    }));
+    renderNewsBriefSubmissionSuccess(savedDocId, newsBriefSubmissionState.articleData, webflowData);
   }).catch(function(err) {
     console.error('Manual news brief submit failed', err);
-    if (status) status.textContent = 'Could not submit: '+err.message;
-    alert('Could not submit manual news brief. Please try again.');
+    if (savedDocId) renderNewsBriefWebflowFailure(savedDocId, newsBriefSubmissionState.articleData, err);
+    else if (status) status.textContent = 'Could not save to Firebase: '+err.message;
   }).finally(function() {
+    newsBriefSubmissionState.inFlight = false;
     if (btn) { btn.disabled = false; btn.textContent = 'Submit to Firebase + CMS'; }
   });
 }
