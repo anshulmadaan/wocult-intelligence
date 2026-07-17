@@ -2439,6 +2439,42 @@ test('main Worker fetch still routes debug and generate requests to original han
   }
 });
 
+test('protected Webflow News route returns CORS for preflight and unauthenticated errors', async () => {
+  let webflowCalled = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    webflowCalled = true;
+    return new Response(JSON.stringify({ id: 'should-not-create' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    const options = await worker.fetch(new Request('https://worker.test/webflow-news', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://intelligence.wocult.com',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type,Authorization',
+      },
+    }), {});
+    assert.equal(options.status, 200);
+    assert.equal(options.headers.get('Access-Control-Allow-Origin'), '*');
+    assert.match(options.headers.get('Access-Control-Allow-Methods') || '', /POST/);
+    assert.match(options.headers.get('Access-Control-Allow-Headers') || '', /Content-Type/);
+
+    const post = await worker.fetch(new Request('https://worker.test/webflow-news', {
+      method: 'POST',
+      headers: { Origin: 'https://intelligence.wocult.com', 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }), {});
+    assert.equal(post.status, 401);
+    assert.equal(post.headers.get('Access-Control-Allow-Origin'), '*');
+    assert.equal(post.headers.get('Content-Type'), 'application/json');
+    assert.equal((await post.json()).error, 'Unauthorized');
+    assert.equal(webflowCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('GET review route only renders confirmation and does not change decision state', async () => {
   const token = await signApprovalToken({
     candidateId: 'c1',
