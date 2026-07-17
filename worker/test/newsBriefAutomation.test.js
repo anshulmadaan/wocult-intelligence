@@ -1375,6 +1375,40 @@ test('recover-finalised-child restores child metadata and re-aggregates parent t
   assert.equal(parent.usage.inputTokens, 120);
 });
 
+test('recover-finalised-child allows stale-timeout parent recovery without active lock', async () => {
+  const mocks = makeRecoveryMocks({
+    run: {
+      state: 'failed',
+      applicationState: 'running',
+      activeRun: false,
+      failureCode: 'stale_run_timeout',
+      failureMessage: 'Run heartbeat became stale before finalisation.',
+    },
+  });
+  const result = await postRecovery(recoveryPayload(), mocks);
+  assert.equal(result.response.status, 200);
+  assert.equal(result.data.ok, true);
+  const parent = mocks.runMap.get('run_recover_12345678');
+  assert.equal(parent.completedItems, 1);
+  assert.equal(parent.percentComplete, 100);
+  assert.equal(parent.activeRun, false);
+  assert.equal(parent.applicationState, 'completed');
+});
+
+test('recover-finalised-child still rejects inactive non-stale parent recovery', async () => {
+  const mocks = makeRecoveryMocks({
+    run: {
+      state: 'failed',
+      applicationState: 'failed',
+      activeRun: false,
+      failureCode: 'manual_stop',
+    },
+  });
+  const result = await postRecovery(recoveryPayload(), mocks);
+  assert.equal(result.response.status, 409);
+  assert.equal(result.data.error, 'active_run_required');
+});
+
 test('recover-finalised-child is idempotent and does not double-count usage or attempted items', async () => {
   const mocks = makeRecoveryMocks();
   const first = await postRecovery(recoveryPayload(), mocks);
