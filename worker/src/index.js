@@ -276,7 +276,7 @@ export default {
 
     // /webflow — proxy to Webflow API
     if (url.pathname === '/webflow') {
-      const unauthorized = await requireProtectedRoute(request, env);
+      const unauthorized = await requireProtectedRoute(request, env, { cors });
       if (unauthorized) return unauthorized;
       try {
         const body = await request.json();
@@ -303,7 +303,7 @@ export default {
 
     // /webflow-news - proxy to Webflow News collection
     if (url.pathname === '/webflow-news') {
-      const unauthorized = await requireProtectedRoute(request, env);
+      const unauthorized = await requireProtectedRoute(request, env, { cors });
       if (unauthorized) return unauthorized;
       try {
         const body = await request.json();
@@ -363,7 +363,7 @@ export default {
     // /reddit - public Reddit JSON scan for workplace signals
     // /webflow-posts - proxy to Webflow THA Posts collection
     if (url.pathname === '/webflow-posts') {
-      const unauthorized = await requireProtectedRoute(request, env);
+      const unauthorized = await requireProtectedRoute(request, env, { cors });
       if (unauthorized) return unauthorized;
       try {
         const body = await request.json();
@@ -415,7 +415,7 @@ export default {
 
     // /webflow-schema - debug Webflow collection field slugs
     if (url.pathname === '/webflow-schema') {
-      const unauthorized = await requireProtectedRoute(request, env);
+      const unauthorized = await requireProtectedRoute(request, env, { cors });
       if (unauthorized) return unauthorized;
       try {
         const collectionId = url.searchParams.get('collectionId') || NEWS_COLLECTION_ID;
@@ -1120,7 +1120,7 @@ export default {
 
     // /webflow-from-firebase — fetch doc from Firebase, push to Webflow
     if (url.pathname === '/webflow-from-firebase') {
-      const unauthorized = await requireProtectedRoute(request, env);
+      const unauthorized = await requireProtectedRoute(request, env, { cors });
       if (unauthorized) return unauthorized;
       try {
         const { docId } = await request.json();
