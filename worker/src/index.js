@@ -151,6 +151,214 @@ export default {
         'news-image': data.image || data.imageUrl || data.coverImageUrl || data['news-image'] || '',
       });
     };
+    const parseJsonText = (text) => {
+      try { return text ? JSON.parse(text) : null; } catch (e) { return { raw: text }; }
+    };
+    const safeImageText = (value, max = 160) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+    const firestoreProjectId = () => env.FIREBASE_PROJECT_ID || 'wocult-tasks';
+    const firestoreRoot = () => `https://firestore.googleapis.com/v1/projects/${firestoreProjectId()}/databases/(default)/documents`;
+    const toFirestoreFieldsLocal = (obj) => {
+      const fields = {};
+      for (const [key, value] of Object.entries(obj || {})) fields[key] = toFirestoreValueLocal(value, key);
+      return fields;
+    };
+    const toFirestoreValueLocal = (value, key = '') => {
+      if (value === null || value === undefined) return { nullValue: null };
+      if (typeof value === 'boolean') return { booleanValue: value };
+      if (typeof value === 'number') return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
+      if (typeof value === 'string') {
+        if (/^\d{4}-\d{2}-\d{2}T/.test(value) && /(At|Timestamp|Time|Date)$/i.test(key)) return { timestampValue: value };
+        return { stringValue: value };
+      }
+      if (Array.isArray(value)) return { arrayValue: { values: value.map((entry) => toFirestoreValueLocal(entry)) } };
+      if (typeof value === 'object') return { mapValue: { fields: toFirestoreFieldsLocal(value) } };
+      return { stringValue: String(value) };
+    };
+    const fromFirestoreValueLocal = (v) => {
+      if (!v) return null;
+      if ('stringValue' in v) return v.stringValue;
+      if ('integerValue' in v) return Number(v.integerValue);
+      if ('doubleValue' in v) return Number(v.doubleValue);
+      if ('booleanValue' in v) return v.booleanValue;
+      if ('timestampValue' in v) return v.timestampValue;
+      if ('nullValue' in v) return null;
+      if ('arrayValue' in v) return (v.arrayValue.values || []).map(fromFirestoreValueLocal);
+      if ('mapValue' in v) {
+        const out = {};
+        for (const [key, val] of Object.entries(v.mapValue.fields || {})) out[key] = fromFirestoreValueLocal(val);
+        return out;
+      }
+      return null;
+    };
+    const fromFirestoreDocLocal = (doc) => {
+      if (!doc?.fields) return null;
+      const out = {};
+      for (const [key, value] of Object.entries(doc.fields)) out[key] = fromFirestoreValueLocal(value);
+      out.id = doc.name?.split('/').pop() || out.id || '';
+      return out;
+    };
+    const getFirestoreAccessTokenLocal = async () => {
+      if (env.FIREBASE_ACCESS_TOKEN) return env.FIREBASE_ACCESS_TOKEN;
+      if (!env.FIREBASE_CLIENT_EMAIL || !env.FIREBASE_PRIVATE_KEY) throw new Error('Firebase service-account secrets are required');
+      const iat = Math.floor(Date.now() / 1000);
+      const assertion = await createNewsImageJwt({
+        iss: env.FIREBASE_CLIENT_EMAIL,
+        scope: 'https://www.googleapis.com/auth/datastore',
+        aud: 'https://oauth2.googleapis.com/token',
+        iat,
+        exp: iat + 3600,
+      }, env.FIREBASE_PRIVATE_KEY);
+      const res = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }).toString(),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(`Firebase OAuth failed: ${data.error || res.status}`);
+      return data.access_token;
+    };
+    const firestoreFetchLocal = async (target, init = {}) => {
+      const token = await getFirestoreAccessTokenLocal();
+      const res = await fetch(target, {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...(init.headers || {}),
+        },
+      });
+      if (!res.ok && res.status !== 404) {
+        const text = await res.text();
+        throw new Error(`Firestore ${res.status}: ${text.slice(0, 200)}`);
+      }
+      return res;
+    };
+    const getArticleDoc = async (id) => {
+      const res = await firestoreFetchLocal(`${firestoreRoot()}/articles/${encodeURIComponent(id)}`);
+      if (res.status === 404) return null;
+      return fromFirestoreDocLocal(await res.json());
+    };
+    const patchArticleDoc = async (id, fields) => {
+      const target = new URL(`${firestoreRoot()}/articles/${encodeURIComponent(id)}`);
+      Object.keys(fields).forEach((key) => target.searchParams.append('updateMask.fieldPaths', key));
+      const res = await firestoreFetchLocal(target.toString(), {
+        method: 'PATCH',
+        body: JSON.stringify({ fields: toFirestoreFieldsLocal(fields) }),
+      });
+      return fromFirestoreDocLocal(await res.json());
+    };
+    const createNewsImageJwt = async (claims, privateKeyPem) => {
+      const body = `${base64UrlLocal(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))}.${base64UrlLocal(JSON.stringify(claims))}`;
+      const key = await crypto.subtle.importKey('pkcs8', pemToArrayBufferLocal(privateKeyPem), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+      const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(body));
+      return `${body}.${base64UrlBytesLocal(new Uint8Array(sig))}`;
+    };
+    const base64UrlLocal = (value) => base64UrlBytesLocal(new TextEncoder().encode(value));
+    const base64UrlBytesLocal = (bytes) => {
+      let bin = '';
+      bytes.forEach((b) => { bin += String.fromCharCode(b); });
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    };
+    const pemToArrayBufferLocal = (pem) => {
+      const normalised = String(pem || '').replace(/\\n/g, '\n');
+      const b64 = normalised.replace(/-----BEGIN PRIVATE KEY-----/g, '').replace(/-----END PRIVATE KEY-----/g, '').replace(/\s+/g, '');
+      const bin = atob(b64);
+      return Uint8Array.from(bin, (c) => c.charCodeAt(0)).buffer;
+    };
+    const md5Hex = async (buffer) => {
+      const bytes = new Uint8Array(buffer);
+      const r = [7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21];
+      const k = Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296) >>> 0);
+      const msg = new Uint8Array((((bytes.length + 8) >> 6) + 1) * 64);
+      msg.set(bytes);
+      msg[bytes.length] = 0x80;
+      const bitLen = bytes.length * 8;
+      for (let i = 0; i < 8; i += 1) msg[msg.length - 8 + i] = Math.floor(bitLen / (2 ** (8 * i))) & 255;
+      let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
+      const leftRotate = (x, c) => ((x << c) | (x >>> (32 - c))) >>> 0;
+      for (let offset = 0; offset < msg.length; offset += 64) {
+        const m = Array.from({ length: 16 }, (_, i) => msg[offset + i * 4] | (msg[offset + i * 4 + 1] << 8) | (msg[offset + i * 4 + 2] << 16) | (msg[offset + i * 4 + 3] << 24));
+        let a = a0, b = b0, c = c0, d = d0;
+        for (let i = 0; i < 64; i += 1) {
+          let f, g;
+          if (i < 16) { f = (b & c) | ((~b) & d); g = i; }
+          else if (i < 32) { f = (d & b) | ((~d) & c); g = (5 * i + 1) % 16; }
+          else if (i < 48) { f = b ^ c ^ d; g = (3 * i + 5) % 16; }
+          else { f = c ^ (b | (~d)); g = (7 * i) % 16; }
+          const temp = d;
+          d = c;
+          c = b;
+          b = (b + leftRotate((a + f + k[i] + m[g]) >>> 0, r[i])) >>> 0;
+          a = temp;
+        }
+        a0 = (a0 + a) >>> 0; b0 = (b0 + b) >>> 0; c0 = (c0 + c) >>> 0; d0 = (d0 + d) >>> 0;
+      }
+      return [a0,b0,c0,d0].map((n) => [0,8,16,24].map((s) => ((n >>> s) & 255).toString(16).padStart(2, '0')).join('')).join('');
+    };
+    const uploadWebflowAsset = async (file, filename, altText) => {
+      const buffer = await file.arrayBuffer();
+      const fileHash = await md5Hex(buffer);
+      const siteId = env.WEBFLOW_SITE_ID;
+      if (!siteId) throw new Error('WEBFLOW_SITE_ID is required for asset upload');
+      const createRes = await fetch(`https://api.webflow.com/v2/sites/${siteId}/assets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + (env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN),
+          accept: 'application/json',
+        },
+        body: JSON.stringify({ fileName: filename, fileHash }),
+      });
+      const createText = await createRes.text();
+      const asset = parseJsonText(createText);
+      if (!createRes.ok) throw new Error(`Webflow asset create failed ${createRes.status}: ${createText.slice(0, 200)}`);
+      const uploadForm = new FormData();
+      for (const [key, value] of Object.entries(asset.uploadDetails || {})) uploadForm.append(key, value);
+      uploadForm.append('file', new File([buffer], filename, { type: 'image/jpeg' }));
+      const uploadRes = await fetch(asset.uploadUrl, { method: 'POST', body: uploadForm });
+      if (!uploadRes.ok && uploadRes.status !== 201) throw new Error(`Webflow asset binary upload failed ${uploadRes.status}`);
+      if (altText) {
+        await fetch(`https://api.webflow.com/v2/assets/${asset.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + (env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN),
+            accept: 'application/json',
+          },
+          body: JSON.stringify({ altText }),
+        }).catch(() => null);
+      }
+      return asset;
+    };
+    const updateWebflowNewsImage = async (itemId, asset, altText) => {
+      const collectionId = env.WEBFLOW_NEWS_COLLECTION_ID || NEWS_COLLECTION_ID;
+      const imageValue = { fileId: asset.id, url: asset.hostedUrl || asset.assetUrl || '', alt: altText || '' };
+      const res = await fetch(`https://api.webflow.com/v2/collections/${collectionId}/items/${encodeURIComponent(itemId)}?skipInvalidFiles=true`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + (env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN),
+          accept: 'application/json',
+        },
+        body: JSON.stringify({ fieldData: { 'news-image': imageValue }, isDraft: true, isArchived: false }),
+      });
+      const text = await res.text();
+      const data = parseJsonText(text);
+      if (!res.ok) throw new Error(`Webflow item update failed ${res.status}: ${text.slice(0, 200)}`);
+      return data;
+    };
+    const normalizeUnsplashPhoto = (photo) => ({
+      unsplashPhotoId: photo.id || '',
+      previewUrl: photo.urls?.small || photo.urls?.regular || '',
+      processingUrl: photo.urls?.raw ? `${photo.urls.raw}&w=1600&fit=max` : (photo.urls?.full || photo.urls?.regular || ''),
+      photographerName: photo.user?.name || '',
+      photographerUrl: photo.user?.links?.html || '',
+      attributionUrl: photo.links?.html || '',
+      downloadLocation: photo.links?.download_location || '',
+      sourceWidth: photo.width || 0,
+      sourceHeight: photo.height || 0,
+      alt: photo.alt_description || photo.description || '',
+    });
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: cors });
@@ -158,6 +366,125 @@ export default {
 
     const automationResponse = await handleAutomationRequest(request, env, null, { cors, jsonResponse });
     if (automationResponse) return automationResponse;
+
+    if (url.pathname === '/news-briefs/unsplash-search') {
+      const unauthorized = await requireProtectedRoute(request, env);
+      if (unauthorized) return unauthorized;
+      if (request.method !== 'GET') return jsonResponse({ ok: false, error: 'Method not allowed' }, 405);
+      const query = safeImageText(url.searchParams.get('q') || '', 80);
+      if (!query) return jsonResponse({ ok: false, error: 'Search query is required' }, 400);
+      if (!env.UNSPLASH_ACCESS_KEY) return jsonResponse({ ok: false, error: 'Unsplash search is not configured' }, 503);
+      try {
+        const searchUrl = new URL('https://api.unsplash.com/search/photos');
+        searchUrl.searchParams.set('query', query);
+        searchUrl.searchParams.set('orientation', 'landscape');
+        searchUrl.searchParams.set('per_page', '12');
+        searchUrl.searchParams.set('content_filter', 'high');
+        const res = await fetch(searchUrl.toString(), {
+          headers: {
+            Authorization: `Client-ID ${env.UNSPLASH_ACCESS_KEY}`,
+            'Accept-Version': 'v1',
+          },
+        });
+        const text = await res.text();
+        const data = parseJsonText(text);
+        if (!res.ok) return jsonResponse({ ok: false, error: 'Unsplash search failed' }, res.status);
+        const results = (data.results || [])
+          .filter((photo) => photo.width > photo.height)
+          .map(normalizeUnsplashPhoto);
+        return jsonResponse({ ok: true, query, results });
+      } catch (e) {
+        return jsonResponse({ ok: false, error: e.message }, 500);
+      }
+    }
+
+    if (url.pathname === '/news-briefs/image') {
+      const unauthorized = await requireProtectedRoute(request, env);
+      if (unauthorized) return unauthorized;
+      if (request.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed' }, 405);
+      try {
+        const form = await request.formData();
+        const firebaseDocId = safeImageText(form.get('firebaseDocId'), 140);
+        const webflowItemId = safeImageText(form.get('webflowItemId'), 140);
+        const filename = safeImageText(form.get('filename'), 96);
+        const altText = safeImageText(form.get('altText') || form.get('headline'), 180);
+        const imageSource = safeImageText(form.get('imageSource'), 24);
+        const imageRequestId = safeImageText(form.get('imageRequestId'), 260);
+        const file = form.get('file');
+        const unsplashMetadata = parseJsonText(String(form.get('unsplashMetadata') || '{}')) || {};
+        if (!firebaseDocId || !webflowItemId || !filename || !imageRequestId) return jsonResponse({ ok: false, error: 'Missing required image metadata' }, 400);
+        if (!/^wocult-[a-z0-9-]+-[a-z0-9]{4}\.jpg$/.test(filename)) return jsonResponse({ ok: false, error: 'Invalid image filename' }, 400);
+        if (!(file instanceof File)) return jsonResponse({ ok: false, error: 'Processed JPEG file is required' }, 400);
+        if (file.type !== 'image/jpeg') return jsonResponse({ ok: false, error: 'Only processed JPEG images are accepted' }, 400);
+        if (file.size <= 0 || file.size >= 100 * 1024) return jsonResponse({ ok: false, error: 'Processed JPEG must be below 100 KB' }, 400);
+        const probe = new Uint8Array(await file.slice(0, 3).arrayBuffer());
+        if (probe[0] !== 0xff || probe[1] !== 0xd8 || probe[2] !== 0xff) return jsonResponse({ ok: false, error: 'Invalid JPEG file' }, 400);
+        const article = await getArticleDoc(firebaseDocId);
+        if (!article) return jsonResponse({ ok: false, error: 'Firebase News Brief record was not found' }, 404);
+        if (String(article.webflowItemId || '') !== webflowItemId) return jsonResponse({ ok: false, error: 'Firebase and Webflow item IDs do not match' }, 409);
+        if (article.imageStatus === 'completed' && article.imageRequestId === imageRequestId && article.webflowAssetId) {
+          return jsonResponse({
+            ok: true,
+            idempotent: true,
+            webflowAssetId: article.webflowAssetId,
+            webflowImageUrl: article.webflowImageUrl || article.imageUrl || '',
+            filename: article.imageFilename || filename,
+            imageRequestId,
+          });
+        }
+        await patchArticleDoc(firebaseDocId, {
+          imageStatus: 'processing',
+          imageSource,
+          imageFilename: filename,
+          imageAltText: altText,
+          imageRequestId,
+          imageUpdatedAt: new Date().toISOString(),
+        });
+        const asset = await uploadWebflowAsset(file, filename, altText);
+        const webflowItem = await updateWebflowNewsImage(webflowItemId, asset, altText);
+        if (imageSource === 'unsplash' && unsplashMetadata.unsplashDownloadLocation) {
+          await fetch(String(unsplashMetadata.unsplashDownloadLocation), {
+            headers: { Authorization: `Client-ID ${env.UNSPLASH_ACCESS_KEY || ''}`, 'Accept-Version': 'v1' },
+          }).catch(() => null);
+        }
+        const imageUrl = asset.hostedUrl || asset.assetUrl || '';
+        const patch = {
+          imageStatus: 'completed',
+          imageSource,
+          imageFilename: filename,
+          imageWidth: 1050,
+          imageHeight: 700,
+          imageFileSize: file.size,
+          imageAltText: altText,
+          imageUpdatedAt: new Date().toISOString(),
+          imageRequestId,
+          webflowAssetId: asset.id || '',
+          webflowImageUrl: imageUrl,
+          imageUrl,
+          newsImage: imageUrl,
+        };
+        if (imageSource === 'unsplash') {
+          patch.unsplashPhotoId = safeImageText(unsplashMetadata.unsplashPhotoId, 120);
+          patch.unsplashPhotographerName = safeImageText(unsplashMetadata.unsplashPhotographerName, 160);
+          patch.unsplashPhotographerUrl = safeImageText(unsplashMetadata.unsplashPhotographerUrl, 300);
+          patch.unsplashAttributionUrl = safeImageText(unsplashMetadata.unsplashAttributionUrl, 300);
+          patch.unsplashDownloadTrackedAt = new Date().toISOString();
+        }
+        await patchArticleDoc(firebaseDocId, patch);
+        return jsonResponse({
+          ok: true,
+          webflowAssetId: asset.id || '',
+          webflowImageUrl: imageUrl,
+          hostedUrl: imageUrl,
+          filename,
+          imageRequestId,
+          webflowItemId,
+          webflowItem,
+        });
+      } catch (e) {
+        return jsonResponse({ ok: false, error: e.message }, e.status || 500);
+      }
+    }
 
     // /generate — proxy to Anthropic, with Firebase editorial brief injection
     if (url.pathname === '/generate') {
@@ -1110,7 +1437,7 @@ export default {
     // /debug — checks Worker secrets without exposing values
     if (url.pathname === '/debug') {
       return jsonResponse({
-        workerVersion: 'firebase-brief-v2',
+        workerVersion: 'firebase-brief-v3-news-image',
         updatedAt: '2026-04-27',
         hasAnthropicKey: Boolean(env.ANTHROPIC_API_KEY),
         hasWebflowToken: Boolean(env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN),
