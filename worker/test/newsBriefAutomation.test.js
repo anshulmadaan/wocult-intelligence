@@ -2421,7 +2421,7 @@ test('main Worker fetch still routes debug and generate requests to original han
   try {
     const debug = await worker.fetch(new Request('https://worker.test/debug'), {});
     assert.equal(debug.status, 200);
-    assert.equal((await debug.json()).workerVersion, 'firebase-brief-v2');
+    assert.equal((await debug.json()).workerVersion, 'firebase-brief-v3-news-image');
 
     const defaultDebug = await worker.fetch(new Request('https://worker.test/?debug=1'), {});
     assert.equal(defaultDebug.status, 200);
