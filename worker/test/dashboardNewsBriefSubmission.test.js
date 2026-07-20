@@ -197,6 +197,50 @@ test('Pre-submit News Brief image selection stores a temporary image before subm
   assert.match(functionBlock('clearNewsBriefPreSubmitImage'), /URL\.revokeObjectURL/);
 });
 
+test('Manual News Brief image modal opens with a fresh search session', () => {
+  const openManual = functionBlock('openPreSubmitNewsBriefImageSelection');
+  const openImage = functionBlock('openNewsBriefImageSelection');
+  const resetManual = functionBlock('resetManualNewsBriefImageModalSession');
+  assert.match(openManual, /formSource:source \|\| 'manual'/);
+  assert.match(openImage, /mode === 'preSubmit' && newsBriefImageState\.formSource === 'manual'/);
+  assert.match(openImage, /resetManualNewsBriefImageModalSession\(newsBriefImageState\.suggestedQuery\)/);
+  assert.match(resetManual, /newsBriefImageState\.modalSessionId \+= 1/);
+  assert.match(resetManual, /newsBriefImageState\.tab = 'unsplash'/);
+  assert.match(resetManual, /newsBriefImageState\.query = suggestedQuery \|\| ''/);
+  assert.match(resetManual, /newsBriefImageState\.unsplashResults = \[\]/);
+  assert.match(resetManual, /newsBriefImageState\.selectedSource = null/);
+  assert.match(resetManual, /newsBriefImageState\.selectedImage = null/);
+  assert.match(resetManual, /newsBriefImageState\.sourceImage = null/);
+  assert.match(resetManual, /picker\.style\.display = 'block'/);
+  assert.match(resetManual, /crop\.style\.display = 'none'/);
+  assert.match(resetManual, /results\.innerHTML = ''/);
+  assert.match(resetManual, /input\.value = newsBriefImageState\.query/);
+});
+
+test('Manual News Brief image modal close clears transient crop state but keeps confirmed form image', () => {
+  const closeImage = functionBlock('closeNewsBriefImageSelection');
+  const resetManual = functionBlock('resetManualNewsBriefImageModalSession');
+  assert.match(closeImage, /shouldResetManualSession = newsBriefImageState\.mode === 'preSubmit' && newsBriefImageState\.formSource === 'manual'/);
+  assert.match(closeImage, /resetManualNewsBriefImageModalSession\(newsBriefImageState\.suggestedQuery\)/);
+  assert.match(resetManual, /URL\.revokeObjectURL\(newsBriefImageState\.outputUrl\)/);
+  assert.match(resetManual, /URL\.revokeObjectURL\(newsBriefImageState\.selectedImage\.previewUrl\)/);
+  assert.match(resetManual, /newsBriefImageState\.crop = \{zoom:1, x:0, y:0, dragging:false, dragX:0, dragY:0\}/);
+  assert.match(resetManual, /newsBriefImageState\.outputBlob = null/);
+  assert.match(resetManual, /newsBriefImageState\.outputUrl = ''/);
+  assert.match(resetManual, /newsBriefImageState\.outputSize = 0/);
+  assert.match(resetManual, /zoom\.value = '1'/);
+  assert.match(resetManual, /preview\.removeAttribute\('src'\)/);
+  assert.match(resetManual, /newsBriefImageStatus\('', false\)/);
+  assert.match(functionBlock('searchNewsBriefUnsplash'), /var sessionId = newsBriefImageState\.modalSessionId/);
+  assert.match(functionBlock('searchNewsBriefUnsplash'), /sessionId !== newsBriefImageState\.modalSessionId/);
+  assert.match(functionBlock('loadNewsBriefImageForCrop'), /sessionId !== newsBriefImageState\.modalSessionId/);
+  assert.match(functionBlock('processNewsBriefImageOutput'), /sessionId !== newsBriefImageState\.modalSessionId/);
+  assert.doesNotMatch(resetManual, /newsBriefPreSubmitImageState = \{/);
+  assert.match(functionBlock('storeNewsBriefPreSubmitImage'), /if \(newsBriefPreSubmitImageState\.previewUrl\) URL\.revokeObjectURL/);
+  assert.match(functionBlock('storeNewsBriefPreSubmitImage'), /newsBriefPreSubmitImageState = \{/);
+  assert.match(functionBlock('removeNewsBriefPreSubmitImage'), /clearNewsBriefPreSubmitImage/);
+});
+
 test('No-image News Brief submission skips the image route and preserves manual image URL support', () => {
   assert.match(functionBlock('collectNewsBriefData'), /selectedImageActive \? '' : \(cmsFieldValue\('r-news-image'\) \|\| cmsFieldValue\('r-img-url'\)\)/);
   assert.match(functionBlock('collectManualNewsBriefReviewData'), /selectedImageActive \? '' : document\.getElementById\('manual-review-news-image'\)\.value\.trim\(\)/);
@@ -243,6 +287,7 @@ test('Editorial Tracker shows News Brief image state and reuses the image interf
   assert.match(functionBlock('editorialTrackerImageStateHtml'), /raw\.imageStatus === 'completed' \|\| raw\.webflowImageUrl/);
   assert.match(functionBlock('openEditorialTrackerNewsBriefImage'), /openNewsBriefImageSelection/);
   assert.match(functionBlock('openEditorialTrackerNewsBriefImage'), /fromTracker:true/);
+  assert.doesNotMatch(functionBlock('openEditorialTrackerNewsBriefImage'), /formSource:'manual'|resetManualNewsBriefImageModalSession/);
   assert.doesNotMatch(functionBlock('openEditorialTrackerNewsBriefImage'), /saveArticleToFirebase/);
   assert.doesNotMatch(functionBlock('useSelectedNewsBriefImage'), /createNewsBriefWebflowDraft/);
 });
