@@ -93,6 +93,18 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .news-social-option.selected{border-color:var(--y);box-shadow:0 0 0 2px rgba(250,199,117,0.28)}
 .news-social-option textarea{width:100%;border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;font-size:14px;font-family:system-ui,sans-serif;line-height:1.55;resize:vertical;min-height:160px;outline:none;background:#fff}
 .news-social-schedule-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.news-image-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.52);z-index:10060;align-items:center;justify-content:center;padding:20px}
+.news-image-panel{width:min(980px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:8px;border:1px solid var(--bdr);box-shadow:0 24px 80px rgba(0,0,0,0.28);padding:22px}
+.news-image-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+.news-image-tab{border:1px solid var(--bdr);background:var(--gray);border-radius:8px;padding:9px 13px;font-weight:700;cursor:pointer}
+.news-image-tab.active{background:var(--blk);color:#fff;border-color:var(--blk)}
+.news-image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:12px}
+.news-image-result{border:1px solid var(--bdr);border-radius:8px;background:#fff;padding:8px;text-align:left;cursor:pointer}
+.news-image-result.selected{border-color:var(--y);box-shadow:0 0 0 2px rgba(250,199,117,0.34)}
+.news-image-result img{width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:6px;background:var(--gray);display:block}
+.news-image-crop-wrap{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;align-items:start}
+.news-image-crop-canvas{width:100%;max-width:630px;aspect-ratio:3/2;border:1px solid var(--bdr);border-radius:8px;background:#111;touch-action:none}
+.news-image-preview{width:100%;aspect-ratio:3/2;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);object-fit:cover}
 @media(max-width:760px){
   .landing{padding:28px 14px}
   .landing-cards{grid-template-columns:1fr!important}
@@ -100,6 +112,8 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
   #landing-editorial-calendar-editor .scratch-screen>div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}
   #editorial-calendar-grid{min-width:860px!important}
   .news-social-schedule-grid{grid-template-columns:1fr}
+  .news-image-crop-wrap{grid-template-columns:1fr}
+  .news-image-panel{padding:16px}
   .topbar{padding:0 12px;gap:8px}
   .tbar-r{gap:6px}
 }
@@ -675,6 +689,48 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()" style="flex:1">Work on socials</button>
         <button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Not now</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="news-brief-image-modal" class="news-image-modal" role="dialog" aria-modal="true" aria-labelledby="news-brief-image-title" onmousedown="if(event.target===this)event.preventDefault()">
+    <div class="news-image-panel">
+      <h2 id="news-brief-image-title" style="font-size:22px;margin-bottom:8px;font-family:Georgia,serif;color:var(--blk)">Choose an image for this News Brief</h2>
+      <p style="font-size:14px;color:var(--g3);line-height:1.6;margin-bottom:12px">Select an Unsplash image, upload your own, or skip and add one later from the Editorial Tracker.</p>
+      <div id="news-brief-image-status" class="hint" style="margin-bottom:12px"></div>
+      <div id="news-brief-image-picker">
+        <div class="news-image-tabs">
+          <button class="news-image-tab active" id="news-image-tab-unsplash" onclick="setNewsBriefImageTab('unsplash')">Unsplash</button>
+          <button class="news-image-tab" id="news-image-tab-upload" onclick="setNewsBriefImageTab('upload')">Upload from computer</button>
+        </div>
+        <div id="news-image-unsplash-panel">
+          <div class="sfield" style="margin-bottom:10px"><label>Search Unsplash</label><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="news-image-search-query" style="flex:1;min-width:220px" onkeydown="if(event.key==='Enter'){event.preventDefault();searchNewsBriefUnsplash();}" /><button class="btn" id="news-image-search-btn" onclick="searchNewsBriefUnsplash()">Search</button><button class="btn" onclick="restoreNewsBriefSuggestedImageQuery()">Use suggested keywords</button></div></div>
+          <div id="news-image-unsplash-results" class="news-image-grid"></div>
+        </div>
+        <div id="news-image-upload-panel" style="display:none">
+          <div class="sfield"><label>Image file</label><input id="news-image-upload-file" type="file" accept="image/jpeg,image/png,image/webp" onchange="handleNewsBriefComputerImage(this.files && this.files[0]);this.value='';" /></div>
+          <div class="hint">JPEG, PNG or WebP. Source image must be readable and large enough for a 1050 x 700 crop.</div>
+        </div>
+      </div>
+      <div id="news-brief-image-crop" style="display:none">
+        <div class="news-image-crop-wrap">
+          <div>
+            <canvas id="news-image-crop-canvas" class="news-image-crop-canvas" width="1050" height="700"></canvas>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+              <button class="btn" onclick="resetNewsBriefImageCrop()">Reset crop</button>
+              <button class="btn" onclick="backToNewsBriefImagePicker()">Back to image search/upload</button>
+            </div>
+          </div>
+          <div>
+            <div class="sfield"><label>Zoom</label><input id="news-image-zoom" type="range" min="1" max="3" step="0.01" value="1" oninput="setNewsBriefImageZoom(this.value)" /></div>
+            <img id="news-image-final-preview" class="news-image-preview" alt="Final crop preview" />
+            <div id="news-image-output-meta" class="hint" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:18px">
+        <button class="btn-lg" id="news-image-skip-btn" onclick="skipNewsBriefImageSelection()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Skip for now</button>
+        <button class="btn-lg btn-y" id="news-image-use-btn" onclick="useSelectedNewsBriefImage()" disabled>Use this image</button>
       </div>
     </div>
   </div>
@@ -3806,6 +3862,7 @@ function renderEditorialTracker() {
     var titleHtml = item.itemType === 'guest_story' && item.raw && item.raw.status === 'published' && item.raw.publishedLink
       ? '<a href="'+escapeHtml(item.raw.publishedLink)+'" target="_blank" rel="noopener" style="color:var(--yd);font-weight:700;text-decoration:none">'+titleText+'</a>'
       : titleText;
+    var imageHtml = editorialTrackerImageStateHtml(item);
     return '<tr>'
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+(idx+1)+'</td>'
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr)"><input type="checkbox" data-tracker-row-key="'+escapeHtml(key)+'" onchange="toggleEditorialTrackerRowSelection(\''+escapeHtml(key)+'\', this.checked)" '+(window._editorialTrackerSelected && window._editorialTrackerSelected[key] ? 'checked' : '')+' /></td>'
@@ -3814,12 +3871,53 @@ function renderEditorialTracker() {
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr)">'+escapeHtml(item.person || '-')+'</td>'
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+escapeHtml(formatFirestoreDate(item.createdAt))+'</td>'
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+(item.submittedAt ? escapeHtml(formatFirestoreDate(item.submittedAt)) : '—')+'</td>'
-      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+trackerStatusDot(item.statusLabel)+escapeHtml(item.statusLabel)+'</td>'
+      + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+trackerStatusDot(item.statusLabel)+escapeHtml(item.statusLabel)+imageHtml+'</td>'
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr);white-space:nowrap">'+escapeHtml(formatFirestoreDate(item.updatedAt))+'</td>'
       + '<td style="padding:10px;border-bottom:1px solid var(--bdr)"><button class="btn" onclick="openEditorialTrackerItem(\''+escapeHtml(item.itemType)+'\',\''+escapeHtml(item.id)+'\')">Open</button></td>'
       + '</tr>';
   }).join('');
   updateEditorialTrackerArchiveButton(items);
+}
+
+function editorialTrackerImageStateHtml(item) {
+  if (!isNewsBriefImageSelectionEnabled()) return '';
+  var raw = item && item.raw || {};
+  var isNewsBrief = raw.contentType === 'news_brief' || raw.cmsType === 'news' || raw.sourceType === 'news_brief' || raw.sourceType === 'manual_news_brief';
+  if (!isNewsBrief) return '';
+  var hasImage = raw.imageStatus === 'completed' || raw.webflowImageUrl || raw.imageUrl || raw.newsImage || raw.webflowAssetId;
+  if (hasImage) return '<div class="hint" style="margin-top:6px;color:#16a34a">Image added</div>';
+  var disabled = raw.webflowItemId ? '' : ' disabled';
+  var btnStyle = raw.webflowItemId ? 'margin-top:6px' : 'opacity:0.5;cursor:not-allowed;margin-top:6px';
+  return '<div class="hint" style="margin-top:6px">Image pending</div><button class="btn"'+disabled+' onclick="event.stopPropagation();openEditorialTrackerNewsBriefImage(\''+escapeHtml(item.id)+'\')" style="'+btnStyle+'">Add image</button>';
+}
+
+function openEditorialTrackerNewsBriefImage(articleId) {
+  if (!isNewsBriefImageSelectionEnabled() || !db || !articleId) return;
+  db.collection('articles').doc(articleId).get().then(function(snap) {
+    if (!snap.exists) throw new Error('News Brief record was not found.');
+    var data = Object.assign({id:snap.id}, snap.data() || {});
+    if (!data.webflowItemId) throw new Error('This News Brief does not have a Webflow item ID yet.');
+    openNewsBriefImageSelection({
+      articleId:snap.id,
+      title:data.title || '',
+      standfirst:data.standfirst || data.shortIntro || '',
+      body:data.body || '',
+      sourceUrl:data.sourceUrl || '',
+      publishedUrl:data.webflowUrl || data.publishedUrl || '',
+      submittedStoryUrl:data.webflowUrl || data.publishedUrl || '',
+      imageUrl:data.webflowImageUrl || data.imageUrl || data.newsImage || '',
+      newsImage:data.webflowImageUrl || data.newsImage || data.imageUrl || '',
+      publishDate:data.publishedDate || data.publishDate || '',
+      publishedDate:data.publishedDate || data.publishDate || '',
+      contentType:'news_brief',
+      cmsType:'news',
+      sourceType:data.sourceType || 'news_brief',
+      webflowItemId:data.webflowItemId,
+      firebaseData:Object.assign({}, data)
+    }, {fromTracker:true});
+  }).catch(function(err) {
+    alert('Could not open image selection: ' + err.message);
+  });
 }
 function clearEditorialTrackerFilters() {
   ['tracker-search','tracker-created-from','tracker-created-to','tracker-submitted-from','tracker-submitted-to'].forEach(function(id) {
@@ -5799,6 +5897,25 @@ function workerFetchWithFirebaseAuth(path, options) {
     return getCurrentUserIdToken(true).then(function(refreshedToken) {
       var retryOptions = Object.assign({}, options);
       retryOptions.headers = Object.assign({'Content-Type':'application/json'}, plainHeaders(options.headers), {
+        Authorization: 'Bearer ' + refreshedToken
+      });
+      return fetch(WORKER + path, retryOptions);
+    });
+  });
+}
+
+function workerFetchWithFirebaseAuthRaw(path, options) {
+  options = options || {};
+  var requestOptions = Object.assign({}, options);
+  requestOptions.headers = plainHeaders(options.headers);
+  return getCurrentUserIdToken(false).then(function(token) {
+    requestOptions.headers.Authorization = 'Bearer ' + token;
+    return fetch(WORKER + path, requestOptions);
+  }).then(function(response) {
+    if (response.status !== 401) return response;
+    return getCurrentUserIdToken(true).then(function(refreshedToken) {
+      var retryOptions = Object.assign({}, options);
+      retryOptions.headers = Object.assign({}, plainHeaders(options.headers), {
         Authorization: 'Bearer ' + refreshedToken
       });
       return fetch(WORKER + path, retryOptions);
@@ -7939,7 +8056,35 @@ var newsBriefSubmissionState = {
   inFlight: false,
   firebaseDocId: '',
   articleData: null,
-  webflowResult: null
+  webflowResult: null,
+  socialContext: null
+};
+var NEWS_BRIEF_IMAGE_SELECTION_ENABLED = false;
+function isNewsBriefImageSelectionEnabled() {
+  return NEWS_BRIEF_IMAGE_SELECTION_ENABLED === true ||
+    window.NEWS_BRIEF_IMAGE_SELECTION_ENABLED === true ||
+    window.localStorage && window.localStorage.getItem('NEWS_BRIEF_IMAGE_SELECTION_ENABLED') === 'true';
+}
+var newsBriefImageState = {
+  open: false,
+  fromTracker: false,
+  tab: 'unsplash',
+  articleContext: null,
+  firebaseDocId: '',
+  webflowItemId: '',
+  suggestedQuery: '',
+  query: '',
+  searchInFlight: false,
+  uploadInFlight: false,
+  selectedSource: null,
+  selectedImage: null,
+  sourceImage: null,
+  crop: {zoom:1, x:0, y:0, dragging:false, dragX:0, dragY:0},
+  outputBlob: null,
+  outputUrl: '',
+  outputSize: 0,
+  filename: '',
+  requestId: ''
 };
 var manualLongViewCmsData = null;
 var longViewSubmissionState = {
@@ -11356,9 +11501,9 @@ function renderNewsBriefWebflowFailure(docId, data, err) {
     + '</div></div>';
 }
 
-function renderNewsBriefSubmissionSuccess(docId, data, webflowData) {
+function buildNewsBriefSocialContext(docId, data, webflowData) {
   var publishedUrl = getSubmittedStoryUrl(webflowData, data);
-  offerNewsBriefSocialWorkflow({
+  return {
     articleId: docId,
     title: data.title || '',
     standfirst: data.standfirst || data.shortIntro || '',
@@ -11373,8 +11518,449 @@ function renderNewsBriefSubmissionSuccess(docId, data, webflowData) {
     contentType: 'news_brief',
     cmsType: 'news',
     sourceType: data.sourceType || 'news_brief',
+    webflowItemId: webflowItemIdFromResponse(webflowData),
     firebaseData: Object.assign({}, data)
+  };
+}
+
+function newsBriefImageStatus(message, isError) {
+  var el = document.getElementById('news-brief-image-status');
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.color = isError ? 'var(--red)' : 'var(--g3)';
+}
+
+function deriveNewsBriefImageKeywords(headline) {
+  var preserve = ['AI','HR','CEO','CFO','CHRO','CTO','COO','CIO','IT','RBI','SEBI','IPO','MSME','India','Indian','Bengaluru','Mumbai','Delhi','Hyderabad','Chennai','Pune'];
+  var generic = {'the':1,'and':1,'for':1,'with':1,'from':1,'this':1,'that':1,'into':1,'over':1,'after':1,'before':1,'new':1,'news':1,'brief':1,'says':1,'will':1,'more':1,'less':1,'goes':1,'mainstream':1,'could':1,'should':1,'amid':1,'about':1,'than':1,'its':1,'their':1,'work':1,'worker':1,'workers':1,'company':1,'companies':1};
+  var words = String(headline || '').replace(/[^A-Za-z0-9&.\-\s]/g,' ').split(/\s+/).filter(Boolean);
+  var picked = [];
+  words.forEach(function(word) {
+    var clean = word.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g,'');
+    if (!clean) return;
+    if (preserve.indexOf(clean) !== -1 && picked.indexOf(clean) === -1) { picked.push(clean); return; }
+    var lower = clean.toLowerCase();
+    if (generic[lower] || lower.length < 3) return;
+    if (/^[A-Z][A-Za-z0-9.-]+$/.test(clean) || /(ai|tech|hiring|layoff|salary|office|startup|policy|labour|labor|benefit|wellbeing|workplace|career|employment|automation|chatbot|india|indian)/i.test(clean)) {
+      if (picked.map(function(x){return x.toLowerCase();}).indexOf(lower) === -1) picked.push(clean);
+    }
   });
+  if (/\bAI\b/i.test(headline) && picked.indexOf('technology') === -1) picked.push('technology');
+  if (/\bIndia|Indian\b/i.test(headline) && picked.indexOf('India') === -1 && picked.indexOf('Indian') === -1) picked.push('India');
+  if (!picked.length) picked = ['office','technology','workplace'];
+  return picked.slice(0, 5).join(' ');
+}
+
+function safeNewsBriefImageSlug(headline) {
+  var slug = makeSlug(String(headline || 'news-brief').toLowerCase()).replace(/^-+|-+$/g,'');
+  if (!slug) slug = 'news-brief';
+  return slug.slice(0, 56).replace(/-+$/,'');
+}
+
+function shortNewsBriefImageSuffix(seed) {
+  var hash = 2166136261;
+  String(seed || Date.now()).split('').forEach(function(ch) {
+    hash ^= ch.charCodeAt(0);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  });
+  return (hash >>> 0).toString(36).slice(0, 4).padEnd(4, '0');
+}
+
+function buildNewsBriefImageFilename(headline, seed) {
+  return 'wocult-' + safeNewsBriefImageSlug(headline) + '-' + shortNewsBriefImageSuffix(seed) + '.jpg';
+}
+
+function openNewsBriefImageSelection(articleContext, options) {
+  if (!articleContext || !articleContext.articleId || !articleContext.webflowItemId) {
+    offerNewsBriefSocialWorkflow(articleContext);
+    return;
+  }
+  options = options || {};
+  newsBriefImageState.open = true;
+  newsBriefImageState.fromTracker = options.fromTracker === true;
+  newsBriefImageState.articleContext = articleContext;
+  newsBriefImageState.firebaseDocId = articleContext.articleId;
+  newsBriefImageState.webflowItemId = articleContext.webflowItemId;
+  newsBriefImageState.suggestedQuery = deriveNewsBriefImageKeywords(articleContext.title || '');
+  newsBriefImageState.query = newsBriefImageState.query || newsBriefImageState.suggestedQuery;
+  newsBriefImageState.selectedSource = null;
+  newsBriefImageState.selectedImage = null;
+  newsBriefImageState.outputBlob = null;
+  newsBriefImageState.outputSize = 0;
+  newsBriefImageState.filename = '';
+  var modal = document.getElementById('news-brief-image-modal');
+  var input = document.getElementById('news-image-search-query');
+  if (input && !input.value) input.value = newsBriefImageState.query;
+  if (modal) modal.style.display = 'flex';
+  document.addEventListener('keydown', preventNewsBriefImageEscape, true);
+  setNewsBriefImageTab('unsplash');
+  newsBriefImageStatus('', false);
+  if (!options.deferSearch) searchNewsBriefUnsplash();
+}
+
+function preventNewsBriefImageEscape(event) {
+  if (newsBriefImageState.open && event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+}
+
+function closeNewsBriefImageSelection() {
+  var modal = document.getElementById('news-brief-image-modal');
+  if (modal) modal.style.display = 'none';
+  document.removeEventListener('keydown', preventNewsBriefImageEscape, true);
+  newsBriefImageState.open = false;
+}
+
+function setNewsBriefImageTab(tab) {
+  newsBriefImageState.tab = tab;
+  var unsplash = document.getElementById('news-image-unsplash-panel');
+  var upload = document.getElementById('news-image-upload-panel');
+  var unsplashTab = document.getElementById('news-image-tab-unsplash');
+  var uploadTab = document.getElementById('news-image-tab-upload');
+  if (unsplash) unsplash.style.display = tab === 'unsplash' ? 'block' : 'none';
+  if (upload) upload.style.display = tab === 'upload' ? 'block' : 'none';
+  if (unsplashTab) unsplashTab.className = 'news-image-tab' + (tab === 'unsplash' ? ' active' : '');
+  if (uploadTab) uploadTab.className = 'news-image-tab' + (tab === 'upload' ? ' active' : '');
+}
+
+function restoreNewsBriefSuggestedImageQuery() {
+  newsBriefImageState.query = newsBriefImageState.suggestedQuery;
+  var input = document.getElementById('news-image-search-query');
+  if (input) input.value = newsBriefImageState.query;
+  searchNewsBriefUnsplash();
+}
+
+function searchNewsBriefUnsplash() {
+  if (newsBriefImageState.searchInFlight) return;
+  var input = document.getElementById('news-image-search-query');
+  var query = (input ? input.value : newsBriefImageState.query || '').trim().replace(/\s+/g,' ');
+  if (!query) { newsBriefImageStatus('Enter a search term before searching Unsplash.', true); return; }
+  if (query.length > 80) { newsBriefImageStatus('Keep the Unsplash search under 80 characters.', true); return; }
+  newsBriefImageState.query = query;
+  newsBriefImageState.searchInFlight = true;
+  newsBriefImageStatus('Searching Unsplash...', false);
+  var btn = document.getElementById('news-image-search-btn');
+  if (btn) btn.disabled = true;
+  return workerFetchWithFirebaseAuth('/news-briefs/unsplash-search?q=' + encodeURIComponent(query), {method:'GET'}).then(parseWorkerResponse).then(function(data) {
+    renderNewsBriefUnsplashResults(data.results || []);
+    newsBriefImageStatus((data.results || []).length ? 'Select an image to crop.' : 'No Unsplash results found. Try a different search.', !(data.results || []).length);
+  }).catch(function(err) {
+    console.error('Unsplash search failed', err);
+    renderNewsBriefUnsplashResults([]);
+    newsBriefImageStatus('Unsplash search failed. You can search again, upload your own image, or skip for now.', true);
+  }).finally(function() {
+    newsBriefImageState.searchInFlight = false;
+    if (btn) btn.disabled = false;
+  });
+}
+
+function renderNewsBriefUnsplashResults(results) {
+  var wrap = document.getElementById('news-image-unsplash-results');
+  if (!wrap) return;
+  wrap.innerHTML = (results || []).slice(0, 12).map(function(photo, idx) {
+    return '<button class="news-image-result" data-news-image-index="'+idx+'" onclick="selectNewsBriefUnsplashImage('+idx+')">'
+      + '<img src="'+escapeHtml(photo.previewUrl || '')+'" alt="'+escapeHtml(photo.alt || 'Unsplash image')+'" />'
+      + '<div style="font-size:12px;color:var(--g3);margin-top:7px">Photo by <a href="'+escapeHtml(photo.photographerUrl || photo.attributionUrl || '#')+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">'+escapeHtml(photo.photographerName || 'Unsplash photographer')+'</a></div>'
+      + '</button>';
+  }).join('');
+  newsBriefImageState.unsplashResults = results || [];
+}
+
+function selectNewsBriefUnsplashImage(index) {
+  var photo = (newsBriefImageState.unsplashResults || [])[index];
+  if (!photo) return;
+  newsBriefImageState.selectedSource = 'unsplash';
+  newsBriefImageState.selectedImage = photo;
+  document.querySelectorAll('.news-image-result').forEach(function(el){ el.classList.remove('selected'); });
+  var selected = document.querySelector('[data-news-image-index="'+index+'"]');
+  if (selected) selected.classList.add('selected');
+  loadNewsBriefImageForCrop(photo.processingUrl || photo.fullUrl || photo.previewUrl, photo);
+}
+
+function handleNewsBriefComputerImage(file) {
+  if (!file) return;
+  if (!/^image\/(jpeg|png|webp)$/i.test(file.type || '')) {
+    newsBriefImageStatus('Choose a JPEG, PNG or WebP image.', true);
+    return;
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    newsBriefImageStatus('Choose an image under 12 MB.', true);
+    return;
+  }
+  var url = URL.createObjectURL(file);
+  newsBriefImageState.selectedSource = 'uploaded';
+  newsBriefImageState.selectedImage = {file:file, previewUrl:url, processingUrl:url, sourceWidth:0, sourceHeight:0};
+  loadNewsBriefImageForCrop(url, newsBriefImageState.selectedImage);
+}
+
+function loadNewsBriefImageForCrop(url, meta) {
+  var img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = function() {
+    if (img.naturalWidth < 1050 || img.naturalHeight < 700) {
+      newsBriefImageStatus('Choose an image at least 1050 x 700 pixels.', true);
+      return;
+    }
+    meta.sourceWidth = img.naturalWidth;
+    meta.sourceHeight = img.naturalHeight;
+    newsBriefImageState.sourceImage = img;
+    resetNewsBriefImageCrop();
+    showNewsBriefImageCrop();
+  };
+  img.onerror = function() {
+    newsBriefImageStatus('This image could not be read. Choose another image or skip for now.', true);
+  };
+  img.src = url;
+}
+
+function showNewsBriefImageCrop() {
+  var picker = document.getElementById('news-brief-image-picker');
+  var crop = document.getElementById('news-brief-image-crop');
+  if (picker) picker.style.display = 'none';
+  if (crop) crop.style.display = 'block';
+  setupNewsBriefCropCanvasEvents();
+  renderNewsBriefImageCrop();
+}
+
+function backToNewsBriefImagePicker() {
+  var picker = document.getElementById('news-brief-image-picker');
+  var crop = document.getElementById('news-brief-image-crop');
+  if (picker) picker.style.display = 'block';
+  if (crop) crop.style.display = 'none';
+  newsBriefImageState.outputBlob = null;
+  var btn = document.getElementById('news-image-use-btn');
+  if (btn) btn.disabled = true;
+}
+
+function resetNewsBriefImageCrop() {
+  newsBriefImageState.crop = {zoom:1, x:0, y:0, dragging:false, dragX:0, dragY:0};
+  var zoom = document.getElementById('news-image-zoom');
+  if (zoom) zoom.value = '1';
+  renderNewsBriefImageCrop();
+}
+
+function setNewsBriefImageZoom(value) {
+  newsBriefImageState.crop.zoom = Math.max(1, Math.min(3, Number(value) || 1));
+  renderNewsBriefImageCrop();
+}
+
+function setupNewsBriefCropCanvasEvents() {
+  var canvas = document.getElementById('news-image-crop-canvas');
+  if (!canvas || canvas._newsImageEventsAttached) return;
+  canvas._newsImageEventsAttached = true;
+  var point = function(e) {
+    var t = e.touches && e.touches[0] ? e.touches[0] : e;
+    return {x:t.clientX, y:t.clientY};
+  };
+  var start = function(e) {
+    e.preventDefault();
+    var p = point(e);
+    newsBriefImageState.crop.dragging = true;
+    newsBriefImageState.crop.dragX = p.x;
+    newsBriefImageState.crop.dragY = p.y;
+  };
+  var move = function(e) {
+    if (!newsBriefImageState.crop.dragging) return;
+    e.preventDefault();
+    var p = point(e);
+    var rect = canvas.getBoundingClientRect();
+    newsBriefImageState.crop.x += (p.x - newsBriefImageState.crop.dragX) * (canvas.width / rect.width);
+    newsBriefImageState.crop.y += (p.y - newsBriefImageState.crop.dragY) * (canvas.height / rect.height);
+    newsBriefImageState.crop.dragX = p.x;
+    newsBriefImageState.crop.dragY = p.y;
+    renderNewsBriefImageCrop();
+  };
+  var end = function() { newsBriefImageState.crop.dragging = false; };
+  canvas.addEventListener('mousedown', start);
+  canvas.addEventListener('touchstart', start, {passive:false});
+  window.addEventListener('mousemove', move);
+  window.addEventListener('touchmove', move, {passive:false});
+  window.addEventListener('mouseup', end);
+  window.addEventListener('touchend', end);
+}
+
+function getNewsBriefCropDrawRect(img) {
+  var crop = newsBriefImageState.crop;
+  var targetW = 1050;
+  var targetH = 700;
+  var baseScale = Math.max(targetW / img.naturalWidth, targetH / img.naturalHeight);
+  var scale = baseScale * crop.zoom;
+  var w = img.naturalWidth * scale;
+  var h = img.naturalHeight * scale;
+  var minX = targetW - w;
+  var minY = targetH - h;
+  var x = Math.min(0, Math.max(minX, (targetW - w) / 2 + crop.x));
+  var y = Math.min(0, Math.max(minY, (targetH - h) / 2 + crop.y));
+  crop.x = x - (targetW - w) / 2;
+  crop.y = y - (targetH - h) / 2;
+  return {x:x, y:y, w:w, h:h};
+}
+
+function renderNewsBriefImageCrop() {
+  var canvas = document.getElementById('news-image-crop-canvas');
+  var img = newsBriefImageState.sourceImage;
+  if (!canvas || !img) return;
+  var ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  var rect = getNewsBriefCropDrawRect(img);
+  ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
+  processNewsBriefImageOutput();
+}
+
+function canvasToJpegBlob(canvas, quality) {
+  return new Promise(function(resolve) {
+    canvas.toBlob(resolve, 'image/jpeg', quality);
+  });
+}
+
+function processNewsBriefImageOutput() {
+  var canvas = document.getElementById('news-image-crop-canvas');
+  if (!canvas) return Promise.resolve(null);
+  var qualities = [0.86,0.82,0.78,0.74,0.70,0.66,0.62,0.58,0.54,0.50,0.46,0.42,0.38,0.34,0.30];
+  var best = null;
+  var chain = Promise.resolve();
+  qualities.forEach(function(q) {
+    chain = chain.then(function() {
+      if (best && best.size < 100 * 1024) return best;
+      return canvasToJpegBlob(canvas, q).then(function(blob) {
+        if (blob) best = blob;
+        return best;
+      });
+    });
+  });
+  return chain.then(function(blob) {
+    var btn = document.getElementById('news-image-use-btn');
+    var meta = document.getElementById('news-image-output-meta');
+    if (newsBriefImageState.outputUrl) URL.revokeObjectURL(newsBriefImageState.outputUrl);
+    newsBriefImageState.outputBlob = blob;
+    newsBriefImageState.outputSize = blob ? blob.size : 0;
+    newsBriefImageState.outputUrl = blob ? URL.createObjectURL(blob) : '';
+    var preview = document.getElementById('news-image-final-preview');
+    if (preview && newsBriefImageState.outputUrl) preview.src = newsBriefImageState.outputUrl;
+    var kb = blob ? Math.round(blob.size / 1024) : 0;
+    if (meta) meta.textContent = '1050 x 700 px · JPEG · ' + kb + ' KB';
+    if (btn) btn.disabled = !blob || blob.size >= 100 * 1024 || newsBriefImageState.uploadInFlight;
+    if (blob && blob.size >= 100 * 1024) newsBriefImageStatus('This crop could not be compressed below 100 KB. Choose another image or skip for now.', true);
+    else if (blob) newsBriefImageStatus('Image ready. Use it or skip for now.', false);
+    return blob;
+  });
+}
+
+function newsBriefImageSourceKey() {
+  var img = newsBriefImageState.selectedImage || {};
+  if (newsBriefImageState.selectedSource === 'unsplash') return img.unsplashPhotoId || img.id || img.previewUrl || '';
+  return [img.file && img.file.name, img.file && img.file.size, img.file && img.file.lastModified].join('-');
+}
+
+function useSelectedNewsBriefImage() {
+  if (newsBriefImageState.uploadInFlight || !newsBriefImageState.outputBlob) return;
+  if (newsBriefImageState.outputBlob.size >= 100 * 1024) {
+    newsBriefImageStatus('The final JPEG must be below 100 KB before upload.', true);
+    return;
+  }
+  var article = newsBriefImageState.articleContext || {};
+  var sourceKey = newsBriefImageSourceKey();
+  var filename = buildNewsBriefImageFilename(article.title || '', newsBriefImageState.firebaseDocId + '-' + sourceKey);
+  var requestId = [newsBriefImageState.firebaseDocId, sourceKey, filename].join(':');
+  newsBriefImageState.filename = filename;
+  newsBriefImageState.requestId = requestId;
+  newsBriefImageState.uploadInFlight = true;
+  var btn = document.getElementById('news-image-use-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
+  newsBriefImageStatus('Uploading image and updating Webflow...', false);
+  var source = newsBriefImageState.selectedImage || {};
+  var meta = {
+    source: newsBriefImageState.selectedSource,
+    unsplashPhotoId: source.unsplashPhotoId || source.id || '',
+    unsplashPhotographerName: source.photographerName || '',
+    unsplashPhotographerUrl: source.photographerUrl || '',
+    unsplashAttributionUrl: source.attributionUrl || '',
+    unsplashDownloadLocation: source.downloadLocation || ''
+  };
+  if (db && newsBriefImageState.firebaseDocId) {
+    db.collection('articles').doc(newsBriefImageState.firebaseDocId).set({
+      imageStatus:'processing',
+      imageSource:newsBriefImageState.selectedSource,
+      imageRequestId:requestId,
+      imageUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true}).catch(function(err){ console.warn('Could not mark image processing:', err); });
+  }
+  var form = new FormData();
+  form.append('firebaseDocId', newsBriefImageState.firebaseDocId);
+  form.append('webflowItemId', newsBriefImageState.webflowItemId);
+  form.append('filename', filename);
+  form.append('headline', article.title || '');
+  form.append('altText', article.title || '');
+  form.append('imageSource', newsBriefImageState.selectedSource || '');
+  form.append('imageRequestId', requestId);
+  form.append('unsplashMetadata', JSON.stringify(meta));
+  form.append('file', newsBriefImageState.outputBlob, filename);
+  workerFetchWithFirebaseAuthRaw('/news-briefs/image', {method:'POST', body:form}).then(parseWorkerResponse).then(function(result) {
+    var url = result.webflowImageUrl || result.hostedUrl || result.assetUrl || '';
+    var updatedArticle = Object.assign({}, article, {
+      imageUrl:url,
+      newsImage:url,
+      webflowAssetId:result.webflowAssetId || '',
+      firebaseData:Object.assign({}, article.firebaseData || {}, {imageUrl:url, newsImage:url, imageStatus:'completed'})
+    });
+    newsBriefImageState.articleContext = updatedArticle;
+    newsBriefSubmissionState.socialContext = updatedArticle;
+    closeNewsBriefImageSelection();
+    if (newsBriefImageState.fromTracker) loadEditorialTracker({force:true});
+    proceedToNewsBriefSocialWorkflow(updatedArticle);
+  }).catch(function(err) {
+    console.error('News brief image upload failed', err);
+    if (db && newsBriefImageState.firebaseDocId) {
+      db.collection('articles').doc(newsBriefImageState.firebaseDocId).set({
+        imageStatus:'failed',
+        imageUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()
+      }, {merge:true}).catch(function(fbErr){ console.warn('Could not mark image failure:', fbErr); });
+    }
+    newsBriefImageStatus('News brief saved, but the image could not be added. Retry image, choose another image, or skip for now.', true);
+  }).finally(function() {
+    newsBriefImageState.uploadInFlight = false;
+    if (btn) { btn.disabled = !newsBriefImageState.outputBlob || newsBriefImageState.outputBlob.size >= 100 * 1024; btn.textContent = 'Use this image'; }
+  });
+}
+
+function markNewsBriefImagePending(docId) {
+  if (!db || !docId) return Promise.resolve();
+  return db.collection('articles').doc(docId).set({
+    imageStatus:'pending',
+    imageUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  }, {merge:true});
+}
+
+function skipNewsBriefImageSelection() {
+  if (newsBriefImageState.uploadInFlight) return;
+  var btn = document.getElementById('news-image-skip-btn');
+  if (btn) btn.disabled = true;
+  markNewsBriefImagePending(newsBriefImageState.firebaseDocId).catch(function(err) {
+    console.warn('Could not mark image pending:', err);
+  }).then(function() {
+    var article = newsBriefImageState.articleContext;
+    closeNewsBriefImageSelection();
+    if (newsBriefImageState.fromTracker) loadEditorialTracker({force:true});
+    proceedToNewsBriefSocialWorkflow(article);
+  }).finally(function() {
+    if (btn) btn.disabled = false;
+  });
+}
+
+function proceedToNewsBriefSocialWorkflow(articleContext) {
+  offerNewsBriefSocialWorkflow(articleContext);
+  startNewsBriefSocialWorkflow();
+}
+
+function renderNewsBriefSubmissionSuccess(docId, data, webflowData) {
+  var socialContext = buildNewsBriefSocialContext(docId, data, webflowData);
+  newsBriefSubmissionState.socialContext = socialContext;
+  if (isNewsBriefImageSelectionEnabled()) {
+    openNewsBriefImageSelection(socialContext);
+  } else {
+    offerNewsBriefSocialWorkflow(socialContext);
+  }
   var result = document.getElementById('publish-result');
   if (result) {
     result.style.display = 'block';
