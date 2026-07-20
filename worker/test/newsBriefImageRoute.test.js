@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
 
 const env = {
@@ -135,10 +136,89 @@ test('image route uploads one Webflow asset, updates existing item and writes Fi
   assert.equal(calls.filter((c) => c.url === 'https://api.webflow.com/v2/sites/site-1/assets').length, 1);
   assert.equal(calls.some((c) => c.url.includes('/collections/news-collection/items/wf-news-1')), true);
   assert.equal(calls.some((c) => c.url.includes('/collections/news-collection/items') && !c.url.includes('wf-news-1')), false);
+  const webflowPatch = calls.find((c) => c.url.includes('/collections/news-collection/items/wf-news-1'));
+  const webflowBody = JSON.parse(webflowPatch.options.body);
+  assert.equal(webflowBody.fieldData['news-image'].fileId, 'asset-1');
+  assert.equal(webflowBody.fieldData['image-source'], 'unsplash');
+  assert.equal(webflowBody.fieldData['image-attribution'], 'Photo by Photographer on Unsplash');
+  assert.equal(webflowBody.fieldData['image-photographer-link'], 'https://unsplash.com/@photo');
+  assert.equal(webflowBody.fieldData['image-source-link'], 'https://unsplash.com/photos/unsplash-1');
   const finalPatch = calls.filter((c) => c.url.includes('/documents/articles/article-1') && c.options.method === 'PATCH').pop();
   assert.match(finalPatch.options.body, /"imageStatus"/);
   assert.match(finalPatch.options.body, /"completed"/);
   assert.match(finalPatch.options.body, /"webflowAssetId"/);
+  assert.match(finalPatch.options.body, /"imageAttribution"/);
+  assert.match(finalPatch.options.body, /Photo by Photographer on Unsplash/);
+});
+
+test('computer upload writes upload source and clears Unsplash attribution fields', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    const entry = { url: String(url), options };
+    calls.push(entry);
+    if (entry.url.includes('/documents/articles/article-1')) {
+      return new Response(JSON.stringify(articleDoc()), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (entry.url === 'https://api.webflow.com/v2/sites/site-1/assets') {
+      return new Response(JSON.stringify({
+        id: 'asset-1',
+        uploadUrl: 'https://uploads.webflow.com/asset-1',
+        hostedUrl: 'https://cdn.webflow.com/asset-1.jpg',
+        uploadDetails: {},
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (entry.url === 'https://uploads.webflow.com/asset-1') return new Response('', { status: 201 });
+    if (entry.url === 'https://api.webflow.com/v2/assets/asset-1') return new Response('{}', { status: 200 });
+    if (entry.url.includes('/collections/news-collection/items/wf-news-1')) return new Response(JSON.stringify({ id: 'wf-news-1' }), { status: 200 });
+    throw new Error('Unexpected fetch ' + entry.url);
+  });
+
+  const res = await worker.fetch(authed('/news-briefs/image', {
+    method: 'POST',
+    body: imageForm({ imageSource: 'uploaded', unsplashMetadata: '{}' }),
+  }), env);
+  assert.equal(res.status, 200);
+  const webflowPatch = calls.find((c) => c.url.includes('/collections/news-collection/items/wf-news-1'));
+  const webflowBody = JSON.parse(webflowPatch.options.body);
+  assert.equal(webflowBody.fieldData['image-source'], 'upload');
+  assert.equal(webflowBody.fieldData['image-attribution'], '');
+  assert.equal(webflowBody.fieldData['image-photographer-link'], '');
+  assert.equal(webflowBody.fieldData['image-source-link'], '');
+  assert.equal(calls.some((c) => c.url.includes('/photos/unsplash-1/download')), false);
+});
+
+test('missing optional Unsplash attribution metadata does not crash image upload', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    const entry = { url: String(url), options };
+    calls.push(entry);
+    if (entry.url.includes('/documents/articles/article-1')) {
+      return new Response(JSON.stringify(articleDoc()), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (entry.url === 'https://api.webflow.com/v2/sites/site-1/assets') {
+      return new Response(JSON.stringify({
+        id: 'asset-1',
+        uploadUrl: 'https://uploads.webflow.com/asset-1',
+        hostedUrl: 'https://cdn.webflow.com/asset-1.jpg',
+        uploadDetails: {},
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (entry.url === 'https://uploads.webflow.com/asset-1') return new Response('', { status: 201 });
+    if (entry.url === 'https://api.webflow.com/v2/assets/asset-1') return new Response('{}', { status: 200 });
+    if (entry.url.includes('/collections/news-collection/items/wf-news-1')) return new Response(JSON.stringify({ id: 'wf-news-1' }), { status: 200 });
+    throw new Error('Unexpected fetch ' + entry.url);
+  });
+  const res = await worker.fetch(authed('/news-briefs/image', {
+    method: 'POST',
+    body: imageForm({ unsplashMetadata: '{}' }),
+  }), env);
+  assert.equal(res.status, 200);
+  const webflowPatch = calls.find((c) => c.url.includes('/collections/news-collection/items/wf-news-1'));
+  const webflowBody = JSON.parse(webflowPatch.options.body);
+  assert.equal(webflowBody.fieldData['image-source'], 'unsplash');
+  assert.equal(webflowBody.fieldData['image-attribution'], '');
+  assert.equal(webflowBody.fieldData['image-photographer-link'], '');
+  assert.equal(webflowBody.fieldData['image-source-link'], '');
 });
 
 test('image route rejects invalid file before Webflow', async (t) => {
@@ -188,4 +268,19 @@ test('idempotent retry returns existing asset without new Webflow calls', async 
   assert.equal(res.status, 200);
   assert.equal(body.idempotent, true);
   assert.equal(calls.length, 1);
+});
+
+test('wrangler production vars preserve site id, max items and Workflow bindings without secrets', () => {
+  const toml = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
+  assert.match(toml, /WEBFLOW_SITE_ID\s*=\s*"[^"]+"/);
+  assert.match(toml, /NEWS_BRIEF_MAX_ITEMS_PER_RUN\s*=\s*"1"/);
+  assert.match(toml, /binding\s*=\s*"NEWS_BRIEF_WORKFLOW"/);
+  assert.match(toml, /binding\s*=\s*"NEWS_BRIEF_CANDIDATE_WORKFLOW"/);
+  assert.match(toml, /binding\s*=\s*"NEWS_BRIEF_FINALIZER_WORKFLOW"/);
+  assert.doesNotMatch(toml, /UNSPLASH_ACCESS_KEY\s*=/);
+  assert.doesNotMatch(toml, /WEBFLOW_API_TOKEN\s*=/);
+  assert.doesNotMatch(toml, /WEBFLOW_TOKEN\s*=/);
+  assert.doesNotMatch(toml, /WORKER_ADMIN_TOKEN\s*=/);
+  assert.doesNotMatch(toml, /FIREBASE_(CLIENT_EMAIL|PRIVATE_KEY|WEB_API_KEY)\s*=/);
+  assert.doesNotMatch(toml, /\[triggers\]|crons\s*=/);
 });
