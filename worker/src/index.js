@@ -330,7 +330,34 @@ export default {
       }
       return asset;
     };
-    const updateWebflowNewsImage = async (itemId, asset, altText) => {
+    const safeImageUrl = (value, max = 300) => {
+      const trimmed = safeImageText(value, max);
+      if (!trimmed) return '';
+      try {
+        const parsed = new URL(trimmed);
+        return (parsed.protocol === 'https:' || parsed.protocol === 'http:') ? trimmed : '';
+      } catch (e) {
+        return '';
+      }
+    };
+    const buildImageAttributionFields = (imageSource, metadata = {}) => {
+      if (imageSource === 'unsplash') {
+        const photographerName = safeImageText(metadata.unsplashPhotographerName, 160);
+        return {
+          'image-source': 'unsplash',
+          'image-attribution': photographerName ? `Photo by ${photographerName} on Unsplash` : '',
+          'image-photographer-link': safeImageUrl(metadata.unsplashPhotographerUrl),
+          'image-source-link': safeImageUrl(metadata.unsplashAttributionUrl),
+        };
+      }
+      return {
+        'image-source': 'upload',
+        'image-attribution': '',
+        'image-photographer-link': '',
+        'image-source-link': '',
+      };
+    };
+    const updateWebflowNewsImage = async (itemId, asset, altText, attributionFields = {}) => {
       const collectionId = env.WEBFLOW_NEWS_COLLECTION_ID || NEWS_COLLECTION_ID;
       const imageValue = { fileId: asset.id, url: asset.hostedUrl || asset.assetUrl || '', alt: altText || '' };
       const res = await fetch(`https://api.webflow.com/v2/collections/${collectionId}/items/${encodeURIComponent(itemId)}?skipInvalidFiles=true`, {
@@ -340,7 +367,7 @@ export default {
           Authorization: 'Bearer ' + (env.WEBFLOW_API_TOKEN || env.WEBFLOW_TOKEN),
           accept: 'application/json',
         },
-        body: JSON.stringify({ fieldData: { 'news-image': imageValue }, isDraft: true, isArchived: false }),
+        body: JSON.stringify({ fieldData: { 'news-image': imageValue, ...attributionFields }, isDraft: true, isArchived: false }),
       });
       const text = await res.text();
       const data = parseJsonText(text);
@@ -440,8 +467,9 @@ export default {
           imageRequestId,
           imageUpdatedAt: new Date().toISOString(),
         });
+        const attributionFields = buildImageAttributionFields(imageSource, unsplashMetadata);
         const asset = await uploadWebflowAsset(file, filename, altText);
-        const webflowItem = await updateWebflowNewsImage(webflowItemId, asset, altText);
+        const webflowItem = await updateWebflowNewsImage(webflowItemId, asset, altText, attributionFields);
         if (imageSource === 'unsplash' && unsplashMetadata.unsplashDownloadLocation) {
           await fetch(String(unsplashMetadata.unsplashDownloadLocation), {
             headers: { Authorization: `Client-ID ${env.UNSPLASH_ACCESS_KEY || ''}`, 'Accept-Version': 'v1' },
@@ -462,6 +490,9 @@ export default {
           webflowImageUrl: imageUrl,
           imageUrl,
           newsImage: imageUrl,
+          imageAttribution: attributionFields['image-attribution'],
+          imagePhotographerLink: attributionFields['image-photographer-link'],
+          imageSourceLink: attributionFields['image-source-link'],
         };
         if (imageSource === 'unsplash') {
           patch.unsplashPhotoId = safeImageText(unsplashMetadata.unsplashPhotoId, 120);

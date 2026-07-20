@@ -18,4 +18,5 @@ binding = "NEWS_BRIEF_FINALIZER_WORKFLOW"
 class_name = "NewsBriefRunFinalizerWorkflow"
 
 [vars]
+WEBFLOW_SITE_ID = "6953cd76905788ee99a03a6c"
 NEWS_BRIEF_MAX_ITEMS_PER_RUN = "1"
