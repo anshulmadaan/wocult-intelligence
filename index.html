@@ -8078,6 +8078,8 @@ var newsBriefImageState = {
   open: false,
   fromTracker: false,
   mode: 'tracker',
+  formSource: '',
+  modalSessionId: 0,
   forceCloseBlocked: false,
   tab: 'unsplash',
   articleContext: null,
@@ -11619,6 +11621,47 @@ function openPreSubmitNewsBriefImageSelection(source) {
   }, {mode:'preSubmit', formSource:source || 'manual'});
 }
 
+function resetManualNewsBriefImageModalSession(suggestedQuery) {
+  newsBriefImageState.modalSessionId += 1;
+  if (newsBriefImageState.outputUrl) URL.revokeObjectURL(newsBriefImageState.outputUrl);
+  if (newsBriefImageState.selectedSource === 'uploaded' && newsBriefImageState.selectedImage && newsBriefImageState.selectedImage.previewUrl) {
+    URL.revokeObjectURL(newsBriefImageState.selectedImage.previewUrl);
+  }
+  newsBriefImageState.tab = 'unsplash';
+  newsBriefImageState.query = suggestedQuery || '';
+  newsBriefImageState.searchInFlight = false;
+  newsBriefImageState.uploadInFlight = false;
+  newsBriefImageState.selectedSource = null;
+  newsBriefImageState.selectedImage = null;
+  newsBriefImageState.unsplashResults = [];
+  newsBriefImageState.sourceImage = null;
+  newsBriefImageState.crop = {zoom:1, x:0, y:0, dragging:false, dragX:0, dragY:0};
+  newsBriefImageState.outputBlob = null;
+  newsBriefImageState.outputUrl = '';
+  newsBriefImageState.outputSize = 0;
+  newsBriefImageState.filename = '';
+  newsBriefImageState.requestId = '';
+  var picker = document.getElementById('news-brief-image-picker');
+  var crop = document.getElementById('news-brief-image-crop');
+  var results = document.getElementById('news-image-unsplash-results');
+  var input = document.getElementById('news-image-search-query');
+  var zoom = document.getElementById('news-image-zoom');
+  var preview = document.getElementById('news-image-final-preview');
+  var meta = document.getElementById('news-image-output-meta');
+  var useBtn = document.getElementById('news-image-use-btn');
+  var searchBtn = document.getElementById('news-image-search-btn');
+  if (picker) picker.style.display = 'block';
+  if (crop) crop.style.display = 'none';
+  if (results) results.innerHTML = '';
+  if (input) input.value = newsBriefImageState.query;
+  if (zoom) zoom.value = '1';
+  if (preview) preview.removeAttribute('src');
+  if (meta) meta.textContent = '';
+  if (useBtn) useBtn.disabled = true;
+  if (searchBtn) searchBtn.disabled = false;
+  newsBriefImageStatus('', false);
+}
+
 function ensureNewsBriefImageModalLayer() {
   var modal = document.getElementById('news-brief-image-modal');
   if (!modal) return null;
@@ -11639,11 +11682,13 @@ function openNewsBriefImageSelection(articleContext, options) {
   newsBriefImageState.open = true;
   newsBriefImageState.mode = mode;
   newsBriefImageState.fromTracker = options.fromTracker === true;
+  newsBriefImageState.formSource = options.formSource || '';
   newsBriefImageState.forceCloseBlocked = mode === 'postSubmit' && isNewsBriefPostSubmitImagePromptEnabled();
   newsBriefImageState.articleContext = articleContext;
   newsBriefImageState.firebaseDocId = articleContext.articleId || '';
   newsBriefImageState.webflowItemId = articleContext.webflowItemId || '';
   newsBriefImageState.suggestedQuery = deriveNewsBriefImageKeywords(articleContext.title || '');
+  if (mode === 'preSubmit' && newsBriefImageState.formSource === 'manual') resetManualNewsBriefImageModalSession(newsBriefImageState.suggestedQuery);
   newsBriefImageState.query = options.preserveQuery ? (newsBriefImageState.query || newsBriefImageState.suggestedQuery) : newsBriefImageState.suggestedQuery;
   newsBriefImageState.selectedSource = null;
   newsBriefImageState.selectedImage = null;
@@ -11692,6 +11737,7 @@ function handleNewsBriefImageBackdrop(event) {
 }
 
 function closeNewsBriefImageSelection() {
+  var shouldResetManualSession = newsBriefImageState.mode === 'preSubmit' && newsBriefImageState.formSource === 'manual';
   var modal = document.getElementById('news-brief-image-modal');
   if (modal) modal.style.display = 'none';
   if (modal && modal.dataset.previousBodyOverflow !== undefined) {
@@ -11706,6 +11752,7 @@ function closeNewsBriefImageSelection() {
   newsBriefImageState.outputUrl = '';
   newsBriefImageState.open = false;
   newsBriefImageState.forceCloseBlocked = false;
+  if (shouldResetManualSession) resetManualNewsBriefImageModalSession(newsBriefImageState.suggestedQuery);
 }
 
 function setNewsBriefImageTab(tab) {
@@ -11729,6 +11776,7 @@ function restoreNewsBriefSuggestedImageQuery() {
 
 function searchNewsBriefUnsplash() {
   if (newsBriefImageState.searchInFlight) return;
+  var sessionId = newsBriefImageState.modalSessionId;
   var input = document.getElementById('news-image-search-query');
   var query = (input ? input.value : newsBriefImageState.query || '').trim().replace(/\s+/g,' ');
   if (!query) { newsBriefImageStatus('Enter a search term before searching Unsplash.', true); return; }
@@ -11739,13 +11787,16 @@ function searchNewsBriefUnsplash() {
   var btn = document.getElementById('news-image-search-btn');
   if (btn) btn.disabled = true;
   return workerFetchWithFirebaseAuth('/news-briefs/unsplash-search?q=' + encodeURIComponent(query), {method:'GET'}).then(parseWorkerResponse).then(function(data) {
+    if (sessionId !== newsBriefImageState.modalSessionId) return;
     renderNewsBriefUnsplashResults(data.results || []);
     newsBriefImageStatus((data.results || []).length ? 'Select an image to crop.' : 'No Unsplash results found. Try a different search.', !(data.results || []).length);
   }).catch(function(err) {
+    if (sessionId !== newsBriefImageState.modalSessionId) return;
     console.error('Unsplash search failed', err);
     renderNewsBriefUnsplashResults([]);
     newsBriefImageStatus('Unsplash search failed. You can search again, upload your own image, or skip for now.', true);
   }).finally(function() {
+    if (sessionId !== newsBriefImageState.modalSessionId) return;
     newsBriefImageState.searchInFlight = false;
     if (btn) btn.disabled = false;
   });
@@ -11794,9 +11845,11 @@ function handleNewsBriefComputerImage(file) {
 }
 
 function loadNewsBriefImageForCrop(url, meta) {
+  var sessionId = newsBriefImageState.modalSessionId;
   var img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = function() {
+    if (sessionId !== newsBriefImageState.modalSessionId) return;
     if (img.naturalWidth < 1050 || img.naturalHeight < 700) {
       newsBriefImageStatus('Choose an image at least 1050 x 700 pixels.', true);
       return;
@@ -11808,6 +11861,7 @@ function loadNewsBriefImageForCrop(url, meta) {
     showNewsBriefImageCrop();
   };
   img.onerror = function() {
+    if (sessionId !== newsBriefImageState.modalSessionId) return;
     newsBriefImageStatus('This image could not be read. Choose another image or skip for now.', true);
   };
   img.src = url;
@@ -11916,6 +11970,7 @@ function canvasToJpegBlob(canvas, quality) {
 function processNewsBriefImageOutput() {
   var canvas = document.getElementById('news-image-crop-canvas');
   if (!canvas) return Promise.resolve(null);
+  var sessionId = newsBriefImageState.modalSessionId;
   var qualities = [0.86,0.82,0.78,0.74,0.70,0.66,0.62,0.58,0.54,0.50,0.46,0.42,0.38,0.34,0.30];
   var best = null;
   var chain = Promise.resolve();
@@ -11929,6 +11984,7 @@ function processNewsBriefImageOutput() {
     });
   });
   return chain.then(function(blob) {
+    if (sessionId !== newsBriefImageState.modalSessionId) return null;
     var btn = document.getElementById('news-image-use-btn');
     var meta = document.getElementById('news-image-output-meta');
     if (newsBriefImageState.outputUrl) URL.revokeObjectURL(newsBriefImageState.outputUrl);
