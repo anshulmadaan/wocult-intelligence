@@ -636,7 +636,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       <div class="sfield"><label>Published date</label><input id="manual-review-published" /></div>
       <div class="sfield"><label>Source name</label><input id="manual-review-source-name" /></div>
       <div class="sfield"><label>Source URL</label><input id="manual-review-source-url" /></div>
-      <div class="sfield"><label>News image</label><input id="manual-review-news-image" /></div>
+      <div class="sfield"><label>News image — optional</label><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="manual-review-news-image" placeholder="Add image URL..." style="flex:1;min-width:220px" /><button class="btn" type="button" onclick="openPreSubmitNewsBriefImageSelection('manual')">Choose image</button></div><div id="manual-review-selected-image" class="hint" style="margin-top:8px"></div></div>
       <div id="manual-review-status" class="hint"></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn-lg" onclick="showManualNewsBrief()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Back</button>
@@ -693,10 +693,10 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     </div>
   </div>
 
-  <div id="news-brief-image-modal" class="news-image-modal" role="dialog" aria-modal="true" aria-labelledby="news-brief-image-title" onmousedown="if(event.target===this)event.preventDefault()">
+  <div id="news-brief-image-modal" class="news-image-modal" role="dialog" aria-modal="true" aria-labelledby="news-brief-image-title" onmousedown="handleNewsBriefImageBackdrop(event)">
     <div class="news-image-panel">
       <h2 id="news-brief-image-title" style="font-size:22px;margin-bottom:8px;font-family:Georgia,serif;color:var(--blk)">Choose an image for this News Brief</h2>
-      <p style="font-size:14px;color:var(--g3);line-height:1.6;margin-bottom:12px">Select an Unsplash image, upload your own, or skip and add one later from the Editorial Tracker.</p>
+      <p id="news-brief-image-description" style="font-size:14px;color:var(--g3);line-height:1.6;margin-bottom:12px">Select an Unsplash image, upload your own, or skip and add one later from the Editorial Tracker.</p>
       <div id="news-brief-image-status" class="hint" style="margin-bottom:12px"></div>
       <div id="news-brief-image-picker">
         <div class="news-image-tabs">
@@ -729,7 +729,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         </div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:18px">
-        <button class="btn-lg" id="news-image-skip-btn" onclick="skipNewsBriefImageSelection()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Skip for now</button>
+        <button class="btn-lg" id="news-image-skip-btn" onclick="skipNewsBriefImageSelection()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Cancel</button>
         <button class="btn-lg btn-y" id="news-image-use-btn" onclick="useSelectedNewsBriefImage()" disabled>Use this image</button>
       </div>
     </div>
@@ -3880,7 +3880,7 @@ function renderEditorialTracker() {
 }
 
 function editorialTrackerImageStateHtml(item) {
-  if (!isNewsBriefImageSelectionEnabled()) return '';
+  if (!isNewsBriefImageToolsEnabled()) return '';
   var raw = item && item.raw || {};
   var isNewsBrief = raw.contentType === 'news_brief' || raw.cmsType === 'news' || raw.sourceType === 'news_brief' || raw.sourceType === 'manual_news_brief';
   if (!isNewsBrief) return '';
@@ -3892,7 +3892,7 @@ function editorialTrackerImageStateHtml(item) {
 }
 
 function openEditorialTrackerNewsBriefImage(articleId) {
-  if (!isNewsBriefImageSelectionEnabled() || !db || !articleId) return;
+  if (!isNewsBriefImageToolsEnabled() || !db || !articleId) return;
   db.collection('articles').doc(articleId).get().then(function(snap) {
     if (!snap.exists) throw new Error('News Brief record was not found.');
     var data = Object.assign({id:snap.id}, snap.data() || {});
@@ -8059,15 +8059,26 @@ var newsBriefSubmissionState = {
   webflowResult: null,
   socialContext: null
 };
-var NEWS_BRIEF_IMAGE_SELECTION_ENABLED = false;
+var NEWS_BRIEF_POST_SUBMIT_IMAGE_PROMPT_ENABLED = false;
+var NEWS_BRIEF_IMAGE_TOOLS_ENABLED = true;
+function isNewsBriefPostSubmitImagePromptEnabled() {
+  return NEWS_BRIEF_POST_SUBMIT_IMAGE_PROMPT_ENABLED === true ||
+    window.NEWS_BRIEF_POST_SUBMIT_IMAGE_PROMPT_ENABLED === true ||
+    window.localStorage && window.localStorage.getItem('NEWS_BRIEF_POST_SUBMIT_IMAGE_PROMPT_ENABLED') === 'true';
+}
+function isNewsBriefImageToolsEnabled() {
+  return NEWS_BRIEF_IMAGE_TOOLS_ENABLED === true ||
+    window.NEWS_BRIEF_IMAGE_TOOLS_ENABLED === true ||
+    window.localStorage && window.localStorage.getItem('NEWS_BRIEF_IMAGE_TOOLS_ENABLED') === 'true';
+}
 function isNewsBriefImageSelectionEnabled() {
-  return NEWS_BRIEF_IMAGE_SELECTION_ENABLED === true ||
-    window.NEWS_BRIEF_IMAGE_SELECTION_ENABLED === true ||
-    window.localStorage && window.localStorage.getItem('NEWS_BRIEF_IMAGE_SELECTION_ENABLED') === 'true';
+  return isNewsBriefImageToolsEnabled();
 }
 var newsBriefImageState = {
   open: false,
   fromTracker: false,
+  mode: 'tracker',
+  forceCloseBlocked: false,
   tab: 'unsplash',
   articleContext: null,
   firebaseDocId: '',
@@ -8085,6 +8096,21 @@ var newsBriefImageState = {
   outputSize: 0,
   filename: '',
   requestId: ''
+};
+var newsBriefPreSubmitImageState = {
+  selected: false,
+  source: '',
+  sourceLabel: '',
+  blob: null,
+  previewUrl: '',
+  outputSize: 0,
+  filename: '',
+  requestId: '',
+  selectedImage: null,
+  unsplashMetadata: null,
+  sourceKey: '',
+  width: 1050,
+  height: 700
 };
 var manualLongViewCmsData = null;
 var longViewSubmissionState = {
@@ -9360,7 +9386,7 @@ function renderNewsBriefCmsReviewFields(content) {
       + '<div class="wf-row"><div class="wf-field"><label class="wf-label">Beat</label><input class="wf-input" id="r-beat" /></div><div class="wf-field"><label class="wf-label">Published date</label><input class="wf-input" id="r-published-date" /></div></div>'
       + '<div class="wf-row"><div class="wf-field"><label class="wf-label">Source name</label><input class="wf-input" id="r-source-name" /></div><div class="wf-field"><label class="wf-label">Source URL</label><input class="wf-input" id="r-source-url" /></div></div>'
       + '<div class="wf-field"><label class="wf-label">SEO description</label><textarea class="wf-textarea" id="r-seo-description" style="min-height:80px"></textarea></div>'
-      + '<div class="wf-field"><label class="wf-label">News image</label><input class="wf-input" id="r-news-image" placeholder="Add image URL..." /></div>';
+      + '<div class="wf-field"><label class="wf-label">News image — optional</label><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="wf-input" id="r-news-image" placeholder="Add image URL..." style="flex:1;min-width:220px" /><button class="btn" type="button" onclick="openPreSubmitNewsBriefImageSelection(\'generated\')">Choose image</button></div><div id="r-news-image-selected-preview" class="hint" style="margin-top:8px"></div></div>';
     box.setAttribute('data-layout', 'news_brief');
   }
   populateNewsBriefReviewFields(content || generatedContent || {});
@@ -9379,6 +9405,7 @@ function populateNewsBriefReviewFields(content) {
   setCmsFieldValue('r-source-url', content.sourceUrl || (currentCard && currentCard.link) || '');
   setCmsFieldValue('r-seo-description', content.seoDescription || content.excerpt || content.standfirst || content.shortIntro || '');
   setCmsFieldValue('r-news-image', content.newsImage || content.imageUrl || '');
+  renderNewsBriefPreSubmitImagePreview();
   updateReviewWordCount();
 }
 function openDraft(idx) {
@@ -10799,7 +10826,8 @@ function collectNewsBriefData(writerName) {
   var title = toSentenceCaseHeadline(cmsFieldValue('r-title'));
   var standfirst = cmsFieldValue('r-standfirst') || cmsFieldValue('r-short');
   var publishedDate = cmsFieldValue('r-published-date') || cmsFieldValue('r-date');
-  var newsImage = cmsFieldValue('r-news-image') || cmsFieldValue('r-img-url');
+  var selectedImageActive = newsBriefPreSubmitImageState && newsBriefPreSubmitImageState.selected;
+  var newsImage = selectedImageActive ? '' : (cmsFieldValue('r-news-image') || cmsFieldValue('r-img-url'));
   return {
     title: title,
     slug: makeSlug(cmsFieldValue('r-slug') || title),
@@ -10943,6 +10971,7 @@ function populateManualNewsBriefReview(fields) {
   document.getElementById('manual-review-source-name').value = fields.sourceName || '';
   document.getElementById('manual-review-source-url').value = fields.sourceUrl || '';
   document.getElementById('manual-review-news-image').value = fields.newsImage || '';
+  renderNewsBriefPreSubmitImagePreview();
   var status = document.getElementById('manual-review-status');
   if (status) status.textContent = '';
 }
@@ -10951,6 +10980,8 @@ function collectManualNewsBriefReviewData() {
   var title = toSentenceCaseHeadline(document.getElementById('manual-review-title').value);
   var standfirst = document.getElementById('manual-review-standfirst').value.trim();
   var body = cleanNewsBriefBody(title, standfirst, formatManualNewsBody(document.getElementById('manual-review-body').value));
+  var selectedImageActive = newsBriefPreSubmitImageState && newsBriefPreSubmitImageState.selected;
+  var manualImageUrl = selectedImageActive ? '' : document.getElementById('manual-review-news-image').value.trim();
   return {
     title: title,
     slug: makeSlug(document.getElementById('manual-review-slug').value || title),
@@ -10963,8 +10994,8 @@ function collectManualNewsBriefReviewData() {
     publishDate: toWebflowDateTime(document.getElementById('manual-review-published').value || new Date()),
     sourceName: document.getElementById('manual-review-source-name').value.trim(),
     sourceUrl: document.getElementById('manual-review-source-url').value.trim(),
-    imageUrl: document.getElementById('manual-review-news-image').value.trim(),
-    newsImage: document.getElementById('manual-review-news-image').value.trim(),
+    imageUrl: manualImageUrl,
+    newsImage: manualImageUrl,
     contentType: 'news_brief',
     cmsType: 'news',
     status: 'submitted'
@@ -11570,27 +11601,56 @@ function buildNewsBriefImageFilename(headline, seed) {
   return 'wocult-' + safeNewsBriefImageSlug(headline) + '-' + shortNewsBriefImageSuffix(seed) + '.jpg';
 }
 
+function newsBriefImageFormHeadline(source) {
+  if (source === 'manual') return document.getElementById('manual-review-title') ? document.getElementById('manual-review-title').value.trim() : '';
+  return cmsFieldValue('r-title') || (generatedContent && generatedContent.title) || '';
+}
+
+function openPreSubmitNewsBriefImageSelection(source) {
+  if (!isNewsBriefImageToolsEnabled()) return;
+  var title = newsBriefImageFormHeadline(source) || 'News Brief';
+  openNewsBriefImageSelection({
+    articleId:'',
+    webflowItemId:'',
+    title:title,
+    contentType:'news_brief',
+    cmsType:'news',
+    sourceType:'news_brief'
+  }, {mode:'preSubmit', formSource:source || 'manual'});
+}
+
 function openNewsBriefImageSelection(articleContext, options) {
-  if (!articleContext || !articleContext.articleId || !articleContext.webflowItemId) {
+  options = options || {};
+  var mode = options.mode || (options.fromTracker ? 'tracker' : 'postSubmit');
+  if (!isNewsBriefImageToolsEnabled()) return;
+  if (mode !== 'preSubmit' && (!articleContext || !articleContext.articleId || !articleContext.webflowItemId)) {
     offerNewsBriefSocialWorkflow(articleContext);
     return;
   }
-  options = options || {};
   newsBriefImageState.open = true;
+  newsBriefImageState.mode = mode;
   newsBriefImageState.fromTracker = options.fromTracker === true;
+  newsBriefImageState.forceCloseBlocked = mode === 'postSubmit' && isNewsBriefPostSubmitImagePromptEnabled();
   newsBriefImageState.articleContext = articleContext;
-  newsBriefImageState.firebaseDocId = articleContext.articleId;
-  newsBriefImageState.webflowItemId = articleContext.webflowItemId;
+  newsBriefImageState.firebaseDocId = articleContext.articleId || '';
+  newsBriefImageState.webflowItemId = articleContext.webflowItemId || '';
   newsBriefImageState.suggestedQuery = deriveNewsBriefImageKeywords(articleContext.title || '');
-  newsBriefImageState.query = newsBriefImageState.query || newsBriefImageState.suggestedQuery;
+  newsBriefImageState.query = options.preserveQuery ? (newsBriefImageState.query || newsBriefImageState.suggestedQuery) : newsBriefImageState.suggestedQuery;
   newsBriefImageState.selectedSource = null;
   newsBriefImageState.selectedImage = null;
   newsBriefImageState.outputBlob = null;
   newsBriefImageState.outputSize = 0;
   newsBriefImageState.filename = '';
+  newsBriefImageState.requestId = '';
   var modal = document.getElementById('news-brief-image-modal');
   var input = document.getElementById('news-image-search-query');
-  if (input && !input.value) input.value = newsBriefImageState.query;
+  var desc = document.getElementById('news-brief-image-description');
+  var cancel = document.getElementById('news-image-skip-btn');
+  var useBtn = document.getElementById('news-image-use-btn');
+  if (input) input.value = newsBriefImageState.query;
+  if (desc) desc.textContent = mode === 'postSubmit' ? 'Select an Unsplash image, upload your own, or skip and add one later from the Editorial Tracker.' : 'Select an Unsplash image, upload your own, crop it, or cancel without changing this News Brief.';
+  if (cancel) cancel.textContent = mode === 'postSubmit' ? 'Skip for now' : 'Cancel';
+  if (useBtn) useBtn.textContent = 'Use this image';
   if (modal) modal.style.display = 'flex';
   document.addEventListener('keydown', preventNewsBriefImageEscape, true);
   setNewsBriefImageTab('unsplash');
@@ -11600,16 +11660,35 @@ function openNewsBriefImageSelection(articleContext, options) {
 
 function preventNewsBriefImageEscape(event) {
   if (newsBriefImageState.open && event.key === 'Escape') {
-    event.preventDefault();
-    event.stopPropagation();
+    if (newsBriefImageState.forceCloseBlocked) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    closeNewsBriefImageSelection();
   }
+}
+
+function handleNewsBriefImageBackdrop(event) {
+  if (event.target !== event.currentTarget) return;
+  if (newsBriefImageState.forceCloseBlocked) {
+    event.preventDefault();
+    return;
+  }
+  closeNewsBriefImageSelection();
 }
 
 function closeNewsBriefImageSelection() {
   var modal = document.getElementById('news-brief-image-modal');
   if (modal) modal.style.display = 'none';
   document.removeEventListener('keydown', preventNewsBriefImageEscape, true);
+  if (newsBriefImageState.outputUrl) URL.revokeObjectURL(newsBriefImageState.outputUrl);
+  if (newsBriefImageState.selectedSource === 'uploaded' && newsBriefImageState.selectedImage && newsBriefImageState.selectedImage.previewUrl) {
+    URL.revokeObjectURL(newsBriefImageState.selectedImage.previewUrl);
+  }
+  newsBriefImageState.outputUrl = '';
   newsBriefImageState.open = false;
+  newsBriefImageState.forceCloseBlocked = false;
 }
 
 function setNewsBriefImageTab(tab) {
@@ -11687,6 +11766,9 @@ function handleNewsBriefComputerImage(file) {
   if (file.size > 12 * 1024 * 1024) {
     newsBriefImageStatus('Choose an image under 12 MB.', true);
     return;
+  }
+  if (newsBriefImageState.selectedSource === 'uploaded' && newsBriefImageState.selectedImage && newsBriefImageState.selectedImage.previewUrl) {
+    URL.revokeObjectURL(newsBriefImageState.selectedImage.previewUrl);
   }
   var url = URL.createObjectURL(file);
   newsBriefImageState.selectedSource = 'uploaded';
@@ -11853,10 +11935,125 @@ function newsBriefImageSourceKey() {
   return [img.file && img.file.name, img.file && img.file.size, img.file && img.file.lastModified].join('-');
 }
 
+function selectedNewsBriefImageMetadata() {
+  var source = newsBriefImageState.selectedImage || {};
+  return {
+    source: newsBriefImageState.selectedSource,
+    unsplashPhotoId: source.unsplashPhotoId || source.id || '',
+    unsplashPhotographerName: source.photographerName || '',
+    unsplashPhotographerUrl: source.photographerUrl || '',
+    unsplashAttributionUrl: source.attributionUrl || '',
+    unsplashDownloadLocation: source.downloadLocation || ''
+  };
+}
+
+function clearNewsBriefPreSubmitImage() {
+  if (newsBriefPreSubmitImageState.previewUrl) URL.revokeObjectURL(newsBriefPreSubmitImageState.previewUrl);
+  newsBriefPreSubmitImageState = {
+    selected: false,
+    source: '',
+    sourceLabel: '',
+    blob: null,
+    previewUrl: '',
+    outputSize: 0,
+    filename: '',
+    requestId: '',
+    selectedImage: null,
+    unsplashMetadata: null,
+    sourceKey: '',
+    width: 1050,
+    height: 700
+  };
+  renderNewsBriefPreSubmitImagePreview();
+}
+
+function removeNewsBriefPreSubmitImage() {
+  clearNewsBriefPreSubmitImage();
+}
+
+function storeNewsBriefPreSubmitImage() {
+  var article = newsBriefImageState.articleContext || {};
+  var sourceKey = newsBriefImageSourceKey();
+  var filename = buildNewsBriefImageFilename(article.title || newsBriefImageFormHeadline('generated') || newsBriefImageFormHeadline('manual') || '', sourceKey);
+  var selectedMeta = Object.assign({}, newsBriefImageState.selectedImage || {});
+  delete selectedMeta.file;
+  delete selectedMeta.previewUrl;
+  delete selectedMeta.processingUrl;
+  if (newsBriefPreSubmitImageState.previewUrl) URL.revokeObjectURL(newsBriefPreSubmitImageState.previewUrl);
+  newsBriefPreSubmitImageState = {
+    selected: true,
+    source: newsBriefImageState.selectedSource || '',
+    sourceLabel: newsBriefImageState.selectedSource === 'unsplash' ? 'Unsplash' : 'Computer upload',
+    blob: newsBriefImageState.outputBlob,
+    previewUrl: URL.createObjectURL(newsBriefImageState.outputBlob),
+    outputSize: newsBriefImageState.outputSize || (newsBriefImageState.outputBlob && newsBriefImageState.outputBlob.size) || 0,
+    filename: filename,
+    requestId: '',
+    selectedImage: selectedMeta,
+    unsplashMetadata: selectedNewsBriefImageMetadata(),
+    sourceKey: sourceKey,
+    width: 1050,
+    height: 700
+  };
+  renderNewsBriefPreSubmitImagePreview();
+  closeNewsBriefImageSelection();
+}
+
+function renderNewsBriefPreSubmitImagePreview() {
+  var state = newsBriefPreSubmitImageState || {};
+  var targets = [
+    {box:document.getElementById('manual-review-selected-image'), input:document.getElementById('manual-review-news-image'), source:'manual'},
+    {box:document.getElementById('r-news-image-selected-preview'), input:document.getElementById('r-news-image'), source:'generated'}
+  ];
+  targets.forEach(function(target) {
+    if (target.input) target.input.disabled = state.selected === true;
+    if (!target.box) return;
+    if (!state.selected) {
+      target.box.innerHTML = '';
+      return;
+    }
+    var kb = Math.round((state.outputSize || 0) / 1024);
+    target.box.innerHTML =
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--bdr);border-radius:8px;padding:10px;background:#fff">'
+      + '<img src="'+escapeHtml(state.previewUrl || '')+'" alt="'+escapeHtml('Selected News Brief image')+'" style="width:126px;height:84px;object-fit:cover;border-radius:6px;border:1px solid var(--bdr)" />'
+      + '<div style="flex:1;min-width:180px"><div style="font-weight:700;color:var(--blk)">Selected image</div><div class="hint">'+escapeHtml(state.sourceLabel || 'Image')+' · 1050 x 700 px · JPEG · '+kb+' KB</div></div>'
+      + '<button class="btn" type="button" onclick="openPreSubmitNewsBriefImageSelection(\''+target.source+'\')">Change image</button>'
+      + '<button class="btn" type="button" onclick="removeNewsBriefPreSubmitImage()">Remove image</button>'
+      + '</div>';
+  });
+}
+
+function uploadNewsBriefImageToWorker(article, blob, imageState) {
+  article = article || {};
+  imageState = imageState || {};
+  var docId = article.articleId || imageState.firebaseDocId || '';
+  var itemId = article.webflowItemId || imageState.webflowItemId || '';
+  if (!docId || !itemId) return Promise.reject(new Error('Missing Firebase or Webflow item ID for image upload.'));
+  var sourceKey = imageState.sourceKey || newsBriefImageSourceKey();
+  var filename = imageState.filename || buildNewsBriefImageFilename(article.title || '', docId + '-' + sourceKey);
+  var requestId = imageState.requestId || [docId, sourceKey, filename].join(':');
+  var meta = imageState.unsplashMetadata || selectedNewsBriefImageMetadata();
+  var form = new FormData();
+  form.append('firebaseDocId', docId);
+  form.append('webflowItemId', itemId);
+  form.append('filename', filename);
+  form.append('headline', article.title || '');
+  form.append('altText', article.title || '');
+  form.append('imageSource', imageState.source || newsBriefImageState.selectedSource || '');
+  form.append('imageRequestId', requestId);
+  form.append('unsplashMetadata', JSON.stringify(meta));
+  form.append('file', blob, filename);
+  return workerFetchWithFirebaseAuthRaw('/news-briefs/image', {method:'POST', body:form}).then(parseWorkerResponse);
+}
+
 function useSelectedNewsBriefImage() {
   if (newsBriefImageState.uploadInFlight || !newsBriefImageState.outputBlob) return;
   if (newsBriefImageState.outputBlob.size >= 100 * 1024) {
     newsBriefImageStatus('The final JPEG must be below 100 KB before upload.', true);
+    return;
+  }
+  if (newsBriefImageState.mode === 'preSubmit') {
+    storeNewsBriefPreSubmitImage();
     return;
   }
   var article = newsBriefImageState.articleContext || {};
@@ -11869,15 +12066,6 @@ function useSelectedNewsBriefImage() {
   var btn = document.getElementById('news-image-use-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
   newsBriefImageStatus('Uploading image and updating Webflow...', false);
-  var source = newsBriefImageState.selectedImage || {};
-  var meta = {
-    source: newsBriefImageState.selectedSource,
-    unsplashPhotoId: source.unsplashPhotoId || source.id || '',
-    unsplashPhotographerName: source.photographerName || '',
-    unsplashPhotographerUrl: source.photographerUrl || '',
-    unsplashAttributionUrl: source.attributionUrl || '',
-    unsplashDownloadLocation: source.downloadLocation || ''
-  };
   if (db && newsBriefImageState.firebaseDocId) {
     db.collection('articles').doc(newsBriefImageState.firebaseDocId).set({
       imageStatus:'processing',
@@ -11886,17 +12074,16 @@ function useSelectedNewsBriefImage() {
       imageUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()
     }, {merge:true}).catch(function(err){ console.warn('Could not mark image processing:', err); });
   }
-  var form = new FormData();
-  form.append('firebaseDocId', newsBriefImageState.firebaseDocId);
-  form.append('webflowItemId', newsBriefImageState.webflowItemId);
-  form.append('filename', filename);
-  form.append('headline', article.title || '');
-  form.append('altText', article.title || '');
-  form.append('imageSource', newsBriefImageState.selectedSource || '');
-  form.append('imageRequestId', requestId);
-  form.append('unsplashMetadata', JSON.stringify(meta));
-  form.append('file', newsBriefImageState.outputBlob, filename);
-  workerFetchWithFirebaseAuthRaw('/news-briefs/image', {method:'POST', body:form}).then(parseWorkerResponse).then(function(result) {
+  uploadNewsBriefImageToWorker(Object.assign({}, article, {
+    articleId:newsBriefImageState.firebaseDocId,
+    webflowItemId:newsBriefImageState.webflowItemId
+  }), newsBriefImageState.outputBlob, {
+    source:newsBriefImageState.selectedSource,
+    sourceKey:sourceKey,
+    filename:filename,
+    requestId:requestId,
+    unsplashMetadata:selectedNewsBriefImageMetadata()
+  }).then(function(result) {
     var url = result.webflowImageUrl || result.hostedUrl || result.assetUrl || '';
     var updatedArticle = Object.assign({}, article, {
       imageUrl:url,
@@ -11907,8 +12094,12 @@ function useSelectedNewsBriefImage() {
     newsBriefImageState.articleContext = updatedArticle;
     newsBriefSubmissionState.socialContext = updatedArticle;
     closeNewsBriefImageSelection();
-    if (newsBriefImageState.fromTracker) loadEditorialTracker({force:true});
-    proceedToNewsBriefSocialWorkflow(updatedArticle);
+    if (newsBriefImageState.fromTracker) {
+      loadEditorialTracker({force:true});
+      fbToast('Image added to the existing News Brief.', true);
+    } else {
+      proceedToNewsBriefSocialWorkflow(updatedArticle);
+    }
   }).catch(function(err) {
     console.error('News brief image upload failed', err);
     if (db && newsBriefImageState.firebaseDocId) {
@@ -11934,6 +12125,10 @@ function markNewsBriefImagePending(docId) {
 
 function skipNewsBriefImageSelection() {
   if (newsBriefImageState.uploadInFlight) return;
+  if (newsBriefImageState.mode === 'preSubmit' || newsBriefImageState.fromTracker) {
+    closeNewsBriefImageSelection();
+    return;
+  }
   var btn = document.getElementById('news-image-skip-btn');
   if (btn) btn.disabled = true;
   markNewsBriefImagePending(newsBriefImageState.firebaseDocId).catch(function(err) {
@@ -11953,23 +12148,85 @@ function proceedToNewsBriefSocialWorkflow(articleContext) {
   startNewsBriefSocialWorkflow();
 }
 
-function renderNewsBriefSubmissionSuccess(docId, data, webflowData) {
-  var socialContext = buildNewsBriefSocialContext(docId, data, webflowData);
+function updateNewsBriefSocialContextWithImage(articleContext, result) {
+  var url = result && (result.webflowImageUrl || result.hostedUrl || result.assetUrl) || '';
+  return Object.assign({}, articleContext, {
+    imageUrl:url,
+    newsImage:url,
+    webflowAssetId:result && result.webflowAssetId || '',
+    firebaseData:Object.assign({}, articleContext.firebaseData || {}, {imageUrl:url, newsImage:url, imageStatus:'completed'})
+  });
+}
+
+function uploadPreSubmitNewsBriefImageIfNeeded(socialContext) {
+  if (!newsBriefPreSubmitImageState || !newsBriefPreSubmitImageState.selected || !newsBriefPreSubmitImageState.blob) {
+    if (!socialContext.imageUrl && !socialContext.newsImage) {
+      markNewsBriefImagePending(socialContext.articleId).catch(function(err) {
+        console.warn('Could not mark image pending:', err);
+      });
+    }
+    return Promise.resolve(socialContext);
+  }
+  var selected = newsBriefPreSubmitImageState;
+  var filename = buildNewsBriefImageFilename(socialContext.title || '', socialContext.articleId + '-' + selected.sourceKey);
+  var requestId = [socialContext.articleId, selected.sourceKey, filename].join(':');
+  selected.filename = filename;
+  selected.requestId = requestId;
+  if (db && socialContext.articleId) {
+    db.collection('articles').doc(socialContext.articleId).set({
+      imageStatus:'processing',
+      imageSource:selected.source,
+      imageRequestId:requestId,
+      imageUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true}).catch(function(err){ console.warn('Could not mark image processing:', err); });
+  }
+  return uploadNewsBriefImageToWorker(socialContext, selected.blob, selected).then(function(result) {
+    var updated = updateNewsBriefSocialContextWithImage(socialContext, result);
+    clearNewsBriefPreSubmitImage();
+    return updated;
+  }).catch(function(err) {
+    console.error('Pre-submit News Brief image upload failed', err);
+    if (db && socialContext.articleId) {
+      db.collection('articles').doc(socialContext.articleId).set({
+        imageStatus:'failed',
+        imageUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()
+      }, {merge:true}).catch(function(fbErr){ console.warn('Could not mark image failure:', fbErr); });
+    }
+    var status = document.getElementById('manual-review-status') || document.getElementById('publish-result');
+    if (status) status.innerHTML = '<div class="publish-success"><div class="publish-title">News Brief saved, but the image could not be added.</div><div class="publish-sub">You can continue to socials now and add the image later from the Editorial Tracker.</div></div>';
+    return Object.assign({}, socialContext, {imageUploadFailed:true});
+  });
+}
+
+function renderNewsBriefSubmissionSuccessFromContext(socialContext) {
   newsBriefSubmissionState.socialContext = socialContext;
-  if (isNewsBriefImageSelectionEnabled()) {
-    openNewsBriefImageSelection(socialContext);
+  if (isNewsBriefPostSubmitImagePromptEnabled()) {
+    openNewsBriefImageSelection(socialContext, {mode:'postSubmit'});
   } else {
     offerNewsBriefSocialWorkflow(socialContext);
   }
   var result = document.getElementById('publish-result');
+  var imageFailureHtml = socialContext && socialContext.imageUploadFailed ? '<div class="publish-sub" style="color:var(--red);margin-top:8px">News Brief saved, but the image could not be added. You can continue to socials now and add the image later from the Editorial Tracker.</div>' : '';
   if (result) {
     result.style.display = 'block';
-    result.innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief saved</div><div class="publish-sub">Saved to Firebase and created as a Webflow News draft.</div><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()">Work on socials</button><button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Not now</button><button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button></div></div>';
+    result.innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief saved</div><div class="publish-sub">Saved to Firebase and created as a Webflow News draft.</div>'+imageFailureHtml+'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()">Work on socials</button><button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Not now</button><button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button></div></div>';
   } else if (document.getElementById('manual-review-status')) {
-    document.getElementById('manual-review-status').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief saved</div><div class="publish-sub">Saved to Firebase and created as a Webflow News draft.</div><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()">Work on socials</button><button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Not now</button><button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button></div></div>';
+    document.getElementById('manual-review-status').innerHTML = '<div class="publish-success"><div class="publish-icon">&#9989;</div><div class="publish-title">News brief saved</div><div class="publish-sub">Saved to Firebase and created as a Webflow News draft.</div>'+imageFailureHtml+'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button class="btn-lg btn-y" onclick="startNewsBriefSocialWorkflow()">Work on socials</button><button class="btn-lg" onclick="skipNewsBriefSocialWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Not now</button><button class="btn-lg" onclick="goToLanding()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Back to dashboard</button></div></div>';
   }
   var actions = document.getElementById('publish-actions');
   if (actions) actions.style.display = 'none';
+}
+
+function renderNewsBriefSubmissionSuccess(docId, data, webflowData) {
+  return renderNewsBriefSubmissionSuccessFromContext(buildNewsBriefSocialContext(docId, data, webflowData));
+}
+
+function completeNewsBriefSubmission(docId, data, webflowData) {
+  var socialContext = buildNewsBriefSocialContext(docId, data, webflowData);
+  return uploadPreSubmitNewsBriefImageIfNeeded(socialContext).then(function(updatedContext) {
+    renderNewsBriefSubmissionSuccessFromContext(updatedContext);
+    return updatedContext;
+  });
 }
 
 function retryNewsBriefWebflowSubmission() {
@@ -11983,7 +12240,7 @@ function retryNewsBriefWebflowSubmission() {
   if (btn) { btn.disabled = true; btn.textContent = 'Creating Webflow draft...'; }
   createNewsBriefWebflowDraft(newsBriefSubmissionState.firebaseDocId, newsBriefSubmissionState.articleData).then(function(webflowData) {
     newsBriefSubmissionState.webflowResult = webflowData;
-    renderNewsBriefSubmissionSuccess(newsBriefSubmissionState.firebaseDocId, newsBriefSubmissionState.articleData, webflowData);
+    return completeNewsBriefSubmission(newsBriefSubmissionState.firebaseDocId, newsBriefSubmissionState.articleData, webflowData);
   }).catch(function(err) {
     console.error('News brief Webflow retry failed', err);
     renderNewsBriefWebflowFailure(newsBriefSubmissionState.firebaseDocId, newsBriefSubmissionState.articleData, err);
@@ -12015,8 +12272,8 @@ function submitManualNewsBriefToCms() {
     return createNewsBriefWebflowDraft(savedDocId, newsBriefSubmissionState.articleData);
   }).then(function(webflowData) {
     newsBriefSubmissionState.webflowResult = webflowData;
-    if (status) status.textContent = 'News brief saved and submitted to CMS.';
-    renderNewsBriefSubmissionSuccess(savedDocId, newsBriefSubmissionState.articleData, webflowData);
+    if (status) status.textContent = newsBriefPreSubmitImageState && newsBriefPreSubmitImageState.selected ? 'News brief saved. Uploading selected image...' : 'News brief saved and submitted to CMS.';
+    return completeNewsBriefSubmission(savedDocId, newsBriefSubmissionState.articleData, webflowData);
   }).catch(function(err) {
     console.error('Manual news brief submit failed', err);
     if (savedDocId) renderNewsBriefWebflowFailure(savedDocId, newsBriefSubmissionState.articleData, err);
@@ -12051,7 +12308,8 @@ function submitNewsBriefArticle(writerName) {
       articleId: submittedDocId,
       contentType: newsData.contentType
     });
-    renderNewsBriefSubmissionSuccess(submittedDocId, newsData, webflowData);
+    btn.textContent = newsBriefPreSubmitImageState && newsBriefPreSubmitImageState.selected ? 'Uploading image...' : btn.textContent;
+    return completeNewsBriefSubmission(submittedDocId, newsData, webflowData);
   }).catch(function(e) {
     console.error('News brief submission failed', e);
     if (submittedDocId) renderNewsBriefWebflowFailure(submittedDocId, newsData, e);
