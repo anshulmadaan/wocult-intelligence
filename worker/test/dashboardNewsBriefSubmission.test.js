@@ -154,6 +154,37 @@ test('News Brief image tools are enabled while the forced post-submit prompt sta
   assert.match(functionBlock('handleNewsBriefImageBackdrop'), /closeNewsBriefImageSelection/);
 });
 
+test('News Brief image modal is hoisted above dashboard forms before display', () => {
+  const ensureLayer = functionBlock('ensureNewsBriefImageModalLayer');
+  const openImage = functionBlock('openNewsBriefImageSelection');
+  assert.match(html, /\.news-image-modal\{[^}]*position:fixed[^}]*z-index:10120/);
+  assert.match(html, /id="landing-manual-news-review"/);
+  assert.match(html, /id="news-brief-social-modal"[^>]*z-index:10050/);
+  assert.match(ensureLayer, /document\.getElementById\('news-brief-image-modal'\)/);
+  assert.match(ensureLayer, /modal\.parentElement !== document\.body/);
+  assert.match(ensureLayer, /document\.body\.appendChild\(modal\)/);
+  assert.match(ensureLayer, /modal\.style\.position = 'fixed'/);
+  assert.match(ensureLayer, /modal\.style\.zIndex = '10120'/);
+  assert.match(openImage, /var modal = ensureNewsBriefImageModalLayer\(\)/);
+  assert.match(openImage, /modal\.style\.display = 'flex'/);
+  assert.match(functionBlock('openPreSubmitNewsBriefImageSelection'), /openNewsBriefImageSelection/);
+  assert.match(functionBlock('openEditorialTrackerNewsBriefImage'), /openNewsBriefImageSelection/);
+});
+
+test('News Brief image modal close paths restore scrolling and keep one modal element', () => {
+  const closeImage = functionBlock('closeNewsBriefImageSelection');
+  assert.match(functionBlock('ensureNewsBriefImageModalLayer'), /appendChild\(modal\)/);
+  assert.doesNotMatch(functionBlock('ensureNewsBriefImageModalLayer'), /cloneNode|createElement/);
+  assert.match(functionBlock('openNewsBriefImageSelection'), /modal\.dataset\.previousBodyOverflow/);
+  assert.match(functionBlock('openNewsBriefImageSelection'), /document\.body\.style\.overflow = 'hidden'/);
+  assert.match(closeImage, /document\.body\.style\.overflow = modal\.dataset\.previousBodyOverflow/);
+  assert.match(closeImage, /delete modal\.dataset\.previousBodyOverflow/);
+  assert.match(functionBlock('preventNewsBriefImageEscape'), /closeNewsBriefImageSelection/);
+  assert.match(functionBlock('handleNewsBriefImageBackdrop'), /closeNewsBriefImageSelection/);
+  assert.match(functionBlock('skipNewsBriefImageSelection'), /closeNewsBriefImageSelection/);
+  assert.match(functionBlock('storeNewsBriefPreSubmitImage'), /renderNewsBriefPreSubmitImagePreview/);
+});
+
 test('Pre-submit News Brief image selection stores a temporary image before submission', () => {
   assert.match(functionBlock('openPreSubmitNewsBriefImageSelection'), /mode:'preSubmit'/);
   assert.match(functionBlock('useSelectedNewsBriefImage'), /newsBriefImageState\.mode === 'preSubmit'/);
