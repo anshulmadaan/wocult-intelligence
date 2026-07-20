@@ -138,7 +138,7 @@ test('News Brief success confirms Webflow draft and offers existing social workf
 });
 
 test('Optional News Brief image selection is feature flagged and forced when enabled', () => {
-  assert.match(html, /var NEWS_BRIEF_IMAGE_SELECTION_ENABLED = true/);
+  assert.match(html, /var NEWS_BRIEF_IMAGE_SELECTION_ENABLED = false/);
   assert.match(html, /function isNewsBriefImageSelectionEnabled/);
   assert.match(html, /Choose an image for this News Brief/);
   assert.match(html, /Select an Unsplash image, upload your own, or skip and add one later from the Editorial Tracker\./);
