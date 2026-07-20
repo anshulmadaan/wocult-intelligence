@@ -240,7 +240,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">14.3</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -11647,6 +11647,7 @@ function resetManualNewsBriefImageModalSession(suggestedQuery) {
   var input = document.getElementById('news-image-search-query');
   var zoom = document.getElementById('news-image-zoom');
   var preview = document.getElementById('news-image-final-preview');
+  var canvas = document.getElementById('news-image-crop-canvas');
   var meta = document.getElementById('news-image-output-meta');
   var useBtn = document.getElementById('news-image-use-btn');
   var searchBtn = document.getElementById('news-image-search-btn');
@@ -11656,6 +11657,7 @@ function resetManualNewsBriefImageModalSession(suggestedQuery) {
   if (input) input.value = newsBriefImageState.query;
   if (zoom) zoom.value = '1';
   if (preview) preview.removeAttribute('src');
+  if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
   if (meta) meta.textContent = '';
   if (useBtn) useBtn.disabled = true;
   if (searchBtn) searchBtn.disabled = false;
@@ -11679,6 +11681,7 @@ function openNewsBriefImageSelection(articleContext, options) {
     offerNewsBriefSocialWorkflow(articleContext);
     return;
   }
+  var manualFreshSession = mode === 'preSubmit' && options.formSource === 'manual';
   newsBriefImageState.open = true;
   newsBriefImageState.mode = mode;
   newsBriefImageState.fromTracker = options.fromTracker === true;
@@ -11688,7 +11691,6 @@ function openNewsBriefImageSelection(articleContext, options) {
   newsBriefImageState.firebaseDocId = articleContext.articleId || '';
   newsBriefImageState.webflowItemId = articleContext.webflowItemId || '';
   newsBriefImageState.suggestedQuery = deriveNewsBriefImageKeywords(articleContext.title || '');
-  if (mode === 'preSubmit' && newsBriefImageState.formSource === 'manual') resetManualNewsBriefImageModalSession(newsBriefImageState.suggestedQuery);
   newsBriefImageState.query = options.preserveQuery ? (newsBriefImageState.query || newsBriefImageState.suggestedQuery) : newsBriefImageState.suggestedQuery;
   newsBriefImageState.selectedSource = null;
   newsBriefImageState.selectedImage = null;
@@ -11712,6 +11714,7 @@ function openNewsBriefImageSelection(articleContext, options) {
   }
   document.addEventListener('keydown', preventNewsBriefImageEscape, true);
   setNewsBriefImageTab('unsplash');
+  if (manualFreshSession) resetManualNewsBriefImageModalSession(newsBriefImageState.suggestedQuery);
   newsBriefImageStatus('', false);
   if (!options.deferSearch) searchNewsBriefUnsplash();
 }

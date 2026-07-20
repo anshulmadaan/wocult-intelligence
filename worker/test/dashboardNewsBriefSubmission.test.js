@@ -202,8 +202,9 @@ test('Manual News Brief image modal opens with a fresh search session', () => {
   const openImage = functionBlock('openNewsBriefImageSelection');
   const resetManual = functionBlock('resetManualNewsBriefImageModalSession');
   assert.match(openManual, /formSource:source \|\| 'manual'/);
-  assert.match(openImage, /mode === 'preSubmit' && newsBriefImageState\.formSource === 'manual'/);
+  assert.match(openImage, /manualFreshSession = mode === 'preSubmit' && options\.formSource === 'manual'/);
   assert.match(openImage, /resetManualNewsBriefImageModalSession\(newsBriefImageState\.suggestedQuery\)/);
+  assert.match(openImage, /setNewsBriefImageTab\('unsplash'\);\s+if \(manualFreshSession\) resetManualNewsBriefImageModalSession/);
   assert.match(resetManual, /newsBriefImageState\.modalSessionId \+= 1/);
   assert.match(resetManual, /newsBriefImageState\.tab = 'unsplash'/);
   assert.match(resetManual, /newsBriefImageState\.query = suggestedQuery \|\| ''/);
@@ -230,6 +231,7 @@ test('Manual News Brief image modal close clears transient crop state but keeps 
   assert.match(resetManual, /newsBriefImageState\.outputSize = 0/);
   assert.match(resetManual, /zoom\.value = '1'/);
   assert.match(resetManual, /preview\.removeAttribute\('src'\)/);
+  assert.match(resetManual, /canvas\.getContext\('2d'\)\.clearRect/);
   assert.match(resetManual, /newsBriefImageStatus\('', false\)/);
   assert.match(functionBlock('searchNewsBriefUnsplash'), /var sessionId = newsBriefImageState\.modalSessionId/);
   assert.match(functionBlock('searchNewsBriefUnsplash'), /sessionId !== newsBriefImageState\.modalSessionId/);
@@ -239,6 +241,150 @@ test('Manual News Brief image modal close clears transient crop state but keeps 
   assert.match(functionBlock('storeNewsBriefPreSubmitImage'), /if \(newsBriefPreSubmitImageState\.previewUrl\) URL\.revokeObjectURL/);
   assert.match(functionBlock('storeNewsBriefPreSubmitImage'), /newsBriefPreSubmitImageState = \{/);
   assert.match(functionBlock('removeNewsBriefPreSubmitImage'), /clearNewsBriefPreSubmitImage/);
+});
+
+test('Manual selector runtime reset keeps confirmed form image out of modal editor state', () => {
+  const elements = new Map();
+  const makeElement = (id) => ({
+    id,
+    style: {},
+    dataset: {},
+    value: '',
+    innerHTML: '',
+    textContent: '',
+    className: '',
+    parentElement: { id: 'app-root' },
+    disabled: false,
+    width: 1050,
+    height: 700,
+    removeAttribute(name) { this[name] = ''; },
+    getContext() { return { clearRect: () => { this.canvasCleared = true; } }; },
+  });
+  [
+    'manual-review-title',
+    'manual-review-selected-image',
+    'news-brief-image-modal',
+    'news-image-search-query',
+    'news-brief-image-description',
+    'news-image-skip-btn',
+    'news-image-use-btn',
+    'news-image-unsplash-panel',
+    'news-image-upload-panel',
+    'news-image-tab-unsplash',
+    'news-image-tab-upload',
+    'news-brief-image-picker',
+    'news-brief-image-crop',
+    'news-image-unsplash-results',
+    'news-image-zoom',
+    'news-image-final-preview',
+    'news-image-crop-canvas',
+    'news-image-output-meta',
+    'news-image-search-btn',
+    'news-brief-image-status',
+  ].forEach((id) => elements.set(id, makeElement(id)));
+  elements.get('manual-review-title').value = 'Fresh Manual Headline';
+  elements.get('manual-review-selected-image').innerHTML = '<div>Selected image</div>';
+  elements.get('news-brief-image-picker').style.display = 'none';
+  elements.get('news-brief-image-crop').style.display = 'block';
+  elements.get('news-image-search-query').value = 'old custom query';
+  elements.get('news-image-unsplash-results').innerHTML = '<button>Old result</button>';
+  elements.get('news-image-zoom').value = '2.4';
+  elements.get('news-image-final-preview').src = 'blob:old-preview';
+  const body = {
+    style: { overflow: 'auto' },
+    appendChild(node) { node.parentElement = body; body.appended = node; },
+  };
+  const context = {
+    document: {
+      body,
+      getElementById: (id) => elements.get(id) || null,
+      addEventListener() {},
+      removeEventListener() {},
+    },
+    window: { localStorage: { getItem: () => null } },
+    URL: {
+      revoked: [],
+      revokeObjectURL(url) { this.revoked.push(url); },
+    },
+    newsBriefImageState: {
+      open: false,
+      fromTracker: false,
+      mode: 'tracker',
+      formSource: '',
+      modalSessionId: 0,
+      forceCloseBlocked: false,
+      tab: 'unsplash',
+      articleContext: null,
+      firebaseDocId: '',
+      webflowItemId: '',
+      suggestedQuery: '',
+      query: 'old custom query',
+      searchInFlight: true,
+      uploadInFlight: true,
+      selectedSource: 'unsplash',
+      selectedImage: { id: 'old-photo' },
+      unsplashResults: [{ id: 'old-photo' }],
+      sourceImage: { naturalWidth: 1200, naturalHeight: 800 },
+      crop: { zoom: 2.4, x: 20, y: 30, dragging: true, dragX: 1, dragY: 1 },
+      outputBlob: { size: 90000 },
+      outputUrl: 'blob:old-output',
+      outputSize: 90000,
+      filename: 'old.jpg',
+      requestId: 'old-request',
+    },
+    newsBriefPreSubmitImageState: {
+      selected: true,
+      source: 'unsplash',
+      previewUrl: 'blob:confirmed-preview',
+      blob: { size: 91000 },
+      outputSize: 91000,
+    },
+    isNewsBriefImageToolsEnabled: () => true,
+    isNewsBriefPostSubmitImagePromptEnabled: () => false,
+    deriveNewsBriefImageKeywords: () => 'fresh headline keywords',
+    offerNewsBriefSocialWorkflow: () => { throw new Error('should not offer socials'); },
+    preventNewsBriefImageEscape: () => {},
+    searchNewsBriefUnsplash: () => { context.searchCalls = (context.searchCalls || 0) + 1; },
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    functionBlock('newsBriefImageStatus'),
+    functionBlock('setNewsBriefImageTab'),
+    functionBlock('newsBriefImageFormHeadline'),
+    functionBlock('resetManualNewsBriefImageModalSession'),
+    functionBlock('ensureNewsBriefImageModalLayer'),
+    functionBlock('openPreSubmitNewsBriefImageSelection'),
+    functionBlock('openNewsBriefImageSelection'),
+    functionBlock('closeNewsBriefImageSelection'),
+  ].join('\n'), context);
+
+  context.openPreSubmitNewsBriefImageSelection('manual');
+  assert.equal(elements.get('news-brief-image-picker').style.display, 'block');
+  assert.equal(elements.get('news-brief-image-crop').style.display, 'none');
+  assert.equal(context.newsBriefImageState.sourceImage, null);
+  assert.equal(context.newsBriefImageState.selectedImage, null);
+  assert.equal(context.newsBriefImageState.unsplashResults.length, 0);
+  assert.equal(context.newsBriefImageState.crop.zoom, 1);
+  assert.equal(context.newsBriefImageState.outputBlob, null);
+  assert.equal(context.newsBriefImageState.outputUrl, '');
+  assert.equal(elements.get('news-image-search-query').value, 'fresh headline keywords');
+  assert.equal(elements.get('news-image-unsplash-results').innerHTML, '');
+  assert.equal(elements.get('news-image-final-preview').src, '');
+  assert.equal(elements.get('news-image-crop-canvas').canvasCleared, true);
+  assert.equal(context.newsBriefPreSubmitImageState.selected, true);
+  assert.match(elements.get('manual-review-selected-image').innerHTML, /Selected image/);
+
+  context.closeNewsBriefImageSelection();
+  assert.equal(context.newsBriefPreSubmitImageState.selected, true);
+  assert.match(elements.get('manual-review-selected-image').innerHTML, /Selected image/);
+  context.newsBriefImageState.selectedImage = { id: 'stale-again' };
+  context.newsBriefImageState.sourceImage = { naturalWidth: 1200, naturalHeight: 800 };
+  elements.get('news-brief-image-crop').style.display = 'block';
+  context.openPreSubmitNewsBriefImageSelection('manual');
+  assert.equal(elements.get('news-brief-image-picker').style.display, 'block');
+  assert.equal(elements.get('news-brief-image-crop').style.display, 'none');
+  assert.equal(context.newsBriefImageState.selectedImage, null);
+  assert.equal(context.newsBriefImageState.sourceImage, null);
 });
 
 test('No-image News Brief submission skips the image route and preserves manual image URL support', () => {
