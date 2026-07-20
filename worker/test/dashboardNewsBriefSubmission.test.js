@@ -128,23 +128,50 @@ test('News Brief Webflow failure state preserves Firebase save and retries only 
 
 test('News Brief success confirms Webflow draft and offers existing social workflow', () => {
   const success = functionBlock('renderNewsBriefSubmissionSuccess');
-  assert.match(success, /offerNewsBriefSocialWorkflow/);
-  assert.match(success, /isNewsBriefImageSelectionEnabled/);
-  assert.match(success, /openNewsBriefImageSelection/);
-  assert.match(success, /News brief saved/);
-  assert.match(success, /created as a Webflow News draft/);
-  assert.match(success, /Work on socials/);
-  assert.match(success, /startNewsBriefSocialWorkflow/);
+  const renderContext = functionBlock('renderNewsBriefSubmissionSuccessFromContext');
+  assert.match(renderContext, /offerNewsBriefSocialWorkflow/);
+  assert.match(renderContext, /isNewsBriefPostSubmitImagePromptEnabled/);
+  assert.match(renderContext, /openNewsBriefImageSelection\(socialContext, \{mode:'postSubmit'\}\)/);
+  assert.match(renderContext, /News brief saved/);
+  assert.match(renderContext, /created as a Webflow News draft/);
+  assert.match(renderContext, /Work on socials/);
+  assert.match(renderContext, /startNewsBriefSocialWorkflow/);
+  assert.match(success, /renderNewsBriefSubmissionSuccessFromContext/);
 });
 
-test('Optional News Brief image selection is feature flagged and forced when enabled', () => {
-  assert.match(html, /var NEWS_BRIEF_IMAGE_SELECTION_ENABLED = false/);
-  assert.match(html, /function isNewsBriefImageSelectionEnabled/);
+test('News Brief image tools are enabled while the forced post-submit prompt stays disabled', () => {
+  assert.match(html, /var NEWS_BRIEF_POST_SUBMIT_IMAGE_PROMPT_ENABLED = false/);
+  assert.match(html, /var NEWS_BRIEF_IMAGE_TOOLS_ENABLED = true/);
+  assert.match(html, /function isNewsBriefPostSubmitImagePromptEnabled/);
+  assert.match(html, /function isNewsBriefImageToolsEnabled/);
   assert.match(html, /Choose an image for this News Brief/);
-  assert.match(html, /Select an Unsplash image, upload your own, or skip and add one later from the Editorial Tracker\./);
   assert.match(html, /id="news-brief-image-modal"/);
-  assert.match(html, /Skip for now/);
+  assert.match(html, /Choose image/);
+  assert.match(html, /News image — optional/);
+  assert.match(html, /Cancel/);
   assert.match(functionBlock('preventNewsBriefImageEscape'), /event\.key === 'Escape'/);
+  assert.match(functionBlock('preventNewsBriefImageEscape'), /closeNewsBriefImageSelection/);
+  assert.match(functionBlock('handleNewsBriefImageBackdrop'), /closeNewsBriefImageSelection/);
+});
+
+test('Pre-submit News Brief image selection stores a temporary image before submission', () => {
+  assert.match(functionBlock('openPreSubmitNewsBriefImageSelection'), /mode:'preSubmit'/);
+  assert.match(functionBlock('useSelectedNewsBriefImage'), /newsBriefImageState\.mode === 'preSubmit'/);
+  assert.match(functionBlock('storeNewsBriefPreSubmitImage'), /newsBriefPreSubmitImageState = \{/);
+  assert.match(functionBlock('storeNewsBriefPreSubmitImage'), /URL\.createObjectURL/);
+  assert.match(functionBlock('renderNewsBriefPreSubmitImagePreview'), /Selected image/);
+  assert.match(functionBlock('renderNewsBriefPreSubmitImagePreview'), /Change image/);
+  assert.match(functionBlock('renderNewsBriefPreSubmitImagePreview'), /Remove image/);
+  assert.match(functionBlock('removeNewsBriefPreSubmitImage'), /clearNewsBriefPreSubmitImage/);
+  assert.match(functionBlock('clearNewsBriefPreSubmitImage'), /URL\.revokeObjectURL/);
+});
+
+test('No-image News Brief submission skips the image route and preserves manual image URL support', () => {
+  assert.match(functionBlock('collectNewsBriefData'), /selectedImageActive \? '' : \(cmsFieldValue\('r-news-image'\) \|\| cmsFieldValue\('r-img-url'\)\)/);
+  assert.match(functionBlock('collectManualNewsBriefReviewData'), /selectedImageActive \? '' : document\.getElementById\('manual-review-news-image'\)\.value\.trim\(\)/);
+  assert.match(functionBlock('uploadPreSubmitNewsBriefImageIfNeeded'), /!newsBriefPreSubmitImageState\.selected/);
+  assert.match(functionBlock('uploadPreSubmitNewsBriefImageIfNeeded'), /return Promise\.resolve\(socialContext\)/);
+  assert.doesNotMatch(functionBlock('uploadPreSubmitNewsBriefImageIfNeeded').split('return Promise.resolve(socialContext)')[0], /\/news-briefs\/image/);
 });
 
 test('News Brief image search, crop, filename and skip paths preserve submitted article state', () => {
@@ -164,20 +191,29 @@ test('News Brief image search, crop, filename and skip paths preserve submitted 
 
 test('Image upload success hands the Webflow image URL directly to social workflow', () => {
   const useImage = functionBlock('useSelectedNewsBriefImage');
-  assert.match(useImage, /\/news-briefs\/image/);
+  assert.match(functionBlock('uploadNewsBriefImageToWorker'), /\/news-briefs\/image/);
   assert.match(useImage, /webflowImageUrl/);
   assert.match(useImage, /proceedToNewsBriefSocialWorkflow\(updatedArticle\)/);
+  assert.match(functionBlock('completeNewsBriefSubmission'), /uploadPreSubmitNewsBriefImageIfNeeded/);
+  assert.match(functionBlock('uploadPreSubmitNewsBriefImageIfNeeded'), /uploadNewsBriefImageToWorker\(socialContext, selected\.blob, selected\)/);
+  assert.match(functionBlock('uploadPreSubmitNewsBriefImageIfNeeded'), /imageUploadFailed:true/);
   assert.match(functionBlock('proceedToNewsBriefSocialWorkflow'), /offerNewsBriefSocialWorkflow/);
   assert.match(functionBlock('proceedToNewsBriefSocialWorkflow'), /startNewsBriefSocialWorkflow/);
 });
 
 test('Editorial Tracker shows News Brief image state and reuses the image interface', () => {
   assert.match(functionBlock('renderEditorialTracker'), /editorialTrackerImageStateHtml/);
+  assert.match(functionBlock('editorialTrackerImageStateHtml'), /isNewsBriefImageToolsEnabled/);
+  assert.doesNotMatch(functionBlock('editorialTrackerImageStateHtml'), /isNewsBriefPostSubmitImagePromptEnabled/);
   assert.match(functionBlock('editorialTrackerImageStateHtml'), /Image pending/);
   assert.match(functionBlock('editorialTrackerImageStateHtml'), /Add image/);
   assert.match(functionBlock('editorialTrackerImageStateHtml'), /Image added/);
+  assert.match(functionBlock('editorialTrackerImageStateHtml'), /raw\.imageStatus === 'completed'/);
+  assert.match(functionBlock('editorialTrackerImageStateHtml'), /raw\.imageStatus === 'completed' \|\| raw\.webflowImageUrl/);
   assert.match(functionBlock('openEditorialTrackerNewsBriefImage'), /openNewsBriefImageSelection/);
+  assert.match(functionBlock('openEditorialTrackerNewsBriefImage'), /fromTracker:true/);
   assert.doesNotMatch(functionBlock('openEditorialTrackerNewsBriefImage'), /saveArticleToFirebase/);
+  assert.doesNotMatch(functionBlock('useSelectedNewsBriefImage'), /createNewsBriefWebflowDraft/);
 });
 
 test('Existing LinkedIn, Editorial Calendar, Automated News Brief and long-form paths remain present', () => {
