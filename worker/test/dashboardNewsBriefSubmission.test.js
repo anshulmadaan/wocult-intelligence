@@ -30,17 +30,18 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.1.1 for restored dashboard card icons', () => {
-  assert.match(html, />15\.1\.1<\/div>/);
+test('dashboard version badge is 15.1.2 for refined standfirst angle', () => {
+  assert.match(html, />15\.1\.2<\/div>/);
+  assert.doesNotMatch(html, />15\.1\.1<\/div>/);
   assert.doesNotMatch(html, />15\.1<\/div>/);
   assert.doesNotMatch(html, />15<\/div>/);
 });
 
 test('Draft new stories card icons match the pre-15.1 dashboard values', () => {
   const expectedCards = [
-    ['Draft from trending news', '📰'],
-    ['Draft from a URL', '🔗'],
-    ['Write your own story', '✍️'],
+    ['Draft from trending news', String.fromCodePoint(0x1f4f0)],
+    ['Draft from a URL', String.fromCodePoint(0x1f517)],
+    ['Write your own story', `${String.fromCodePoint(0x270d)}\uFE0F`],
   ];
 
   for (const [title, icon] of expectedCards) {
@@ -48,6 +49,13 @@ test('Draft new stories card icons match the pre-15.1 dashboard values', () => {
     assert.match(html, cardPattern);
   }
   assert.doesNotMatch(html, /<div class="lcard-icon">\?\?<\/div>/);
+});
+
+test('dashboard visible Unicode symbols are not replaced with literal question marks', () => {
+  assert.doesNotMatch(html, /\?\?/);
+  assert.match(html, /title="Notifications">🔔<span/);
+  assert.match(html, /Open dashboard →/);
+  assert.match(html, /← Back/);
 });
 
 function loadAuthHarness(overrides = {}) {
@@ -135,20 +143,31 @@ test('News Brief submit path records Firebase success before Webflow and prevent
   assert.doesNotMatch(submit, /fetch\(WORKER \+ '\/webflow-news'/);
 });
 
-test('News Brief generation prompts make standfirst a Wocult workplace interpretation', () => {
+test('News Brief generation prompts choose a distinct Wocult-relevant standfirst angle', () => {
   const generate = functionBlock('generateNewsBrief');
   const manual = functionBlock('generateManualNewsBriefFields');
   for (const block of [generate, manual]) {
+    assert.match(block, /WOCULT AUDIENCE/);
+    assert.match(block, /people navigating work in India, including employees, managers, jobseekers, independent professionals and business leaders/);
+    assert.match(block, /careers, hiring, skills, pay, management, workplace culture, job security, policy or power at work/);
     assert.match(block, /STANDFIRST PURPOSE/);
-    assert.match(block, /must not restate or paraphrase the headline/);
-    assert.match(block, /Wocult(?:\\+)?'?s workplace lens/);
-    assert.match(block, /Indian working professionals/);
+    assert.match(block, /strongest distinct implication, tension, shift or consequence/);
+    assert.match(block, /must not restate, expand or paraphrase the headline/);
+    assert.match(block, /Use Wocult(?:\\+)?'?s audience context to select the angle/);
+    assert.match(block, /Do not mechanically mention "working professionals", "Indian professionals" or "employees"/);
+    assert.match(block, /do not explicitly explain that it is "what this means for working professionals"/);
     assert.match(block, /140 to 200 characters/);
-    assert.match(block, /do not repeat the headline/);
+    assert.match(block, /distinct angle not already expressed by the headline/);
+    assert.match(block, /Do not use a generic explanation that the story matters to working professionals/i);
+    assert.match(block, /Include the company, number or place only when needed to make the angle clear/i);
+    assert.match(block, /Do not repeat these details merely because they appear in the headline/i);
     assert.match(block, /do not invent/i);
     assert.match(block, /Preserve the original casing of all proper nouns/);
     assert.match(block, /JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts/);
-    assert.match(block, /AI is redirecting India/);
+    assert.match(block, /India's technology hiring is becoming more specialised/);
+    assert.doesNotMatch(block, /Make the meaning useful to Indian working professionals/i);
+    assert.doesNotMatch(block, /explain what it means for Indian working professionals/i);
+    assert.doesNotMatch(block, /what this means for employees/i);
   }
 });
 
