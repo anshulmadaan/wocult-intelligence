@@ -30,9 +30,24 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.1 for News CMS editorial output update', () => {
-  assert.match(html, />15\.1<\/div>/);
+test('dashboard version badge is 15.1.1 for restored dashboard card icons', () => {
+  assert.match(html, />15\.1\.1<\/div>/);
+  assert.doesNotMatch(html, />15\.1<\/div>/);
   assert.doesNotMatch(html, />15<\/div>/);
+});
+
+test('Draft new stories card icons match the pre-15.1 dashboard values', () => {
+  const expectedCards = [
+    ['Draft from trending news', '📰'],
+    ['Draft from a URL', '🔗'],
+    ['Write your own story', '✍️'],
+  ];
+
+  for (const [title, icon] of expectedCards) {
+    const cardPattern = new RegExp(`<div class="lcard-icon">${icon}</div>\\s*<div class="lcard-title">${title}</div>`);
+    assert.match(html, cardPattern);
+  }
+  assert.doesNotMatch(html, /<div class="lcard-icon">\?\?<\/div>/);
 });
 
 function loadAuthHarness(overrides = {}) {
