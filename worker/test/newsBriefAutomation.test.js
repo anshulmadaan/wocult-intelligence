@@ -230,7 +230,7 @@ function assertCandidateMetadata(candidate) {
   assert.ok(candidate.publishers?.length, 'source metadata publishers are required');
 }
 
-test('automated News Brief draft prompt gives standfirst a workplace purpose', () => {
+test('automated News Brief draft prompt chooses a distinct Wocult-relevant standfirst angle', () => {
   const prompt = buildDraftPrompt({
     originalHeadline: 'JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts',
     item: trackerItem(1, {
@@ -251,15 +251,27 @@ test('automated News Brief draft prompt gives standfirst a workplace purpose', (
     },
   });
 
-  assert.match(prompt, /The headline states the news event/);
-  assert.match(prompt, /standfirst must not restate or paraphrase the headline/);
-  assert.match(prompt, /Wocult's workplace lens/);
-  assert.match(prompt, /Indian working professionals/);
+  assert.match(prompt, /Wocult audience/);
+  assert.match(prompt, /people navigating work in India, including employees, managers, jobseekers, independent professionals and business leaders/);
+  assert.match(prompt, /careers, hiring, skills, pay, management, workplace culture, job security, policy or power at work/);
+  assert.match(prompt, /The headline states what happened/);
+  assert.match(prompt, /strongest distinct implication, tension, shift or consequence/);
+  assert.match(prompt, /standfirst must add[\s\S]*It must not restate, expand or paraphrase the headline/);
+  assert.match(prompt, /Use Wocult's audience context to select the angle/);
+  assert.match(prompt, /Do not mechanically mention "working professionals", "Indian professionals" or "employees"/);
+  assert.match(prompt, /do not explicitly explain that it is "what this means for working professionals"/);
   assert.match(prompt, /Write 140 to 200 characters/);
+  assert.match(prompt, /distinct angle not already expressed by the headline/);
+  assert.match(prompt, /Do not use a generic explanation that the story matters to working professionals/);
+  assert.match(prompt, /Include the company, number or place only when needed to make the angle clear/);
+  assert.match(prompt, /Do not repeat these details merely because they appear in the headline/);
   assert.match(prompt, /no invented quotes or unsupported numbers/);
   assert.match(prompt, /Preserve the original casing of all proper nouns, company names, locations, demonyms, product names, visa categories and acronyms/);
   assert.match(prompt, /JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts/);
-  assert.match(prompt, /AI is redirecting India's tech hiring rather than shrinking it/);
+  assert.match(prompt, /India's technology hiring is becoming more specialised/);
+  assert.doesNotMatch(prompt, /Make the meaning useful to Indian working professionals/i);
+  assert.doesNotMatch(prompt, /explain what it means for Indian working professionals/i);
+  assert.doesNotMatch(prompt, /what this means for employees/i);
 });
 
 test('automated News Webflow payload preserves headline casing and uses current ISO timestamp', async () => {
