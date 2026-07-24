@@ -27,6 +27,7 @@ import {
   startNewsBriefAutomationWorkflow,
   sortNewsTrackerItemsNewestFirst,
   applyPrimarySourceDiscovery,
+  buildAutomationNewsFieldData,
   buildDraftPrompt,
   buildPrimarySourceDiscoveryPrompt,
   buildPrimarySourceSearchQueries,
@@ -85,6 +86,24 @@ const goodDraft = {
   sourceName: 'The Economic Times',
   sourceUrl: baseItem.link,
 };
+
+async function withMockedDate(iso, fn) {
+  const RealDate = globalThis.Date;
+  class MockDate extends RealDate {
+    constructor(...args) {
+      super(...(args.length ? args : [iso]));
+    }
+    static now() {
+      return new RealDate(iso).getTime();
+    }
+  }
+  globalThis.Date = MockDate;
+  try {
+    return await fn();
+  } finally {
+    globalThis.Date = RealDate;
+  }
+}
 
 function trackerItem(n, overrides = {}) {
   return {
@@ -210,6 +229,66 @@ function assertCandidateMetadata(candidate) {
   assert.ok(candidate.articleSourceName, 'articleSourceName is required');
   assert.ok(candidate.publishers?.length, 'source metadata publishers are required');
 }
+
+test('automated News Brief draft prompt gives standfirst a workplace purpose', () => {
+  const prompt = buildDraftPrompt({
+    originalHeadline: 'JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts',
+    item: trackerItem(1, {
+      headline: 'JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts',
+      source: 'Reuters',
+      sourceUrl: 'https://source.test/jpmorgan',
+    }),
+    qualification: goodQualification,
+    verification: {
+      status: 'verified',
+      summary: 'Verified hiring and workforce facts.',
+      primarySourceUrl: 'https://source.test/jpmorgan',
+      supportingSourceUrls: ['https://source.test/context'],
+      sourceTitles: ['JPMorgan plans India GCC hiring'],
+      publishers: ['Reuters'],
+      excerpts: ['JPMorgan plans 1,000 India GCC hires despite workforce reductions elsewhere.'],
+      confirmedFacts: ['JPMorgan plans 1,000 India GCC hires.'],
+    },
+  });
+
+  assert.match(prompt, /The headline states the news event/);
+  assert.match(prompt, /standfirst must not restate or paraphrase the headline/);
+  assert.match(prompt, /Wocult's workplace lens/);
+  assert.match(prompt, /Indian working professionals/);
+  assert.match(prompt, /Write 140 to 200 characters/);
+  assert.match(prompt, /no invented quotes or unsupported numbers/);
+  assert.match(prompt, /Preserve the original casing of all proper nouns, company names, locations, demonyms, product names, visa categories and acronyms/);
+  assert.match(prompt, /JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts/);
+  assert.match(prompt, /AI is redirecting India's tech hiring rather than shrinking it/);
+});
+
+test('automated News Webflow payload preserves headline casing and uses current ISO timestamp', async () => {
+  await withMockedDate('2026-07-23T14:37:52.123Z', () => {
+    const fieldData = buildAutomationNewsFieldData({
+      ...goodDraft,
+      title: '  "JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts"  ',
+      publishedDate: '2026-07-23',
+      publishDate: '2026-07-23T00:00:00Z',
+    });
+
+    assert.equal(fieldData.name, 'JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts');
+    assert.equal(fieldData['published-date'], '2026-07-23T14:37:52.123Z');
+    assert.notEqual(fieldData['published-date'], '2026-07-23');
+    assert.notEqual(fieldData['published-date'], '2026-07-23T00:00:00Z');
+    assert.ok(Object.hasOwn(fieldData, 'published-date'));
+    assert.equal(Object.hasOwn(fieldData, 'publish-date'), false);
+  });
+});
+
+test('automated News headline normalisation preserves proper nouns and acronyms', () => {
+  const headline = 'JPMorgan says India and Indian teams in Dallas, Mumbai and Bengaluru will use GCC, AI, H-1B, Salesforce, Amazon, Uber and Intel tools';
+  const fieldData = buildAutomationNewsFieldData({ ...goodDraft, title: headline });
+
+  for (const term of ['JPMorgan', 'India', 'Indian', 'Dallas', 'Mumbai', 'Bengaluru', 'GCC', 'AI', 'H-1B', 'Salesforce', 'Amazon', 'Uber', 'Intel']) {
+    assert.match(fieldData.name, new RegExp(term.replace('-', '\\-')));
+  }
+  assert.equal(fieldData.name, headline);
+});
 
 test('normalises News Tracker response fields without changing source shape', () => {
   const data = normalizeNewsTrackerResponse({ ok: true, updatedAt: recent, count: 1, items: [baseItem] });
@@ -2470,6 +2549,52 @@ test('protected Webflow News route returns CORS for preflight and unauthenticate
     assert.equal(post.headers.get('Content-Type'), 'application/json');
     assert.equal((await post.json()).error, 'Unauthorized');
     assert.equal(webflowCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('protected Webflow News route preserves headline casing and writes current published-date timestamp', async () => {
+  let webflowCalls = 0;
+  let capturedPayload = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    webflowCalls += 1;
+    capturedPayload = JSON.parse(options.body);
+    assert.match(String(url), /\/collections\/news-test-collection\/items$/);
+    return new Response(JSON.stringify({ id: 'wf-news-1', fieldData: capturedPayload.fieldData }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    await withMockedDate('2026-07-23T14:37:52.123Z', async () => {
+      const response = await worker.fetch(new Request('https://worker.test/webflow-news', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer admin', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fieldData: {
+            title: '  "JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts"  ',
+            slug: 'jpmorgan-india-gcc-hiring',
+            standfirst: 'AI infrastructure roles are becoming a stronger signal for Indian technology workers than broad hiring counts alone.',
+            body: '<p>Body</p>',
+            beat: 'AI at Work',
+            publishedDate: '2026-07-23',
+            'published-date': '2026-07-23T00:00:00Z',
+          },
+        }),
+      }), {
+        WORKER_ADMIN_TOKEN: 'admin',
+        WEBFLOW_NEWS_COLLECTION_ID: 'news-test-collection',
+        WEBFLOW_API_TOKEN: 'webflow-token',
+      });
+
+      assert.equal(response.status, 200);
+      assert.equal(webflowCalls, 1);
+      assert.equal(capturedPayload.fieldData.name, 'JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts');
+      assert.equal(capturedPayload.fieldData['published-date'], '2026-07-23T14:37:52.123Z');
+      assert.notEqual(capturedPayload.fieldData['published-date'], '2026-07-23');
+      assert.notEqual(capturedPayload.fieldData['published-date'], '2026-07-23T00:00:00Z');
+      assert.ok(Object.hasOwn(capturedPayload.fieldData, 'published-date'));
+      assert.equal(Object.hasOwn(capturedPayload.fieldData, 'publish-date'), false);
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

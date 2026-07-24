@@ -96,25 +96,13 @@ export default {
       if (raw.includes('compan')) return NEWS_BEAT_OPTIONS.companies;
       return NEWS_BEAT_OPTIONS['future of work'];
     };
-    const escapeRegExp = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const toSentenceCaseHeadline = (text) => {
+    const normalizeNewsHeadline = (text) => {
       let s = String(text || '').trim().replace(/\s+/g, ' ');
       if (!s) return '';
-      s = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-
-      const preserve = ['AI','HR','CEO','CFO','CHRO','CTO','COO','CIO','IT','PF','EPF','EPFO','ESIC','POSH','TCS','HUL','RBI','SEBI','IPO','MSME','U.S.','US','UK','H-1B'];
-      preserve.forEach((term) => {
-        const re = new RegExp('\\b' + escapeRegExp(term) + '\\b', 'gi');
-        s = s.replace(re, term);
-      });
-
+      const quoted = s.match(/^["'“”‘’](.+)["'“”‘’]$/);
+      if (quoted) s = quoted[1].trim().replace(/\s+/g, ' ');
       return s;
     };
-    function toWebflowDateTime(value) {
-      const d = value ? new Date(value) : new Date();
-      if (!d || Number.isNaN(d.getTime())) return new Date().toISOString();
-      return d.toISOString();
-    }
     const limitSeoDescription = (text) => {
       const s = String(text || '').replace(/\s+/g, ' ').trim();
       if (!s) return '';
@@ -135,8 +123,8 @@ export default {
     };
     const buildNewsFieldData = (payload) => {
       const data = payload.fieldData || payload;
-      const title = toSentenceCaseHeadline(data.title || data.name);
-      const publishedDate = toWebflowDateTime(data.publishedDate || data.publishDate || data.date || data['published-date'] || data['publish-date'] || new Date());
+      const title = normalizeNewsHeadline(data.title || data.name);
+      const publishedDate = new Date().toISOString();
       const seoDescription = limitSeoDescription(data.seoDescription || data['seo-description'] || data.standfirst || data.excerpt || data.shortIntro || data['short-story-intro'] || '');
       return stripEmptyOptionalFields({
         name: title,
