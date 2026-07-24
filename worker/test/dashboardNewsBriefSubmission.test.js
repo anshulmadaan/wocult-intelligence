@@ -30,8 +30,10 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.1.2 for refined standfirst angle', () => {
-  assert.match(html, />15\.1\.2<\/div>/);
+test('dashboard version badge is 15.2 for Canva social creative MVP', () => {
+  assert.match(html, />15\.2<\/div>/);
+  assert.doesNotMatch(html, />15\.2\.0<\/div>/);
+  assert.doesNotMatch(html, />15\.1\.2<\/div>/);
   assert.doesNotMatch(html, />15\.1\.1<\/div>/);
   assert.doesNotMatch(html, />15\.1<\/div>/);
   assert.doesNotMatch(html, />15<\/div>/);
@@ -404,6 +406,7 @@ test('Manual selector runtime reset keeps confirmed form image out of modal edit
     document: {
       body,
       getElementById: (id) => elements.get(id) || null,
+      querySelector: () => null,
       addEventListener() {},
       removeEventListener() {},
     },
@@ -454,6 +457,7 @@ test('Manual selector runtime reset keeps confirmed form image out of modal edit
   };
   vm.createContext(context);
   vm.runInContext([
+    functionBlock('newsBriefImageTargetConfig'),
     functionBlock('newsBriefImageStatus'),
     functionBlock('setNewsBriefImageTab'),
     functionBlock('newsBriefImageFormHeadline'),
@@ -506,10 +510,11 @@ test('News Brief image search, crop, filename and skip paths preserve submitted 
   assert.match(functionBlock('searchNewsBriefUnsplash'), /newsBriefImageState\.query = query/);
   assert.match(functionBlock('searchNewsBriefUnsplash'), /\/news-briefs\/unsplash-search/);
   assert.match(functionBlock('handleNewsBriefComputerImage'), /\^image\\\/\(jpeg\|png\|webp\)\$/);
-  assert.match(functionBlock('getNewsBriefCropDrawRect'), /1050/);
-  assert.match(functionBlock('getNewsBriefCropDrawRect'), /700/);
+  assert.match(functionBlock('newsBriefImageTargetConfig'), /width:1050/);
+  assert.match(functionBlock('newsBriefImageTargetConfig'), /height:700/);
+  assert.match(functionBlock('getNewsBriefCropDrawRect'), /newsBriefImageTargetConfig/);
   assert.match(functionBlock('canvasToJpegBlob'), /image\/jpeg/);
-  assert.match(functionBlock('processNewsBriefImageOutput'), /100 \* 1024/);
+  assert.match(functionBlock('processNewsBriefImageOutput'), /target\.maxBytes/);
   assert.match(functionBlock('buildNewsBriefImageFilename'), /wocult-/);
   assert.match(functionBlock('skipNewsBriefImageSelection'), /markNewsBriefImagePending/);
   assert.doesNotMatch(functionBlock('skipNewsBriefImageSelection'), /createNewsBriefWebflowDraft/);
@@ -563,6 +568,90 @@ test('Manual long-view workflow and shared social success path are present', () 
   assert.match(html, /Submit to Firebase \+ THA Posts/);
   assert.match(functionBlock('offerNewsBriefSocialWorkflow'), /contentType === 'long_form'/);
   assert.match(functionBlock('renderLongViewSubmissionSuccess'), /Work on socials/);
+});
+
+test('Canva social workflow defines the three frozen templates and staged UI', () => {
+  assert.match(html, /NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES/);
+  assert.match(html, /key:'template_1'/);
+  assert.match(html, /Full-bleed gradient/);
+  assert.match(html, /DAHQCSJUww0/);
+  assert.match(html, /https:\/\/canva\.link\/snx9l8cent4vnlz/);
+  assert.match(html, /key:'template_2'/);
+  assert.match(html, /Text-led editorial/);
+  assert.match(html, /DAHQQ10w4aw/);
+  assert.match(html, /key:'template_3'/);
+  assert.match(html, /Three-point summary/);
+  assert.match(html, /DAHQRDKQRrY/);
+  assert.match(html, /https:\/\/canva\.link\/zftpd3ly8z8tn9k/);
+  assert.match(html, /target="_blank" rel="noopener noreferrer"[^>]*>Preview in Canva/);
+  assert.match(html, /id="news-social-open-canva-link" href="#" target="_blank" rel="noopener noreferrer"/);
+  assert.match(html, /id="news-social-stage-linkedin"/);
+  assert.match(html, /Continue to creative/);
+  assert.match(html, /id="news-social-stage-template"/);
+  assert.match(html, /id="news-social-stage-creative"/);
+  assert.match(html, /id="news-social-calendar-section" class="news-social-stage" hidden/);
+});
+
+test('Canva creative generation requests template-specific structured JSON and keeps LinkedIn copy separate', () => {
+  const generateCreative = functionBlock('generateNewsBriefCreativeFields');
+  assert.match(generateCreative, /Required JSON shape/);
+  assert.match(generateCreative, /\{"headline":"\.\.\.","subtext":"\.\.\."\}/);
+  assert.match(generateCreative, /\{"headline":"\.\.\.","bullets":\["\.\.\.","\.\.\.","\.\.\."\]\}/);
+  assert.match(generateCreative, /British English/);
+  assert.match(generateCreative, /no invented figures, quotations, people or claims/);
+  assert.match(generateCreative, /no hashtags/);
+  assert.match(generateCreative, /no emojis/);
+  assert.doesNotMatch(generateCreative, /newsBriefSocialState\.options\s*=/);
+  const validate = functionBlock('validateNewsBriefCreativeFields');
+  assert.match(validate, /bullets\.length !== 3/);
+  assert.match(functionBlock('renderNewsBriefCreativeFields'), /over soft limit/);
+});
+
+test('Social image mode uses 1080 by 1350 while article crop remains 1050 by 700', () => {
+  const config = functionBlock('newsBriefImageTargetConfig');
+  assert.match(config, /width:1080/);
+  assert.match(config, /height:1350/);
+  assert.match(config, /maxBytes:500 \* 1024/);
+  assert.match(config, /width:1050/);
+  assert.match(config, /height:700/);
+  assert.match(config, /maxBytes:100 \* 1024/);
+  assert.match(functionBlock('uploadNewsBriefImageToWorker'), /form\.append\('purpose', imageState\.purpose \|\| 'article'\)/);
+  assert.match(functionBlock('useSelectedNewsBriefImage'), /newsBriefImageState\.mode === 'social'/);
+});
+
+test('Canva handoff and calendar save require social image and persist template metadata', () => {
+  const save = functionBlock('saveNewsBriefSocialToCalendar');
+  assert.match(save, /Please select a Canva template before saving/);
+  assert.match(save, /Please complete all Canva creative fields before saving/);
+  assert.match(save, /Please upload a social image before saving/);
+  assert.match(save, /Please confirm Canva editing is complete before saving/);
+  assert.match(save, /socialImageUrl:newsBriefSocialState\.socialImageUrl/);
+  assert.match(save, /socialImageAssetId:newsBriefSocialState\.socialImageAssetId/);
+  assert.match(save, /socialTemplateKey:template\.key/);
+  assert.match(save, /canvaTemplateDesignId:template\.designId/);
+  assert.match(save, /canvaTemplateUrl:template\.url/);
+  assert.match(save, /canvaDesignUrl:newsBriefSocialState\.canvaDesignUrl/);
+  assert.match(save, /creativeHeadline:newsBriefSocialState\.creativeFields\.headline/);
+  assert.match(save, /creativeBullets:template\.key === 'template_3'/);
+  assert.match(save, /contentCopy:contentHtml/);
+  assert.match(functionBlock('newsBriefSocialSetCanvaConfirmed'), /newsBriefSocialState\.stage = 'calendar'/);
+  assert.match(functionBlock('newsBriefSocialSetCanvaConfirmed'), /newsBriefSocialState\.stage === 'calendar'\) newsBriefSocialState\.stage = 'creative'/);
+});
+
+test('Social workflow reset clears Canva and social image state without changing feature flags', () => {
+  const reset = functionBlock('resetNewsBriefSocialState');
+  for (const field of ['stage', 'templateKey', 'templateName', 'templateDesignId', 'templateUrl', 'creativeGenerating', 'creativeFields', 'socialImageUrl', 'socialImageAssetId', 'socialImageBlobUrl', 'socialImageEdited', 'canvaDesignUrl', 'canvaConfirmed']) {
+    assert.match(reset, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  assert.match(html, /var NEWS_BRIEF_POST_SUBMIT_IMAGE_PROMPT_ENABLED = false/);
+  assert.match(html, /var NEWS_BRIEF_IMAGE_TOOLS_ENABLED = true/);
+});
+
+test('No duplicate static HTML ids are introduced by Canva social workflow', () => {
+  const socialBlock = html.slice(html.indexOf('<div id="landing-news-brief-social"'), html.indexOf('<div id="landing-automated-news-briefs"'));
+  const ids = [...socialBlock.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+  const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+  assert.deepEqual([...new Set(duplicates)].sort(), []);
 });
 
 test('Long-view Webflow submission uses authenticated Worker fetch and idempotency check', () => {
