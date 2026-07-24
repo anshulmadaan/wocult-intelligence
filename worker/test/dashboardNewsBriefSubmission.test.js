@@ -30,6 +30,11 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
+test('dashboard version badge is 15.1 for News CMS editorial output update', () => {
+  assert.match(html, />15\.1<\/div>/);
+  assert.doesNotMatch(html, />15<\/div>/);
+});
+
 function loadAuthHarness(overrides = {}) {
   const calls = [];
   const context = {
@@ -113,6 +118,73 @@ test('News Brief submit path records Firebase success before Webflow and prevent
   assert.match(submit, /btn\.textContent = 'Creating Webflow draft\.\.\.'/);
   assert.match(submit, /createNewsBriefWebflowDraft\(submittedDocId, newsData\)/);
   assert.doesNotMatch(submit, /fetch\(WORKER \+ '\/webflow-news'/);
+});
+
+test('News Brief generation prompts make standfirst a Wocult workplace interpretation', () => {
+  const generate = functionBlock('generateNewsBrief');
+  const manual = functionBlock('generateManualNewsBriefFields');
+  for (const block of [generate, manual]) {
+    assert.match(block, /STANDFIRST PURPOSE/);
+    assert.match(block, /must not restate or paraphrase the headline/);
+    assert.match(block, /Wocult(?:\\+)?'?s workplace lens/);
+    assert.match(block, /Indian working professionals/);
+    assert.match(block, /140 to 200 characters/);
+    assert.match(block, /do not repeat the headline/);
+    assert.match(block, /do not invent/i);
+    assert.match(block, /Preserve the original casing of all proper nouns/);
+    assert.match(block, /JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts/);
+    assert.match(block, /AI is redirecting India/);
+  }
+});
+
+test('News headline normalization preserves proper nouns and acronyms without destructive lowercasing', () => {
+  const block = functionBlock('normalizeNewsHeadline');
+  assert.doesNotMatch(block, /slice\(1\)\.toLowerCase\(\)/);
+  assert.doesNotMatch(block, /toLowerCase\(\)/);
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext(functionBlock('normalizeNewsHeadline'), context);
+  const headline = '  "JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts"  ';
+  assert.equal(context.normalizeNewsHeadline(headline), 'JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts');
+  const terms = ['JPMorgan', 'India', 'Indian', 'Dallas', 'Mumbai', 'Bengaluru', 'GCC', 'AI', 'H-1B', 'Salesforce', 'Amazon', 'Uber', 'Intel'];
+  const normalized = context.normalizeNewsHeadline(terms.join('  '));
+  for (const term of terms) assert.match(normalized, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+});
+
+test('News Brief Webflow field data preserves headline casing and uses fresh ISO timestamp', () => {
+  const RealDate = Date;
+  class FixedDate extends RealDate {
+    constructor(...args) {
+      super(args.length ? args[0] : '2026-07-23T14:37:52.123Z');
+    }
+    static now() { return new RealDate('2026-07-23T14:37:52.123Z').getTime(); }
+  }
+  const context = {
+    Date: FixedDate,
+    cleanNewsBriefBody: (title, standfirst, body) => body,
+    limitSeoDescription: (text) => String(text || '').trim(),
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    functionBlock('normalizeNewsHeadline'),
+    functionBlock('toSentenceCaseHeadline'),
+    functionBlock('toWebflowDateTime'),
+    functionBlock('buildNewsBriefFieldData'),
+  ].join('\n'), context);
+  const fieldData = context.buildNewsBriefFieldData({
+    title: 'JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts',
+    slug: 'jpmorgan-plans-india-gcc-hires',
+    standfirst: 'AI is redirecting India tech hiring.',
+    body: '<p>Body</p>',
+    publishedDate: '2026-07-23',
+  });
+  assert.equal(fieldData.title, 'JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts');
+  assert.equal(fieldData.name, 'JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts');
+  assert.equal(fieldData['published-date'], '2026-07-23T14:37:52.123Z');
+  assert.equal(fieldData.publishedDate, '2026-07-23T14:37:52.123Z');
+  assert.notEqual(fieldData['published-date'], '2026-07-23');
+  assert.notEqual(fieldData['published-date'], '2026-07-23T00:00:00Z');
+  assert.match(functionBlock('buildNewsBriefFieldData'), /'published-date': publishedDate/);
 });
 
 test('News Brief Webflow failure state preserves Firebase save and retries only Webflow', () => {
