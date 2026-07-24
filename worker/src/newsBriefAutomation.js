@@ -1012,6 +1012,20 @@ export function buildDraftPrompt(candidate) {
 
 Rules: 250-400 words, British English, fact-led, for working professionals, no invented quotes or unsupported numbers, valid HTML paragraphs in body only.
 
+Headline rules: Return headlines in sentence case. Preserve the original casing of all proper nouns, company names, locations, demonyms, product names, visa categories and acronyms.
+
+Standfirst purpose: The headline states the news event. The standfirst must not restate or paraphrase the headline. It must interpret the development through Wocult's workplace lens and explain what it means for Indian working professionals.
+
+Standfirst rules: Write 140 to 200 characters. Carry the workplace consequence, labour-market shift, career implication, management implication or skills implication. Where relevant, name the company, the number and the place, but do not repeat the headline's phrasing. Do not merely expand the event details already present in the headline. Do not begin with a generic phrase such as "The development comes as". Do not use promotional language. Do not speculate beyond the available evidence. Hand off cleanly to the body without duplicating the opening paragraph. Use sentence case while preserving proper nouns and acronyms exactly. Make the meaning useful to Indian working professionals. Include company, number and place where material and natural within the limit, while prioritising interpretation over event repetition.
+
+Standfirst example:
+Bad headline/standfirst pair:
+Headline: JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts
+Standfirst: JPMorgan Chase is recruiting around 1,000 technology specialists for its India GCC, targeting AI, cloud architecture, and cybersecurity, even as AI cuts staffing elsewhere in the bank.
+Good headline/standfirst pair:
+Headline: JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts
+Standfirst: AI is redirecting India's tech hiring rather than shrinking it. Demand for generalist IT roles is falling while AI infrastructure and cloud security skills command a premium.
+
 Candidate and verified sources:
 ${JSON.stringify(safeCandidate, null, 2)}`;
 }
@@ -3314,14 +3328,15 @@ export function automationCandidateToArticle(candidate) {
 }
 
 export function buildAutomationNewsFieldData(draft = {}) {
-  const title = toSentenceCaseHeadline(draft.title || draft.name || '');
+  const title = normalizeNewsHeadline(draft.title || draft.name || '');
+  const publishedDate = new Date().toISOString();
   return stripEmptyOptionalFields({
     name: title,
     slug: draft.slug,
     standfirst: draft.standfirst || draft.shortIntro || draft.excerpt || '',
     body: draft.body || '',
     beat: draft.beat || draft.category || 'Future of Work',
-    'published-date': draft.publishedDate || draft.publishDate || new Date().toISOString(),
+    'published-date': publishedDate,
     'source-name': draft.sourceName || draft['source-name'] || '',
     'source-url': draft.sourceUrl || draft['source-url'] || '',
     'seo-description': draft.seoDescription || draft['seo-description'] || draft.standfirst || '',
@@ -3819,17 +3834,11 @@ function clean(value) {
   return String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function escapeRegExp(value) {
-  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function toSentenceCaseHeadline(text) {
+function normalizeNewsHeadline(text) {
   let s = String(text || '').trim().replace(/\s+/g, ' ');
   if (!s) return '';
-  s = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-  ['AI', 'HR', 'CEO', 'CFO', 'CHRO', 'CTO', 'COO', 'CIO', 'IT', 'PF', 'EPF', 'EPFO', 'ESIC', 'POSH', 'TCS', 'HUL', 'RBI', 'SEBI', 'IPO', 'MSME', 'U.S.', 'US', 'UK', 'H-1B'].forEach((term) => {
-    s = s.replace(new RegExp(`\\b${escapeRegExp(term)}\\b`, 'gi'), term);
-  });
+  const quoted = s.match(/^["'“”‘’](.+)["'“”‘’]$/);
+  if (quoted) s = quoted[1].trim().replace(/\s+/g, ' ');
   return s;
 }
 
