@@ -203,92 +203,20 @@ test('image route rejects unsupported purpose values before Firebase or Webflow 
   assert.equal(calls.length, 0);
 });
 
-test('social image upload creates an asset without updating the Webflow news-image field', async (t) => {
-  const calls = [];
-  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
-    const entry = { url: String(url), options };
-    calls.push(entry);
-    if (entry.url.includes('/documents/articles/article-1')) {
-      return new Response(JSON.stringify(articleDoc()), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    }
-    if (entry.url === 'https://api.webflow.com/v2/sites/site-1/assets') {
-      return new Response(JSON.stringify({
-        id: 'asset-social-1',
-        uploadUrl: 'https://uploads.webflow.com/asset-social-1',
-        hostedUrl: 'https://cdn.webflow.com/social-1.jpg',
-        uploadDetails: {},
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    }
-    if (entry.url === 'https://uploads.webflow.com/asset-social-1') return new Response('', { status: 201 });
-    if (entry.url === 'https://api.webflow.com/v2/assets/asset-social-1') return new Response('{}', { status: 200 });
-    if (entry.url === 'https://api.unsplash.com/photos/unsplash-1/download') return new Response('{}', { status: 200 });
-    throw new Error('Unexpected fetch ' + entry.url);
-  });
-
-  const res = await worker.fetch(authed('/news-briefs/image', {
-    method: 'POST',
-    body: imageForm({
-      purpose: 'social',
-      imageRequestId: 'article-1:social:unsplash-1:wocult-ai-search-goes-mainstream-in-india-a7k3.jpg',
-    }),
-  }), env);
-  const body = await res.json();
-  assert.equal(res.status, 200);
-  assert.equal(body.purpose, 'social');
-  assert.equal(body.webflowAssetId, 'asset-social-1');
-  assert.equal(body.webflowImageUrl, 'https://cdn.webflow.com/social-1.jpg');
-  assert.equal(calls.some((c) => c.url.includes('/collections/news-collection/items/wf-news-1')), false);
-  const finalPatch = calls.filter((c) => c.url.includes('/documents/articles/article-1') && c.options.method === 'PATCH').pop();
-  assert.match(finalPatch.options.body, /"socialImageUrl"/);
-  assert.match(finalPatch.options.body, /"socialImageAssetId"/);
-  assert.match(finalPatch.options.body, /"socialImageSource"/);
-  assert.match(finalPatch.options.body, /"socialImageRequestId"/);
-  assert.doesNotMatch(finalPatch.options.body, /"newsImage"/);
-  assert.doesNotMatch(finalPatch.options.body, /"imageUrl"/);
-  assert.doesNotMatch(finalPatch.options.body, /"webflowAssetId"/);
-});
-
-test('social computer upload uses upload source and remains separate from article metadata', async (t) => {
-  const calls = [];
-  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
-    const entry = { url: String(url), options };
-    calls.push(entry);
-    if (entry.url.includes('/documents/articles/article-1')) return new Response(JSON.stringify(articleDoc()), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (entry.url === 'https://api.webflow.com/v2/sites/site-1/assets') return new Response(JSON.stringify({ id: 'asset-social-2', uploadUrl: 'https://uploads.webflow.com/asset-social-2', hostedUrl: 'https://cdn.webflow.com/social-2.jpg', uploadDetails: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (entry.url === 'https://uploads.webflow.com/asset-social-2') return new Response('', { status: 201 });
-    if (entry.url === 'https://api.webflow.com/v2/assets/asset-social-2') return new Response('{}', { status: 200 });
-    throw new Error('Unexpected fetch ' + entry.url);
-  });
-  const res = await worker.fetch(authed('/news-briefs/image', {
-    method: 'POST',
-    body: imageForm({ purpose: 'social', imageSource: 'uploaded', unsplashMetadata: '{}', imageRequestId: 'article-1:social:upload:wocult-ai-search-goes-mainstream-in-india-a7k3.jpg' }),
-  }), env);
-  assert.equal(res.status, 200);
-  const finalPatch = calls.filter((c) => c.url.includes('/documents/articles/article-1') && c.options.method === 'PATCH').pop();
-  assert.match(finalPatch.options.body, /"socialImageSource"/);
-  assert.match(finalPatch.options.body, /"uploaded"/);
-  assert.equal(calls.some((c) => c.url.includes('/collections/news-collection/items/wf-news-1')), false);
-});
-
-test('idempotent social retry returns existing social asset without Webflow calls', async (t) => {
+test('social image purpose is no longer accepted by the article image route', async (t) => {
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
     calls.push({ url: String(url), options });
-    return new Response(JSON.stringify(articleDoc({
-      socialImageRequestId: { stringValue: 'article-1:social:unsplash-1:wocult-ai-search-goes-mainstream-in-india-a7k3.jpg' },
-      socialImageAssetId: { stringValue: 'asset-social-1' },
-      socialImageUrl: { stringValue: 'https://cdn.webflow.com/social-1.jpg' },
-    })), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    throw new Error('Social purpose should be rejected before external calls');
   });
   const res = await worker.fetch(authed('/news-briefs/image', {
     method: 'POST',
-    body: imageForm({ purpose: 'social', imageRequestId: 'article-1:social:unsplash-1:wocult-ai-search-goes-mainstream-in-india-a7k3.jpg' }),
+    body: imageForm({ purpose: 'social' }),
   }), env);
   const body = await res.json();
-  assert.equal(res.status, 200);
-  assert.equal(body.idempotent, true);
-  assert.equal(body.webflowAssetId, 'asset-social-1');
-  assert.equal(calls.length, 1);
+  assert.equal(res.status, 400);
+  assert.equal(body.error, 'Invalid image purpose');
+  assert.equal(calls.length, 0);
 });
 
 test('computer upload writes upload source and clears Unsplash attribution fields', async (t) => {

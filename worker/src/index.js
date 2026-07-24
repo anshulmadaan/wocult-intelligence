@@ -417,29 +417,22 @@ export default {
         const purpose = safeImageText(form.get('purpose') || 'article', 24);
         const file = form.get('file');
         const unsplashMetadata = parseJsonText(String(form.get('unsplashMetadata') || '{}')) || {};
-        if (!['article', 'social'].includes(purpose)) return jsonResponse({ ok: false, error: 'Invalid image purpose' }, 400);
-        const maxBytes = purpose === 'social' ? 500 * 1024 : 100 * 1024;
+        if (purpose !== 'article') return jsonResponse({ ok: false, error: 'Invalid image purpose' }, 400);
+        const maxBytes = 100 * 1024;
         if (!firebaseDocId || !webflowItemId || !filename || !imageRequestId) return jsonResponse({ ok: false, error: 'Missing required image metadata' }, 400);
         if (!/^wocult-[a-z0-9-]+-[a-z0-9]{4}\.jpg$/.test(filename)) return jsonResponse({ ok: false, error: 'Invalid image filename' }, 400);
         if (!(file instanceof File)) return jsonResponse({ ok: false, error: 'Processed JPEG file is required' }, 400);
         if (file.type !== 'image/jpeg') return jsonResponse({ ok: false, error: 'Only processed JPEG images are accepted' }, 400);
-        if (file.size <= 0 || file.size >= maxBytes) return jsonResponse({ ok: false, error: purpose === 'social' ? 'Processed social JPEG must be below 500 KB' : 'Processed JPEG must be below 100 KB' }, 400);
+        if (file.size <= 0 || file.size >= maxBytes) return jsonResponse({ ok: false, error: 'Processed JPEG must be below 100 KB' }, 400);
         const probe = new Uint8Array(await file.slice(0, 3).arrayBuffer());
         if (probe[0] !== 0xff || probe[1] !== 0xd8 || probe[2] !== 0xff) return jsonResponse({ ok: false, error: 'Invalid JPEG file' }, 400);
         const article = await getArticleDoc(firebaseDocId);
         if (!article) return jsonResponse({ ok: false, error: 'Firebase News Brief record was not found' }, 404);
         if (String(article.webflowItemId || '') !== webflowItemId) return jsonResponse({ ok: false, error: 'Firebase and Webflow item IDs do not match' }, 409);
-        if (purpose === 'social' && article.socialImageRequestId === imageRequestId && article.socialImageAssetId) {
-          return jsonResponse({ ok: true, idempotent: true, purpose, webflowAssetId: article.socialImageAssetId, webflowImageUrl: article.socialImageUrl || '', filename, imageRequestId });
-        }
-        if (purpose === 'article' && article.imageStatus === 'completed' && article.imageRequestId === imageRequestId && article.webflowAssetId) {
+        if (article.imageStatus === 'completed' && article.imageRequestId === imageRequestId && article.webflowAssetId) {
           return jsonResponse({ ok: true, idempotent: true, purpose, webflowAssetId: article.webflowAssetId, webflowImageUrl: article.webflowImageUrl || article.imageUrl || '', filename: article.imageFilename || filename, imageRequestId });
         }
-        await patchArticleDoc(firebaseDocId, purpose === 'social' ? {
-          socialImageSource: imageSource,
-          socialImageRequestId: imageRequestId,
-          socialImageUpdatedAt: new Date().toISOString(),
-        } : {
+        await patchArticleDoc(firebaseDocId, {
           imageStatus: 'processing',
           imageSource,
           imageFilename: filename,
@@ -449,20 +442,14 @@ export default {
         });
         const attributionFields = buildImageAttributionFields(imageSource, unsplashMetadata);
         const asset = await uploadWebflowAsset(file, filename, altText);
-        const webflowItem = purpose === 'article' ? await updateWebflowNewsImage(webflowItemId, asset, altText, attributionFields) : null;
+        const webflowItem = await updateWebflowNewsImage(webflowItemId, asset, altText, attributionFields);
         if (imageSource === 'unsplash' && unsplashMetadata.unsplashDownloadLocation) {
           await fetch(String(unsplashMetadata.unsplashDownloadLocation), {
             headers: { Authorization: `Client-ID ${env.UNSPLASH_ACCESS_KEY || ''}`, 'Accept-Version': 'v1' },
           }).catch(() => null);
         }
         const imageUrl = asset.hostedUrl || asset.assetUrl || '';
-        const patch = purpose === 'social' ? {
-          socialImageUrl: imageUrl,
-          socialImageAssetId: asset.id || '',
-          socialImageSource: imageSource,
-          socialImageRequestId: imageRequestId,
-          socialImageUpdatedAt: new Date().toISOString(),
-        } : {
+        const patch = {
           imageStatus: 'completed',
           imageSource,
           imageFilename: filename,
@@ -481,7 +468,7 @@ export default {
           imageSourceLink: attributionFields['image-source-link'],
         };
         if (imageSource === 'unsplash') {
-          const prefix = purpose === 'social' ? 'socialUnsplash' : 'unsplash';
+          const prefix = 'unsplash';
           patch[prefix + 'PhotoId'] = safeImageText(unsplashMetadata.unsplashPhotoId, 120);
           patch[prefix + 'PhotographerName'] = safeImageText(unsplashMetadata.unsplashPhotographerName, 160);
           patch[prefix + 'PhotographerUrl'] = safeImageText(unsplashMetadata.unsplashPhotographerUrl, 300);

@@ -30,8 +30,9 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.2 for Canva social creative MVP', () => {
-  assert.match(html, />15\.2<\/div>/);
+test('dashboard version badge is 15.3 for Canva social workflow regression fixes', () => {
+  assert.match(html, />15\.3<\/div>/);
+  assert.doesNotMatch(html, />15\.2<\/div>/);
   assert.doesNotMatch(html, />15\.2\.0<\/div>/);
   assert.doesNotMatch(html, />15\.1\.2<\/div>/);
   assert.doesNotMatch(html, />15\.1\.1<\/div>/);
@@ -589,6 +590,9 @@ test('Canva social workflow defines the three frozen templates and staged UI', (
   assert.match(html, /Continue to creative/);
   assert.match(html, /id="news-social-stage-template"/);
   assert.match(html, /id="news-social-stage-creative"/);
+  assert.match(html, /id="news-social-stage-canva"/);
+  assert.match(html, /Continue to Canva/);
+  assert.match(html, /Create a copy before editing so the Wocult master template remains unchanged\. Paste the prepared text and News Brief image into the Canva copy\./);
   assert.match(html, /id="news-social-calendar-section" class="news-social-stage" hidden/);
 });
 
@@ -607,26 +611,30 @@ test('Canva creative generation requests template-specific structured JSON and k
   assert.match(functionBlock('renderNewsBriefCreativeFields'), /over soft limit/);
 });
 
-test('Social image mode uses 1080 by 1350 while article crop remains 1050 by 700', () => {
+test('Canva workflow reuses the News Brief image while article crop remains 1050 by 700', () => {
   const config = functionBlock('newsBriefImageTargetConfig');
-  assert.match(config, /width:1080/);
-  assert.match(config, /height:1350/);
-  assert.match(config, /maxBytes:500 \* 1024/);
+  assert.doesNotMatch(config, /width:1080/);
+  assert.doesNotMatch(config, /height:1350/);
+  assert.doesNotMatch(config, /500 \* 1024/);
   assert.match(config, /width:1050/);
   assert.match(config, /height:700/);
   assert.match(config, /maxBytes:100 \* 1024/);
-  assert.match(functionBlock('uploadNewsBriefImageToWorker'), /form\.append\('purpose', imageState\.purpose \|\| 'article'\)/);
-  assert.match(functionBlock('useSelectedNewsBriefImage'), /newsBriefImageState\.mode === 'social'/);
+  assert.doesNotMatch(functionBlock('uploadNewsBriefImageToWorker'), /form\.append\('purpose'/);
+  assert.doesNotMatch(functionBlock('useSelectedNewsBriefImage'), /newsBriefImageState\.mode === 'social'/);
+  assert.match(functionBlock('newsBriefSocialImageFromArticle'), /articleContext\.imageUrl/);
+  assert.match(functionBlock('newsBriefSocialImageFromArticle'), /articleContext\.newsImage/);
+  assert.match(html, /No News Brief image was selected\. You can continue to Canva without an image\./);
 });
 
-test('Canva handoff and calendar save require social image and persist template metadata', () => {
+test('Canva handoff and calendar save reuse News Brief image and persist template metadata', () => {
   const save = functionBlock('saveNewsBriefSocialToCalendar');
   assert.match(save, /Please select a Canva template before saving/);
   assert.match(save, /Please complete all Canva creative fields before saving/);
-  assert.match(save, /Please upload a social image before saving/);
+  assert.doesNotMatch(save, /Please upload a social image before saving/);
   assert.match(save, /Please confirm Canva editing is complete before saving/);
-  assert.match(save, /socialImageUrl:newsBriefSocialState\.socialImageUrl/);
-  assert.match(save, /socialImageAssetId:newsBriefSocialState\.socialImageAssetId/);
+  assert.match(save, /imageUrl:newsBriefSocialState\.creativeImageUrl \|\| newsBriefSocialState\.imageUrl \|\| ''/);
+  assert.doesNotMatch(save, /socialImageAssetId/);
+  assert.doesNotMatch(save, /socialImageUrl:/);
   assert.match(save, /socialTemplateKey:template\.key/);
   assert.match(save, /canvaTemplateDesignId:template\.designId/);
   assert.match(save, /canvaTemplateUrl:template\.url/);
@@ -635,16 +643,50 @@ test('Canva handoff and calendar save require social image and persist template 
   assert.match(save, /creativeBullets:template\.key === 'template_3'/);
   assert.match(save, /contentCopy:contentHtml/);
   assert.match(functionBlock('newsBriefSocialSetCanvaConfirmed'), /newsBriefSocialState\.stage = 'calendar'/);
-  assert.match(functionBlock('newsBriefSocialSetCanvaConfirmed'), /newsBriefSocialState\.stage === 'calendar'\) newsBriefSocialState\.stage = 'creative'/);
+  assert.match(functionBlock('newsBriefSocialSetCanvaConfirmed'), /newsBriefSocialState\.stage === 'calendar'\) newsBriefSocialState\.stage = 'canva'/);
+  assert.match(functionBlock('renderNewsBriefSocialStages'), /news-social-calendar-actions/);
 });
 
-test('Social workflow reset clears Canva and social image state without changing feature flags', () => {
+test('Social workflow reset clears Canva template state without changing article image data or feature flags', () => {
   const reset = functionBlock('resetNewsBriefSocialState');
-  for (const field of ['stage', 'templateKey', 'templateName', 'templateDesignId', 'templateUrl', 'creativeGenerating', 'creativeFields', 'socialImageUrl', 'socialImageAssetId', 'socialImageBlobUrl', 'socialImageEdited', 'canvaDesignUrl', 'canvaConfirmed']) {
+  for (const field of ['stage', 'templateKey', 'templateName', 'templateDesignId', 'templateUrl', 'creativeGenerating', 'creativeFields', 'creativeImageUrl', 'canvaDesignUrl', 'canvaConfirmed']) {
     assert.match(reset, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
+  assert.doesNotMatch(reset, /socialImageAssetId|socialImageBlobUrl|socialImageEdited/);
   assert.match(html, /var NEWS_BRIEF_POST_SUBMIT_IMAGE_PROMPT_ENABLED = false/);
   assert.match(html, /var NEWS_BRIEF_IMAGE_TOOLS_ENABLED = true/);
+});
+
+test('LinkedIn options are cleaned of source labels and raw URLs', () => {
+  const prompt = functionBlock('generateNewsBriefSocialOptions');
+  assert.match(prompt, /do not include Source:, Link:, citation lines, raw URLs or source attribution lines/);
+  assert.match(prompt, /Background source URL, not for inclusion in the post/);
+  const clean = functionBlock('cleanNewsBriefSocialCopy');
+  assert.match(clean, /https\?:\\\/\\\/\\S\+/);
+  assert.match(clean, /\(source\|link\|citation\|read the full story\)/);
+  const validate = functionBlock('validateNewsBriefSocialOptions');
+  assert.match(validate, /cleanNewsBriefSocialCopy\(opt\.text\)/);
+});
+
+test('Template selection visibly selects cards and Stage 3 shows the selected template', () => {
+  const renderTemplates = functionBlock('renderNewsBriefSocialTemplates');
+  assert.match(renderTemplates, /aria-selected/);
+  assert.match(renderTemplates, /Selected/);
+  assert.match(renderTemplates, /news-social-template-continue-btn/);
+  const select = functionBlock('selectNewsBriefSocialTemplate');
+  assert.match(select, /newsBriefSocialState\.templateKey = template\.key/);
+  assert.doesNotMatch(select, /generateNewsBriefSocialOptions/);
+  const continueFields = functionBlock('newsBriefSocialContinueToCreativeFields');
+  assert.match(continueFields, /generateNewsBriefCreativeFields\(false\)/);
+  assert.match(functionBlock('renderNewsBriefSelectedTemplateSummary'), /Change template/);
+});
+
+test('Cancelling image modal preserves social options and edited LinkedIn copy', () => {
+  const close = functionBlock('closeNewsBriefImageSelection');
+  assert.doesNotMatch(close, /generateNewsBriefSocialOptions/);
+  assert.doesNotMatch(close, /resetNewsBriefSocialState/);
+  const start = functionBlock('startNewsBriefSocialWorkflow');
+  assert.match(start, /if \(!newsBriefSocialState\.options\.length\) generateNewsBriefSocialOptions\(\)/);
 });
 
 test('No duplicate static HTML ids are introduced by Canva social workflow', () => {
