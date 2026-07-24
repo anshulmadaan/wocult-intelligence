@@ -1014,9 +1014,11 @@ Rules: 250-400 words, British English, fact-led, for working professionals, no i
 
 Headline rules: Return headlines in sentence case. Preserve the original casing of all proper nouns, company names, locations, demonyms, product names, visa categories and acronyms.
 
-Standfirst purpose: The headline states the news event. The standfirst must not restate or paraphrase the headline. It must interpret the development through Wocult's workplace lens and explain what it means for Indian working professionals.
+Wocult audience: Wocult is built for people navigating work in India, including employees, managers, jobseekers, independent professionals and business leaders. Choose editorial angles that reveal a meaningful consequence for careers, hiring, skills, pay, management, workplace culture, job security, policy or power at work. Use this audience context to decide the angle. Do not mechanically mention "working professionals", "Indian professionals" or "employees" in the standfirst unless the wording is natural and necessary.
 
-Standfirst rules: Write 140 to 200 characters. Carry the workplace consequence, labour-market shift, career implication, management implication or skills implication. Where relevant, name the company, the number and the place, but do not repeat the headline's phrasing. Do not merely expand the event details already present in the headline. Do not begin with a generic phrase such as "The development comes as". Do not use promotional language. Do not speculate beyond the available evidence. Hand off cleanly to the body without duplicating the opening paragraph. Use sentence case while preserving proper nouns and acronyms exactly. Make the meaning useful to Indian working professionals. Include company, number and place where material and natural within the limit, while prioritising interpretation over event repetition.
+Standfirst purpose: The headline states what happened. The standfirst must add the strongest distinct implication, tension, shift or consequence supported by the story. It must not restate, expand or paraphrase the headline. Use Wocult's audience context to select the angle, but do not explicitly explain that it is "what this means for working professionals".
+
+Standfirst rules: Write 140 to 200 characters. Carry a distinct angle not already expressed by the headline. When supported by the evidence, relate the angle to careers, hiring, skills, pay, management, workplace culture, job security, policy, labour markets or power at work. Do not repeat, expand or paraphrase the headline. Do not use a generic explanation that the story matters to working professionals. Include the company, number or place only when needed to make the angle clear. Do not repeat these details merely because they appear in the headline. Do not begin with a generic phrase such as "The development comes as". Do not use promotional language. Do not speculate beyond the available evidence. Hand off cleanly to the body without duplicating the opening paragraph. Use sentence case while preserving proper nouns and acronyms exactly. Choose an angle that is relevant to Wocult's audience without explicitly naming the audience unless it is natural and necessary.
 
 Standfirst example:
 Bad headline/standfirst pair:
@@ -1024,7 +1026,7 @@ Headline: JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts
 Standfirst: JPMorgan Chase is recruiting around 1,000 technology specialists for its India GCC, targeting AI, cloud architecture, and cybersecurity, even as AI cuts staffing elsewhere in the bank.
 Good headline/standfirst pair:
 Headline: JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts
-Standfirst: AI is redirecting India's tech hiring rather than shrinking it. Demand for generalist IT roles is falling while AI infrastructure and cloud security skills command a premium.
+Standfirst: India's technology hiring is becoming more specialised, with AI infrastructure, cloud architecture and cybersecurity expertise commanding greater demand.
 
 Candidate and verified sources:
 ${JSON.stringify(safeCandidate, null, 2)}`;
