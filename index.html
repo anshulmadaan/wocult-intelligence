@@ -240,12 +240,12 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.1</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.1.1</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
     <button class="btn" id="rbtn" onclick="loadAll()" style="display:none">Refresh</button>
-    <button class="notification-bell" id="notification-bell" onclick="toggleNotificationsPanel()" title="Notifications">??<span class="notification-badge" id="notification-count">0</span></button>
+    <button class="notification-bell" id="notification-bell" onclick="toggleNotificationsPanel()" title="Notifications">🔔<span class="notification-badge" id="notification-count">0</span></button>
     <button class="btn" onclick="showSubmitStoryIdeaScreen()" style="font-size:11px;display:none;background:#FAC775;color:var(--blk)" id="btn-new-guest-story">+ New Story</button>
     <button class="btn btn-ghost" onclick="handleHomeClick()" style="font-size:11px;display:none" id="btn-back-landing">Home</button>
     <button class="btn btn-ghost" onclick="logout()" style="font-size:11px;display:none" id="btn-logout">Logout</button>
@@ -408,7 +408,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 
 <div id="guest-writer-stories" class="landing" style="display:none;padding-top:32px">
   <div class="scratch-screen" style="max-width:900px">
-    <button onclick="showGuestWriterDashboard()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">? Back</button>
+    <button onclick="showGuestWriterDashboard()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back</button>
     <h2>My stories</h2>
     <p class="sub">Drafts can be edited and submitted. Stories under review, scheduled, or published are view-only for now.</p>
     <button class="btn" onclick="loadGuestWriterStories({force:true})" style="margin-bottom:12px">Refresh</button>
@@ -451,7 +451,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 
 <div id="guest-writer-idea-discussion" class="landing" style="display:none;padding-top:32px">
   <div class="scratch-screen" style="max-width:780px">
-    <button onclick="goGuestWriterDashboardWithUnsavedCheck()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">? Go back to dashboard</button>
+    <button onclick="goGuestWriterDashboardWithUnsavedCheck()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Go back to dashboard</button>
     <h2 style="margin-bottom:18px">Idea discussion</h2>
     <div id="gwi-discussion-summary" style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-bottom:16px"></div>
     <div id="gwi-messages" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px"></div>
@@ -466,7 +466,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 
 <div id="guest-writer-status-screen" class="landing" style="display:none">
   <div class="scratch-screen guest-writer-status-scroll">
-    <button onclick="goGuestWriterDashboardWithUnsavedCheck()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin:0 24px 20px">? Go back to dashboard</button>
+    <button onclick="goGuestWriterDashboardWithUnsavedCheck()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin:0 24px 20px">← Go back to dashboard</button>
     <h2 id="guest-writer-status-title">Story status</h2>
     <div class="sub" id="guest-writer-status-copy"></div>
   </div>
@@ -487,22 +487,22 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Draft new stories</h2>
         <div class="landing-cards">
       <div class="lcard" onclick="showMain()">
-        <div class="lcard-icon">??</div>
+        <div class="lcard-icon">📰</div>
         <div class="lcard-title">Draft from trending news</div>
         <div class="lcard-desc">Explore live news from Indian workplaces. Find a story that matters and draft a Wocult piece from it.</div>
-        <div class="lcard-cta">Open dashboard ?</div>
+        <div class="lcard-cta">Open dashboard →</div>
       </div>
       <div class="lcard" onclick="showUrlEntry()">
-        <div class="lcard-icon">??</div>
+        <div class="lcard-icon">🔗</div>
         <div class="lcard-title">Draft from a URL</div>
         <div class="lcard-desc">Paste any article URL. The AI will read it and draft a Wocult story — with your editorial angle.</div>
-        <div class="lcard-cta">Paste a URL ?</div>
+        <div class="lcard-cta">Paste a URL →</div>
       </div>
       <div class="lcard" onclick="showScratchChoice()">
-        <div class="lcard-icon">??</div>
+        <div class="lcard-icon">✍️</div>
         <div class="lcard-title">Write your own story</div>
         <div class="lcard-desc">Share your own story, experience, or perspective. We'll help you shape it into a Wocult piece.</div>
-        <div class="lcard-cta">Start writing ?</div>
+        <div class="lcard-cta">Start writing →</div>
       </div>
       <div class="lcard" onclick="showManualNewsBrief()">
         <div class="lcard-icon">NB</div>
@@ -529,16 +529,16 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Curate interviews</h2>
         <div class="landing-cards" style="grid-template-columns:repeat(2,1fr)">
       <div class="lcard" onclick="showPrepareInterview()">
-        <div class="lcard-icon">???</div>
+        <div class="lcard-icon">🎙️</div>
         <div class="lcard-title">Prepare and send questions</div>
         <div class="lcard-desc">Create sharp Wocult-style interview questions from a topic brief.</div>
-        <div class="lcard-cta">Prepare questions ?</div>
+        <div class="lcard-cta">Prepare questions →</div>
       </div>
       <div class="lcard" onclick="showInterviewSubmissions()">
         <div class="lcard-icon">IN</div>
         <div class="lcard-title">Guest interview submissions</div>
         <div class="lcard-desc">Review guest interview responses and final Q&A submissions.</div>
-        <div class="lcard-cta">Review interview submissions ?</div>
+        <div class="lcard-cta">Review interview submissions →</div>
       </div>
         </div>
       </section>
@@ -550,13 +550,13 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         <div class="lcard-icon">GW</div>
         <div class="lcard-title">Guest writer profiles</div>
         <div class="lcard-desc">Review recent Guest Writer profiles and approve access to the writing tool.</div>
-        <div class="lcard-cta">Review profiles ?</div>
+        <div class="lcard-cta">Review profiles →</div>
       </div>
       <div class="lcard" onclick="showStaffGuestWriterStories()">
         <div class="lcard-icon">ST</div>
         <div class="lcard-title">Guest writer stories</div>
         <div class="lcard-desc">Review submitted Guest Writer drafts and update editorial status.</div>
-        <div class="lcard-cta">Review stories ?</div>
+        <div class="lcard-cta">Review stories →</div>
       </div>
         </div>
       </section>
@@ -574,7 +574,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         <div class="lcard-icon">EC</div>
         <div class="lcard-title">Editorial Calendar</div>
         <div class="lcard-desc">Plan, schedule and manage Wocult content across channels.</div>
-        <div class="lcard-cta">Open calendar ?</div>
+        <div class="lcard-cta">Open calendar →</div>
       </div>
         </div>
       </section>
@@ -602,11 +602,11 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <!-- URL entry screen -->
   <div id="landing-url" class="landing" style="display:none">
     <div class="url-entry">
-      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;align-self:flex-start;padding:0">? Back</button>
+      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;align-self:flex-start;padding:0">← Back</button>
       <h2>Draft from a URL</h2>
       <p>Paste the URL of any article. The AI will read it and draft an original Wocult story based on the content.</p>
       <input class="wf-input" id="landing-url-input" placeholder="https://economictimes.com/..." style="font-size:14px" onkeydown="if(event.key==='Enter')startFromUrl()" />
-      <button class="btn-lg btn-y" onclick="startFromUrl()" style="align-self:flex-start;padding:12px 28px">Draft this story ?</button>
+      <button class="btn-lg btn-y" onclick="startFromUrl()" style="align-self:flex-start;padding:12px 28px">Draft this story →</button>
     </div>
   </div>
 
@@ -802,7 +802,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <!-- Prepare interview screen -->
   <div id="landing-prepare-interview" class="landing" style="display:none;padding-top:32px">
     <div class="scratch-screen">
-      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">? Back</button>
+      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back</button>
       <h2>Prepare interview</h2>
       <p class="sub">Add a brief and choose how many questions you want.</p>
 
@@ -840,7 +840,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
 
       <details style="margin-bottom:16px;padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;font-family:inherit">
         <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--blk);font-family:inherit">Wocult interview approach</summary>
-        <div class="hint" style="font-size:12px;line-height:1.6;margin-top:12px;color:var(--blk)">Set the ground ? Explore the lived reality ? Find the tension ? Look for answers ? End with meaning</div>
+        <div class="hint" style="font-size:12px;line-height:1.6;margin-top:12px;color:var(--blk)">Set the ground → Explore the lived reality → Find the tension → Look for answers → End with meaning</div>
         <div class="hint" style="font-size:12px;line-height:1.6;margin-top:10px;color:var(--blk)">Ask clearly. Celebrate what works. Challenge what doesn’t. Don’t dodge the uncomfortable question if that is where the real story sits.</div>
         <div class="hint" style="font-size:12px;line-height:1.6;margin-top:8px">Use this as a guide while framing questions. The interview does not need to be rigid, but it should move from context to real experience, challenge, solutions, and insight.</div>
       </details>
@@ -866,7 +866,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <div id="landing-interview-submissions" class="landing" style="display:none;padding-top:32px">
     <div class="scratch-screen" style="max-width:980px">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
-        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">? Back to staff dashboard</button>
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
         <button class="btn" onclick="loadInterviewSubmissions({force:true})">Refresh</button>
       </div>
       <h2>Staff submissions</h2>
@@ -900,7 +900,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <div id="landing-guest-writer-applications" class="landing" style="display:none;padding-top:32px">
     <div class="scratch-screen" style="max-width:980px">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
-        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">? Back to staff dashboard</button>
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
         <button class="btn" onclick="loadGuestWriterApplications({force:true})">Refresh</button>
       </div>
       <h2>Guest writer profiles</h2>
@@ -917,7 +917,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <div id="landing-guest-writer-stories" class="landing" style="display:none;padding-top:32px">
     <div class="scratch-screen" style="max-width:980px">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
-        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">? Back to staff dashboard</button>
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
         <button class="btn" onclick="loadStaffGuestWriterStories({force:true,resetDetail:true})">Refresh</button>
       </div>
       <h2>Guest writer stories</h2>
@@ -1118,7 +1118,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <div id="landing-unsent-admin" class="landing" style="display:none;padding-top:32px">
     <div class="scratch-screen" style="max-width:1100px">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
-        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">? Back to staff dashboard</button>
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
         <button class="btn" onclick="loadUnsentSubmissions({force:true})">Refresh</button>
       </div>
       <h2>UNSENT</h2>
@@ -1138,7 +1138,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <div id="landing-blog-comments-admin" class="landing" style="display:none;padding-top:32px">
     <div class="scratch-screen" style="max-width:1100px">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
-        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">? Back to staff dashboard</button>
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
         <button class="btn" onclick="loadBlogComments({force:true})">Refresh</button>
       </div>
       <h2>BLOG COMMENTS</h2>
@@ -1159,19 +1159,19 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <!-- Write from scratch choice screen -->
   <div id="landing-scratch-choice" class="landing" style="display:none;padding-top:32px">
     <div class="scratch-screen">
-      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">? Back</button>
+      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back</button>
       <h2>How would you like to start?</h2>
       <p class="sub">Choose the path that best matches where your story is right now.</p>
       <div class="landing-cards" style="grid-template-columns:1fr;gap:14px">
         <div class="lcard" onclick="showExistingDraftForm()">
           <div class="lcard-title">Start with an existing draft</div>
           <div class="lcard-desc">Already have something written? Paste it here and we’ll help refine it.</div>
-          <div class="lcard-cta">Paste draft ?</div>
+          <div class="lcard-cta">Paste draft →</div>
         </div>
         <div class="lcard" onclick="showScratchForm()">
           <div class="lcard-title">Start a new draft</div>
           <div class="lcard-desc">Answer a few prompts and we’ll help shape your story.</div>
-          <div class="lcard-cta">Answer prompts ?</div>
+          <div class="lcard-cta">Answer prompts →</div>
         </div>
       </div>
     </div>
@@ -1180,7 +1180,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <!-- Existing draft paste screen -->
   <div id="landing-existing-draft" class="landing" style="display:none;padding-top:32px">
     <div class="scratch-screen">
-      <button onclick="showScratchChoice()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">? Back</button>
+      <button onclick="showScratchChoice()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back</button>
       <h2>Start with an existing draft</h2>
       <p class="sub">Paste your draft below. We’ll refine it into a polished Wocult piece while preserving your voice and intent.</p>
       <div class="sfield">
@@ -1199,7 +1199,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   <!-- Write from scratch screen -->
   <div id="landing-scratch" class="landing" style="display:none;padding-top:32px">
     <div class="scratch-screen">
-      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">? Back</button>
+      <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back</button>
       <h2>Tell us your story</h2>
       <p class="sub">Share your experience, perspective, or idea. Write freely — we'll shape it into a Wocult piece. Your voice, our edit.</p>
 
@@ -1363,9 +1363,9 @@ There are no right or wrong answers here. Please answer openly and in your own v
         <div style="font-size:10px;color:var(--g3);background:var(--gray);border:1px solid var(--bdr);padding:2px 8px;border-radius:10px">Wocult AI</div>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn" id="update-draft-btn" onclick="updateDraft()" style="padding:6px 14px;font-size:13px" title="Sync your manual edits and let Wocult AI polish them">? Update</button>
+        <button class="btn" id="update-draft-btn" onclick="updateDraft()" style="padding:6px 14px;font-size:13px" title="Sync your manual edits and let Wocult AI polish them">↻ Update</button>
         <button class="btn" id="revert-draft-btn" onclick="revertDraftUpdate()" disabled style="padding:6px 14px;font-size:13px;opacity:0.5;cursor:not-allowed" title="Restore the story from before the last Update">Revert</button>
-        <button class="btn-lg btn-y" style="white-space:nowrap;padding:6px 16px;font-size:13px" onclick="proceedToReview()">Proceed to Review ?</button>
+        <button class="btn-lg btn-y" style="white-space:nowrap;padding:6px 16px;font-size:13px" onclick="proceedToReview()">Proceed to Review →</button>
       </div>
     </div>
     <!-- Toolbar row -->
@@ -1387,7 +1387,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
     <div id="chat-article-preview" contenteditable="true" style="padding:24px;background:#fff;height:500px;overflow-y:scroll;outline:none;cursor:text;font-size:14px;line-height:1.8;border-bottom:1px solid var(--bdr)" oninput="updateWordCount()"></div>
     <div id="word-count-bar" style="padding:6px 24px;background:#fff;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--g3)">
       <span id="word-count-num">0 words</span>
-      <span id="word-count-warn" style="display:none;color:#E24B4A;font-weight:500">? Over 1200 words — recommended max exceeded</span>
+      <span id="word-count-warn" style="display:none;color:#E24B4A;font-weight:500">⚠ Over 1200 words — recommended max exceeded</span>
     </div>
     <div class="refine-chat-panel" style="background:var(--gray);border-top:2px solid var(--bdr)">
       <div id="chat-messages" style="padding:16px;display:flex;flex-direction:column;gap:10px"></div>
@@ -1430,7 +1430,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
     <div class="wf-field">
       <label class="wf-label">Cover Image</label>
       <div style="display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray)">
-        <input class="wf-input" id="r-img-url" placeholder="Add image URL..." style="margin:0" oninput="document.getElementById('r-img-name').textContent=this.value?'? URL ready':''" />
+        <input class="wf-input" id="r-img-url" placeholder="Add image URL..." style="margin:0" oninput="document.getElementById('r-img-name').textContent=this.value?'✓ URL ready':''" />
         <div style="display:flex;align-items:center;gap:10px">
           <label style="font-size:12px;color:var(--g3);white-space:nowrap">Upload file:</label>
           <input type="file" id="r-img-file" accept="image/*" onchange="handleReviewImg(event)" style="font-size:12px;flex:1" />
@@ -1442,7 +1442,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   </div>
   <div id="publish-result" style="display:none"></div>
   <div class="wf-actions" id="publish-actions">
-    <button class="btn-lg" onclick="showWorkflowStep('refine')" style="background:var(--gray);border:none;cursor:pointer">? Back to Refine</button>
+    <button class="btn-lg" onclick="showWorkflowStep('refine')" style="background:var(--gray);border:none;cursor:pointer">← Back to Refine</button>
     <button class="btn-lg" id="guest-writer-save-draft-btn" onclick="saveGuestWriterDraft('draft')" style="display:none;background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Save draft</button>
     <button class="btn-lg" onclick="exportCSV()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Export CSV</button>
     <button class="btn-lg btn-y" id="publish-btn" onclick="submitArticle()">Submit</button>
@@ -2583,7 +2583,7 @@ function openGuestWriterRevisionScreen(story) {
   if (reviewStep) {
     reviewStep.insertAdjacentHTML('beforeend',
       '<div id="writer-review-panel" class="wf-section" style="margin-top:18px">'
-      + '<button onclick="goGuestWriterDashboardWithUnsavedCheck()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:14px">? Go back to dashboard</button>'
+      + '<button onclick="goGuestWriterDashboardWithUnsavedCheck()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:14px">← Go back to dashboard</button>'
       + '<div style="font-size:16px;font-weight:700;margin-bottom:8px">Story review chat</div>'
       + '<div id="writer-review-messages-editor" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>'
       + '<textarea id="writer-review-message-editor" class="wf-textarea" rows="4" placeholder="Reply to Wocult..."></textarea>'
@@ -3436,8 +3436,8 @@ function editorialCalendarSyncOccurrences(entryId, data) {
 function editorialCalendarActivityDetails(before, after) {
   var parts = [];
   if (!before || !before.id) parts.push('Created by '+((currentUser && currentUser.email) || 'staff'));
-  if (before && before.status && before.status !== after.status) parts.push('Status: '+before.status+' ? '+after.status);
-  if (before && before.publishDate && editorialCalendarDateKey(before.publishDate) !== after.publishDate) parts.push('Publish date: '+editorialCalendarDateKey(before.publishDate)+' ? '+after.publishDate);
+  if (before && before.status && before.status !== after.status) parts.push('Status: '+before.status+' → '+after.status);
+  if (before && before.publishDate && editorialCalendarDateKey(before.publishDate) !== after.publishDate) parts.push('Publish date: '+editorialCalendarDateKey(before.publishDate)+' → '+after.publishDate);
   if (before && before.recurrence && JSON.stringify(before.recurrence) !== JSON.stringify(after.recurrence)) parts.push('Recurrence changed');
   return parts.join('; ');
 }
@@ -8013,7 +8013,7 @@ function autoSaveMemory(note) {
   db.collection('editorial_memory').add({note:note, type:'auto', createdAt:firebase.firestore.FieldValue.serverTimestamp()})
     .then(function(ref){
       _memoryNotes.push({id:ref.id, note:note, type:'auto'});
-      fbToast('?? Learned: '+note.substring(0,50)+'...');
+      fbToast('🧠 Learned: '+note.substring(0,50)+'...');
     }).catch(function(e){ console.warn('Auto memory save failed', e); });
 }
 
