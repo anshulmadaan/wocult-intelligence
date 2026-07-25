@@ -213,9 +213,50 @@ export default {
       out.id = doc.name?.split('/').pop() || out.id || '';
       return out;
     };
+    const base64UrlBytesLocal = (bytes) => {
+      let bin = '';
+      bytes.forEach((b) => { bin += String.fromCharCode(b); });
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    };
+    const base64UrlLocal = (value) => base64UrlBytesLocal(new TextEncoder().encode(value));
+    const pemToArrayBufferLocal = (pem) => {
+      const normalised = String(pem || '').replace(/\\n/g, '\n');
+      const b64 = normalised.replace(/-----BEGIN PRIVATE KEY-----/g, '').replace(/-----END PRIVATE KEY-----/g, '').replace(/\s+/g, '');
+      const bin = atob(b64);
+      return Uint8Array.from(bin, (c) => c.charCodeAt(0)).buffer;
+    };
+    const createNewsImageJwt = async (claims, privateKeyPem) => {
+      const body = `${base64UrlLocal(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))}.${base64UrlLocal(JSON.stringify(claims))}`;
+      const key = await crypto.subtle.importKey('pkcs8', pemToArrayBufferLocal(privateKeyPem), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+      const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(body));
+      return `${body}.${base64UrlBytesLocal(new Uint8Array(sig))}`;
+    };
     const getFirestoreAccessTokenLocal = async () => {
       if (env.FIREBASE_ACCESS_TOKEN) return env.FIREBASE_ACCESS_TOKEN;
-      throw new Error('FIREBASE_ACCESS_TOKEN is required for image upload');
+      if (!env.FIREBASE_CLIENT_EMAIL || !env.FIREBASE_PRIVATE_KEY) throw new Error('Firebase service-account secrets are required for image upload');
+      const iat = Math.floor(Date.now() / 1000);
+      let assertion;
+      try {
+        assertion = await createNewsImageJwt({
+          iss: env.FIREBASE_CLIENT_EMAIL,
+          scope: 'https://www.googleapis.com/auth/datastore',
+          aud: 'https://oauth2.googleapis.com/token',
+          iat,
+          exp: iat + 3600,
+        }, env.FIREBASE_PRIVATE_KEY);
+      } catch (e) {
+        throw new Error('Firebase service-account JWT signing failed');
+      }
+      const res = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }).toString(),
+      });
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+      if (!res.ok) throw new Error(`Firebase OAuth token exchange failed: ${data.error || res.status}`);
+      if (!data.access_token) throw new Error('Firebase OAuth token exchange failed: missing access_token');
+      return data.access_token;
     };
     const firestoreFetchLocal = async (target, init = {}) => {
       const token = await getFirestoreAccessTokenLocal();
