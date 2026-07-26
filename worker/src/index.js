@@ -1,5 +1,6 @@
 import {
   handleAutomationRequest,
+  requireFirebaseAdminEmailRoute,
   requireProtectedRoute,
   scheduledNewsBriefAutomation,
 } from './newsBriefAutomation.js';
@@ -337,7 +338,7 @@ export default {
       if (!createRes.ok) throw new Error(`Webflow asset create failed ${createRes.status}: ${createText.slice(0, 200)}`);
       const uploadForm = new FormData();
       for (const [key, value] of Object.entries(asset.uploadDetails || {})) uploadForm.append(key, value);
-      uploadForm.append('file', new File([buffer], filename, { type: 'image/jpeg' }));
+      uploadForm.append('file', new File([buffer], filename, { type: file.type || 'image/jpeg' }));
       const uploadRes = await fetch(asset.uploadUrl, { method: 'POST', body: uploadForm });
       if (!uploadRes.ok && uploadRes.status !== 201) throw new Error(`Webflow asset binary upload failed ${uploadRes.status}`);
       if (altText) {
@@ -362,6 +363,13 @@ export default {
       } catch (e) {
         return '';
       }
+    };
+    const isSupportedPreviewImageBytes = async (file) => {
+      const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+      if (file.type === 'image/jpeg') return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+      if (file.type === 'image/png') return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a;
+      if (file.type === 'image/webp') return bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+      return false;
     };
     const buildImageAttributionFields = (imageSource, metadata = {}) => {
       if (imageSource === 'unsplash') {
@@ -440,6 +448,36 @@ export default {
         return jsonResponse({ ok: true, query, results });
       } catch (e) {
         return jsonResponse({ ok: false, error: e.message }, 500);
+      }
+    }
+
+    if (url.pathname === '/admin/canva-template-preview-image') {
+      const adminAuth = await requireFirebaseAdminEmailRoute(request, env, { cors });
+      if (adminAuth instanceof Response) return adminAuth;
+      if (request.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed' }, 405);
+      try {
+        const form = await request.formData();
+        const templateId = safeImageText(form.get('templateId'), 40);
+        const file = form.get('file');
+        const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+        const extensionByType = {
+          'image/jpeg': 'jpg',
+          'image/png': 'png',
+          'image/webp': 'webp',
+        };
+        const maxBytes = 2 * 1024 * 1024;
+        if (!['template1', 'template2', 'template3'].includes(templateId)) return jsonResponse({ ok: false, error: 'Invalid template ID' }, 400);
+        if (!(file instanceof File)) return jsonResponse({ ok: false, error: 'Preview image file is required' }, 400);
+        if (!allowedTypes.has(file.type)) return jsonResponse({ ok: false, error: 'Preview image must be JPEG, PNG or WebP' }, 400);
+        if (file.size <= 0 || file.size > maxBytes) return jsonResponse({ ok: false, error: 'Preview image must be 2 MB or smaller' }, 400);
+        if (!(await isSupportedPreviewImageBytes(file))) return jsonResponse({ ok: false, error: 'Preview image content does not match its file type' }, 400);
+        const filename = `wocult-canva-${templateId}-${Date.now()}.${extensionByType[file.type]}`;
+        const asset = await uploadWebflowAsset(file, filename, `Wocult Canva ${templateId} preview`);
+        const hostedUrl = asset.hostedUrl || asset.assetUrl || '';
+        if (!hostedUrl || !/^https?:\/\//i.test(hostedUrl)) throw new Error('Webflow did not return a permanent hosted URL');
+        return jsonResponse({ ok: true, templateId, webflowAssetId: asset.id || '', previewImageUrl: hostedUrl, hostedUrl });
+      } catch (e) {
+        return jsonResponse({ ok: false, error: e.message }, e.status || 500);
       }
     }
 
