@@ -543,6 +543,21 @@ export async function requireProtectedRoute(request, env, deps = {}) {
   return null;
 }
 
+export async function requireFirebaseAdminEmailRoute(request, env, deps = {}) {
+  const auth = request.headers.get('Authorization') || '';
+  const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1] || '';
+  let claims = null;
+  if (bearer && env.FIREBASE_PROJECT_ID) {
+    claims = await verifyFirebaseIdToken(bearer, env, deps).catch(() => null);
+  }
+  const email = String(claims?.email || '').toLowerCase();
+  if (email === 'anmadaan@gmail.com') return { ok: true, claims };
+  return new Response(JSON.stringify({ ok: false, error: claims ? 'Forbidden' : 'Unauthorized' }), {
+    status: claims ? 403 : 401,
+    headers: { ...(deps.cors || {}), 'Content-Type': 'application/json' },
+  });
+}
+
 export async function handleAutomationRequest(request, env, ctx, shared = {}, deps = {}) {
   const url = new URL(request.url);
   const isNewsBriefAutomationRoute =

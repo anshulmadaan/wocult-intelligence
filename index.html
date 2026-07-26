@@ -104,6 +104,7 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 #news-social-image-preview img{max-width:220px;width:100%;height:auto;object-fit:cover;border:1px solid var(--bdr);border-radius:8px;background:#fff}
 .news-social-review-card{border:1px solid var(--bdr);border-radius:8px;background:#fff;padding:12px;margin-bottom:12px}
 .news-social-review-copy{white-space:pre-wrap;font-size:14px;line-height:1.55;color:var(--blk);margin:8px 0 10px}
+.admin-template-grid{display:grid;grid-template-columns:1fr;gap:16px}.admin-template-card{border:1px solid var(--bdr);border-radius:8px;background:#fff;padding:16px}.admin-template-layout{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:16px;align-items:start}.admin-template-preview{width:100%;aspect-ratio:4/5;object-fit:cover;border:1px solid var(--bdr);border-radius:8px;background:#f3eee6}.admin-field-row{display:grid;grid-template-columns:96px minmax(0,1fr) auto auto;gap:8px;align-items:center;margin:8px 0}.admin-field-row input,.admin-template-card input,.admin-template-card textarea,.admin-template-card select{width:100%;border:1px solid var(--bdr);border-radius:8px;padding:9px 11px;font-size:14px;font-family:system-ui,sans-serif;background:#fff;outline:none}.admin-template-card textarea{min-height:72px;resize:vertical}.admin-template-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.admin-status-error{color:var(--red)}@media(max-width:780px){.admin-template-layout{grid-template-columns:1fr}.admin-field-row{grid-template-columns:1fr}.admin-field-row button{width:100%}}
 .news-image-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.52);z-index:10120;align-items:center;justify-content:center;padding:20px}
 .news-image-panel{width:min(980px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:8px;border:1px solid var(--bdr);box-shadow:0 24px 80px rgba(0,0,0,0.28);padding:22px}
 .news-image-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
@@ -251,7 +252,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.4</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.5</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -605,8 +606,27 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         <div class="lcard-desc">Review, edit, and delete blog comments.</div>
         <div class="lcard-cta">Open comments</div>
       </div>
+      <div class="lcard" id="admin-nav-card" onclick="showAdminDashboard()" style="display:none">
+        <div class="lcard-icon">AD</div>
+        <div class="lcard-title">Admin</div>
+        <div class="lcard-desc">Manage Wocult Intelligence settings for Canva social templates.</div>
+        <div class="lcard-cta">Open Admin</div>
+      </div>
         </div>
       </section>
+    </div>
+  </div>
+
+  <div id="landing-admin-dashboard" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:1120px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">&larr; Back to staff dashboard</button>
+        <button class="btn-lg btn-y" id="admin-canva-save-btn" onclick="saveAdminCanvaTemplates()">Save changes</button>
+      </div>
+      <h2>Admin</h2>
+      <p class="sub">Canva social template settings</p>
+      <div id="admin-canva-status" class="hint" style="margin-bottom:12px"></div>
+      <div id="admin-canva-template-grid" class="admin-template-grid"></div>
     </div>
   </div>
 
@@ -1580,6 +1600,7 @@ var STAFF_EMAILS = [
   "divya.madaan@gmail.com",
   "anmadaan@gmail.com"
 ];
+var ADMIN_EMAIL = "anmadaan@gmail.com";
 var currentUser = null;
 var currentGuestWriterProfile = null;
 var currentGuestWriterArticleId = '';
@@ -1618,11 +1639,15 @@ var editorialCalendarState = {
   editorRecoveryKey: '',
   searchOutsideMonth: false
 };
+var NEWS_BRIEF_SOCIAL_CANVA_TEMPLATE_IDS = ['template1','template2','template3'];
 var NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES = [
-  {key:'template_1', name:'Full-bleed gradient', description:'Full-bleed editorial image with gradient and text overlay', designId:'DAHQCSJUww0', url:'https://canva.link/snx9l8cent4vnlz', previewImage:'assets/canva-template-1.png', fields:['headline','subtext'], labels:{headline:'Headline', subtext:'Sub-title'}, limits:{headline:72, subtext:140}},
-  {key:'template_2', name:'Text-led editorial', description:'Text-led editorial layout with supporting image', designId:'DAHQQ10w4aw', url:'https://www.canva.com/design/DAHQQ10w4aw/mQ_xjBspc6KdnSnCxpvc6Q/edit?ui=e30', previewImage:'assets/canva-template-2.png', fields:['headline','subtext'], labels:{headline:'Headline', subtext:'Sub-title'}, limits:{headline:72, subtext:140}},
-  {key:'template_3', name:'Three-point summary', description:'Headline followed by three concise story points', designId:'DAHQRDKQRrY', url:'https://canva.link/zftpd3ly8z8tn9k', previewImage:'assets/canva-template-3.png', fields:['headline','bullet1','bullet2','bullet3'], labels:{headline:'Headline', bullet1:'Bullet 1', bullet2:'Bullet 2', bullet3:'Bullet 3'}, limits:{headline:72, bullet1:70, bullet2:70, bullet3:70}}
+  {id:'template1', key:'template_1', name:'Full-bleed gradient', description:'Full-bleed editorial image with gradient and text overlay', designId:'DAHQCSJUww0', url:'https://canva.link/snx9l8cent4vnlz', canvaUrl:'https://canva.link/snx9l8cent4vnlz', previewImage:'assets/canva-template-1.png', previewImageUrl:'assets/canva-template-1.png', enabled:true, fieldDefinitions:[{id:'headline', type:'headline', label:'Headline'}, {id:'subtitle', type:'subtitle', label:'Sub-title'}], fields:['headline','subtext'], labels:{headline:'Headline', subtext:'Sub-title'}, limits:{headline:72, subtext:140}},
+  {id:'template2', key:'template_2', name:'Text-led editorial', description:'Text-led editorial layout with supporting image', designId:'DAHQQ10w4aw', url:'https://www.canva.com/design/DAHQQ10w4aw/mQ_xjBspc6KdnSnCxpvc6Q/edit?ui=e30', canvaUrl:'https://www.canva.com/design/DAHQQ10w4aw/mQ_xjBspc6KdnSnCxpvc6Q/edit?ui=e30', previewImage:'assets/canva-template-2.png', previewImageUrl:'assets/canva-template-2.png', enabled:true, fieldDefinitions:[{id:'headline', type:'headline', label:'Headline'}, {id:'subtitle', type:'subtitle', label:'Sub-title'}], fields:['headline','subtext'], labels:{headline:'Headline', subtext:'Sub-title'}, limits:{headline:72, subtext:140}},
+  {id:'template3', key:'template_3', name:'Three-point summary', description:'Headline followed by three concise story points', designId:'DAHQRDKQRrY', url:'https://canva.link/zftpd3ly8z8tn9k', canvaUrl:'https://canva.link/zftpd3ly8z8tn9k', previewImage:'assets/canva-template-3.png', previewImageUrl:'assets/canva-template-3.png', enabled:true, fieldDefinitions:[{id:'headline', type:'headline', label:'Headline'}, {id:'bullet1', type:'bullet', label:'Bullet 1'}, {id:'bullet2', type:'bullet', label:'Bullet 2'}, {id:'bullet3', type:'bullet', label:'Bullet 3'}], fields:['headline','bullet1','bullet2','bullet3'], labels:{headline:'Headline', bullet1:'Bullet 1', bullet2:'Bullet 2', bullet3:'Bullet 3'}, limits:{headline:72, bullet1:70, bullet2:70, bullet3:70}}
 ];
+var NEWS_BRIEF_SOCIAL_CANVA_DEFAULTS = NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES.map(function(template) {
+  return JSON.parse(JSON.stringify(template));
+});
 var newsBriefSocialState = {
   articleId: '',
   article: null,
@@ -1644,11 +1669,37 @@ var newsBriefSocialState = {
   creativeImageUrl: '',
   canvaDesignUrl: '',
   canvaConfirmed: false,
+  templateConfigSnapshot: null,
   dirty: false
+};
+var adminCanvaState = {
+  loading: false,
+  saving: false,
+  templates: [],
+  savedTemplates: []
 };
 
 function isStaffUser(user) {
   return !!(user && STAFF_EMAILS.indexOf((user.email || '').toLowerCase()) !== -1);
+}
+function isAdminUser(user) {
+  return !!(user && String(user.email || '').toLowerCase() === ADMIN_EMAIL);
+}
+function updateAdminNavigationVisibility() {
+  var nav = document.getElementById('admin-nav-card');
+  if (nav) nav.style.display = isAdminUser(currentUser) ? 'block' : 'none';
+}
+function guardAdminScreen() {
+  if (isAdminUser(currentUser)) return true;
+  hideAllAppScreens();
+  if (currentUser && isStaffUser(currentUser)) goToLanding();
+  else if (currentUser) {
+    currentAccessMode = 'guest_writer';
+    loadGuestWriterProfile(currentUser.uid);
+  } else {
+    showAccessScreen();
+  }
+  return false;
 }
 function guardStaffScreen() {
   if (isStaffUser(currentUser)) return true;
@@ -1662,8 +1713,14 @@ function guardStaffScreen() {
   return false;
 }
 function enforceStaffScreenAccess() {
+  updateAdminNavigationVisibility();
+  var adminPage = document.getElementById('landing-admin-dashboard');
+  if (adminPage && adminPage.style.display !== 'none' && !isAdminUser(currentUser)) {
+    guardAdminScreen();
+    return;
+  }
   if (isStaffUser(currentUser)) return;
-  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-editorial-calendar','landing-editorial-calendar-editor','landing-news-brief-social','landing-automated-news-briefs','landing-unsent-admin','landing-blog-comments-admin','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
+  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-editorial-calendar','landing-editorial-calendar-editor','landing-news-brief-social','landing-automated-news-briefs','landing-unsent-admin','landing-blog-comments-admin','landing-admin-dashboard','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
     var el = document.getElementById(id);
     return el && el.style.display !== 'none';
   });
@@ -1796,6 +1853,7 @@ function hideAllAppScreens() {
   if (newStoryBtn) newStoryBtn.style.display = 'none';
   var bell = document.getElementById('notification-bell');
   if (bell) bell.style.display = currentUser ? 'inline-flex' : 'none';
+  updateAdminNavigationVisibility();
   var uploadBlock = document.getElementById('guest-writer-upload-block');
   if (uploadBlock) uploadBlock.style.display = 'none';
   var submitBtn = document.getElementById('guest-writer-submit-story-btn');
@@ -1909,6 +1967,7 @@ function logout() {
   currentGuestWriterArticleId = '';
   currentGuestWriterStory = null;
   window._notifications = [];
+  updateAdminNavigationVisibility();
   updateNotificationBell();
   if (auth) auth.signOut().finally(function(){ showAccessScreen(); });
   else showAccessScreen();
@@ -1934,6 +1993,7 @@ function restoreAccessSession() {
 }
 function routeSignedInUser(user) {
   currentUser = user;
+  updateAdminNavigationVisibility();
   if (!user) { currentAccessMode = ''; showAccessScreen(); return; }
   clearUnsavedChanges();
   document.getElementById('btn-logout').style.display = 'inline-flex';
@@ -5874,7 +5934,8 @@ function hideStaffLandingPanels() {
     'landing-news-brief-social',
     'landing-automated-news-briefs',
     'landing-unsent-admin',
-    'landing-blog-comments-admin'
+    'landing-blog-comments-admin',
+    'landing-admin-dashboard'
   ].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
@@ -10383,6 +10444,7 @@ function resetNewsBriefSocialState() {
     creativeImageUrl: '',
     canvaDesignUrl: '',
     canvaConfirmed: false,
+    templateConfigSnapshot: null,
     dirty: false
   };
   var modal = document.getElementById('news-brief-social-modal');
@@ -10398,6 +10460,356 @@ function getSubmittedStoryUrl(webflowData, article) {
   return webflowData.publishedUrl || webflowData.webflowUrl || webflowData.url || webflowData.link ||
     fieldData.publishedUrl || fieldData.url || item.publishedUrl || item.url || item.link ||
     itemFields.publishedUrl || itemFields.url || article.publishedUrl || '';
+}
+
+function cloneCanvaTemplate(template) {
+  return JSON.parse(JSON.stringify(template || {}));
+}
+
+function defaultCanvaTemplateById(id) {
+  return NEWS_BRIEF_SOCIAL_CANVA_DEFAULTS.find(function(template) { return template.id === id; }) || null;
+}
+
+function isSafeHttpUrl(value, allowEmpty) {
+  var trimmed = String(value || '').trim();
+  if (!trimmed) return allowEmpty === true;
+  try {
+    var parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (e) {
+    return false;
+  }
+}
+
+function normalizeSafeHttpUrl(value) {
+  var trimmed = String(value || '').trim();
+  try {
+    var parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.toString();
+  } catch (e) {}
+  return trimmed;
+}
+
+function isSafePreviewImageValue(value) {
+  var trimmed = String(value || '').trim();
+  if (isSafeHttpUrl(trimmed, false)) return true;
+  return /^assets\/canva-template-[123]\.png$/i.test(trimmed);
+}
+
+function normalizeCanvaFieldDefinitions(value, fallbackDefinitions) {
+  var fallback = Array.isArray(fallbackDefinitions) ? fallbackDefinitions : [];
+  var raw = Array.isArray(value) ? value : fallback;
+  var fields = [];
+  var counts = { headline: 0, subtitle: 0, bullet: 0 };
+  raw.forEach(function(field, index) {
+    if (!field || typeof field !== 'object') return;
+    var type = String(field.type || '').trim();
+    if (['headline','subtitle','bullet'].indexOf(type) === -1) return;
+    counts[type] += 1;
+    if (type === 'headline' && counts.headline > 1) return;
+    if (type === 'subtitle' && counts.subtitle > 1) return;
+    if (type === 'bullet' && counts.bullet > 5) return;
+    var id = type === 'headline' ? 'headline' : type === 'subtitle' ? 'subtitle' : ('bullet' + counts.bullet);
+    fields.push({
+      id: id,
+      type: type,
+      label: String(field.label || (type === 'headline' ? 'Headline' : type === 'subtitle' ? 'Sub-title' : 'Bullet ' + counts.bullet)).trim()
+    });
+  });
+  if (fields.filter(function(field) { return field.type === 'headline'; }).length !== 1) return cloneCanvaTemplate({ fieldDefinitions: fallback }).fieldDefinitions || [];
+  return fields;
+}
+
+function toInternalCanvaFields(fieldDefinitions) {
+  var labels = {};
+  var fields = [];
+  var limits = {};
+  (fieldDefinitions || []).forEach(function(field) {
+    var internalId = field.type === 'subtitle' ? 'subtext' : field.id;
+    fields.push(internalId);
+    labels[internalId] = field.label;
+    limits[internalId] = field.type === 'headline' ? 72 : field.type === 'subtitle' ? 140 : 70;
+  });
+  return { fields: fields, labels: labels, limits: limits };
+}
+
+function mergeCanvaTemplateRecord(defaultTemplate, storedRecord) {
+  var template = cloneCanvaTemplate(defaultTemplate);
+  var record = storedRecord && typeof storedRecord === 'object' ? storedRecord : {};
+  if (typeof record.name === 'string' && record.name.trim()) template.name = record.name.trim();
+  if (typeof record.description === 'string') template.description = record.description.trim();
+  if (typeof record.canvaUrl === 'string' && isSafeHttpUrl(record.canvaUrl, false)) {
+    template.canvaUrl = normalizeSafeHttpUrl(record.canvaUrl);
+    template.url = template.canvaUrl;
+  }
+  if (typeof record.previewImageUrl === 'string' && isSafeHttpUrl(record.previewImageUrl, false)) {
+    template.previewImageUrl = normalizeSafeHttpUrl(record.previewImageUrl);
+    template.previewImage = template.previewImageUrl;
+  }
+  if (typeof record.enabled === 'boolean') template.enabled = record.enabled;
+  template.fieldDefinitions = normalizeCanvaFieldDefinitions(record.fields, template.fieldDefinitions);
+  var internal = toInternalCanvaFields(template.fieldDefinitions);
+  template.fields = internal.fields;
+  template.labels = internal.labels;
+  template.limits = Object.assign({}, template.limits || {}, internal.limits);
+  return template;
+}
+
+function mergeCanvaTemplateConfig(storedConfig) {
+  var config = storedConfig && typeof storedConfig === 'object' ? storedConfig : {};
+  var merged = NEWS_BRIEF_SOCIAL_CANVA_TEMPLATE_IDS.map(function(id) {
+    return mergeCanvaTemplateRecord(defaultCanvaTemplateById(id), config[id]);
+  });
+  if (!merged.some(function(template) { return template.enabled !== false; })) {
+    merged = NEWS_BRIEF_SOCIAL_CANVA_DEFAULTS.map(cloneCanvaTemplate);
+  }
+  return merged;
+}
+
+function canvaTemplateFirestorePayload(templates) {
+  var payload = {};
+  NEWS_BRIEF_SOCIAL_CANVA_TEMPLATE_IDS.forEach(function(id) {
+    var template = (templates || []).find(function(entry) { return entry.id === id; }) || defaultCanvaTemplateById(id);
+    payload[id] = {
+      name: String(template.name || '').trim(),
+      description: String(template.description || '').trim(),
+      canvaUrl: String(template.canvaUrl || template.url || '').trim(),
+      previewImageUrl: String(template.previewImageUrl || template.previewImage || '').trim(),
+      enabled: template.enabled !== false,
+      fields: (template.fieldDefinitions || []).map(function(field) {
+        return { id: field.id, type: field.type, label: field.label };
+      })
+    };
+  });
+  return payload;
+}
+
+function loadCanvaTemplatesFromFirestore() {
+  if (!db) return Promise.resolve(mergeCanvaTemplateConfig(null));
+  return db.collection('editorial_config').doc('canva_templates').get().then(function(doc) {
+    return mergeCanvaTemplateConfig(doc && doc.exists ? (doc.data() || {}) : null);
+  });
+}
+
+function currentNewsBriefSocialTemplates() {
+  return newsBriefSocialState.templateConfigSnapshot || NEWS_BRIEF_SOCIAL_CANVA_DEFAULTS;
+}
+
+function showAdminDashboard() {
+  if (!guardAdminScreen()) return;
+  hideStaffLandingPanels();
+  document.getElementById('landing').style.display = 'block';
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-admin-dashboard').style.display = 'flex';
+  loadAdminCanvaTemplates();
+}
+
+function setAdminCanvaStatus(message, isError) {
+  var status = document.getElementById('admin-canva-status');
+  if (!status) return;
+  status.textContent = message || '';
+  status.className = isError ? 'hint admin-status-error' : 'hint';
+}
+
+function loadAdminCanvaTemplates() {
+  if (!guardAdminScreen()) return Promise.resolve([]);
+  adminCanvaState.loading = true;
+  setAdminCanvaStatus('Loading Canva template settings...', false);
+  return loadCanvaTemplatesFromFirestore().then(function(templates) {
+    adminCanvaState.templates = templates.map(cloneCanvaTemplate);
+    adminCanvaState.savedTemplates = templates.map(cloneCanvaTemplate);
+    renderAdminCanvaTemplates();
+    setAdminCanvaStatus('Loaded.', false);
+    return templates;
+  }).catch(function(err) {
+    console.warn('Admin Canva template config load failed:', err);
+    adminCanvaState.templates = mergeCanvaTemplateConfig(null).map(cloneCanvaTemplate);
+    adminCanvaState.savedTemplates = adminCanvaState.templates.map(cloneCanvaTemplate);
+    renderAdminCanvaTemplates();
+    setAdminCanvaStatus('Could not load Firestore settings. Showing defaults: ' + err.message, true);
+    return adminCanvaState.templates;
+  }).finally(function() {
+    adminCanvaState.loading = false;
+  });
+}
+
+function adminTemplateIndex(id) {
+  return adminCanvaState.templates.findIndex(function(template) { return template.id === id; });
+}
+
+function renderAdminCanvaTemplates() {
+  var grid = document.getElementById('admin-canva-template-grid');
+  if (!grid) return;
+  grid.innerHTML = adminCanvaState.templates.map(function(template, templateIndex) {
+    var preview = template.previewImageUrl || template.previewImage || '';
+    var fieldRows = (template.fieldDefinitions || []).map(function(field, fieldIndex) {
+      return '<div class="admin-field-row">'
+        + '<select onchange="updateAdminCanvaField(\''+template.id+'\','+fieldIndex+',\'type\',this.value)"><option value="headline" '+(field.type === 'headline' ? 'selected' : '')+'>headline</option><option value="subtitle" '+(field.type === 'subtitle' ? 'selected' : '')+'>subtitle</option><option value="bullet" '+(field.type === 'bullet' ? 'selected' : '')+'>bullet</option></select>'
+        + '<input value="'+escapeAttr(field.label || '')+'" oninput="updateAdminCanvaField(\''+template.id+'\','+fieldIndex+',\'label\',this.value)" />'
+        + '<button class="btn" onclick="moveAdminCanvaField(\''+template.id+'\','+fieldIndex+',-1)">Up</button>'
+        + '<button class="btn" onclick="moveAdminCanvaField(\''+template.id+'\','+fieldIndex+',1)">Down</button>'
+        + '</div>';
+    }).join('');
+    return '<div class="admin-template-card" data-template-id="'+escapeAttr(template.id)+'">'
+      + '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px"><div><div class="hint" style="font-weight:700">Template '+(templateIndex + 1)+'</div><h3 style="font-size:18px;margin:4px 0 0;color:var(--blk)">'+escapeHtml(template.name || template.id)+'</h3></div><label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" '+(template.enabled !== false ? 'checked' : '')+' onchange="updateAdminCanvaTemplate(\''+template.id+'\',\'enabled\',this.checked)" /> Enabled</label></div>'
+      + '<div class="admin-template-layout"><div>'
+      + '<div class="sfield"><label>Template name</label><input value="'+escapeAttr(template.name || '')+'" oninput="updateAdminCanvaTemplate(\''+template.id+'\',\'name\',this.value)" /></div>'
+      + '<div class="sfield"><label>Description</label><textarea oninput="updateAdminCanvaTemplate(\''+template.id+'\',\'description\',this.value)">'+escapeHtml(template.description || '')+'</textarea></div>'
+      + '<div class="sfield"><label>Canva URL</label><input value="'+escapeAttr(template.canvaUrl || template.url || '')+'" oninput="updateAdminCanvaTemplate(\''+template.id+'\',\'canvaUrl\',this.value)" /></div>'
+      + '<div class="admin-template-actions" style="margin-bottom:12px"><button class="btn" onclick="testAdminCanvaLink(\''+template.id+'\')">Test link</button></div>'
+      + '<div class="sfield"><label>Preview image URL</label><input value="'+escapeAttr(preview)+'" oninput="updateAdminCanvaTemplate(\''+template.id+'\',\'previewImageUrl\',this.value);renderAdminCanvaTemplates()" /></div>'
+      + '<div class="sfield"><label>Upload preview image</label><input type="file" accept="image/jpeg,image/png,image/webp" onchange="uploadAdminCanvaPreviewImage(\''+template.id+'\',this.files && this.files[0]);this.value=\'\';" /></div>'
+      + '<div style="font-size:12px;font-weight:700;color:var(--g3);text-transform:uppercase;margin:12px 0 4px">Required content fields</div>'
+      + fieldRows
+      + '</div><div><img class="admin-template-preview" src="'+escapeAttr(preview)+'" alt="'+escapeAttr((template.name || template.id) + ' preview')+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';" /><div class="news-social-template-preview-fallback" style="margin-bottom:0">Preview unavailable</div></div></div>'
+      + '</div>';
+  }).join('');
+  var saveBtn = document.getElementById('admin-canva-save-btn');
+  if (saveBtn) {
+    saveBtn.disabled = adminCanvaState.saving;
+    saveBtn.textContent = adminCanvaState.saving ? 'Saving...' : 'Save changes';
+  }
+}
+
+function updateAdminCanvaTemplate(id, key, value) {
+  if (!guardAdminScreen()) return;
+  var idx = adminTemplateIndex(id);
+  if (idx < 0) return;
+  adminCanvaState.templates[idx][key] = value;
+  if (key === 'canvaUrl') adminCanvaState.templates[idx].url = value;
+  if (key === 'previewImageUrl') adminCanvaState.templates[idx].previewImage = value;
+}
+
+function updateAdminCanvaField(id, fieldIndex, key, value) {
+  if (!guardAdminScreen()) return;
+  var idx = adminTemplateIndex(id);
+  if (idx < 0 || !adminCanvaState.templates[idx].fieldDefinitions[fieldIndex]) return;
+  adminCanvaState.templates[idx].fieldDefinitions[fieldIndex][key] = value;
+}
+
+function moveAdminCanvaField(id, fieldIndex, direction) {
+  if (!guardAdminScreen()) return;
+  var idx = adminTemplateIndex(id);
+  if (idx < 0) return;
+  var fields = adminCanvaState.templates[idx].fieldDefinitions;
+  var next = fieldIndex + direction;
+  if (next < 0 || next >= fields.length) return;
+  var tmp = fields[fieldIndex];
+  fields[fieldIndex] = fields[next];
+  fields[next] = tmp;
+  renderAdminCanvaTemplates();
+}
+
+function testAdminCanvaLink(id) {
+  var idx = adminTemplateIndex(id);
+  if (idx < 0) return;
+  var url = String(adminCanvaState.templates[idx].canvaUrl || '').trim();
+  if (!url || !isSafeHttpUrl(url, false)) { setAdminCanvaStatus('Enter a safe http or https Canva URL before testing.', true); return; }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+function validateAdminCanvaTemplates(templates) {
+  var enabledCount = 0;
+  return NEWS_BRIEF_SOCIAL_CANVA_TEMPLATE_IDS.map(function(id) {
+    var template = cloneCanvaTemplate((templates || []).find(function(entry) { return entry.id === id; }) || {});
+    var displayName = template.name || id;
+    template.name = String(template.name || '').trim();
+    template.description = String(template.description || '').trim();
+    template.canvaUrl = normalizeSafeHttpUrl(template.canvaUrl || template.url || '');
+    template.previewImageUrl = String(template.previewImageUrl || template.previewImage || '').trim();
+    if (isSafeHttpUrl(template.previewImageUrl, false)) template.previewImageUrl = normalizeSafeHttpUrl(template.previewImageUrl);
+    if (!template.name) throw new Error(displayName + ': Template name is required.');
+    if (!isSafeHttpUrl(template.canvaUrl, false)) throw new Error(displayName + ': Canva URL must use http or https.');
+    if (!isSafePreviewImageValue(template.previewImageUrl)) throw new Error(displayName + ': Preview image URL must use http or https.');
+    if (template.enabled !== false) enabledCount += 1;
+    var fields = Array.isArray(template.fieldDefinitions) ? template.fieldDefinitions : [];
+    var headlineCount = fields.filter(function(field) { return field.type === 'headline'; }).length;
+    var subtitleCount = fields.filter(function(field) { return field.type === 'subtitle'; }).length;
+    var bulletCount = fields.filter(function(field) { return field.type === 'bullet'; }).length;
+    if (headlineCount !== 1) throw new Error(displayName + ': Exactly one headline field is required.');
+    if (subtitleCount > 1) throw new Error(displayName + ': Only one subtitle field is allowed.');
+    if (bulletCount > 5) throw new Error(displayName + ': No more than five bullet fields are allowed.');
+    fields.forEach(function(field) {
+      if (['headline','subtitle','bullet'].indexOf(field.type) === -1) throw new Error(displayName + ': Unsupported field type.');
+      field.label = String(field.label || '').trim();
+      if (!field.label) throw new Error(displayName + ': Field labels are required.');
+    });
+    template.fieldDefinitions = normalizeCanvaFieldDefinitions(fields, defaultCanvaTemplateById(id).fieldDefinitions);
+    var internal = toInternalCanvaFields(template.fieldDefinitions);
+    template.fields = internal.fields;
+    template.labels = internal.labels;
+    template.limits = Object.assign({}, defaultCanvaTemplateById(id).limits, internal.limits);
+    template.url = template.canvaUrl;
+    template.previewImage = template.previewImageUrl;
+    return template;
+  }).map(function(template) {
+    if (enabledCount < 1) throw new Error('At least one Canva template must remain enabled.');
+    return template;
+  });
+}
+
+function changedAdminCanvaUrls(nextTemplates) {
+  return nextTemplates.filter(function(template) {
+    var saved = (adminCanvaState.savedTemplates || []).find(function(entry) { return entry.id === template.id; }) || {};
+    return String(saved.canvaUrl || saved.url || '').trim() !== String(template.canvaUrl || '').trim();
+  });
+}
+
+function saveAdminCanvaTemplates() {
+  if (!guardAdminScreen() || adminCanvaState.saving) return Promise.resolve(false);
+  if (!db) { setAdminCanvaStatus('Firestore is not initialized. Sign in again and retry.', true); return Promise.resolve(false); }
+  var validated;
+  try {
+    validated = validateAdminCanvaTemplates(adminCanvaState.templates);
+  } catch (err) {
+    setAdminCanvaStatus(err.message, true);
+    return Promise.resolve(false);
+  }
+  var changedUrls = changedAdminCanvaUrls(validated);
+  if (changedUrls.length) {
+    var names = changedUrls.map(function(template) { return template.name; }).join(', ');
+    var message = changedUrls.length === 1
+      ? 'You are replacing the Canva link for ' + names + '.\nContinue and publish this change?'
+      : 'You are replacing the Canva links for ' + names + '.\nContinue and publish these changes?';
+    if (!window.confirm(message)) return Promise.resolve(false);
+  }
+  adminCanvaState.saving = true;
+  renderAdminCanvaTemplates();
+  setAdminCanvaStatus('Saving Canva template settings...', false);
+  return db.collection('editorial_config').doc('canva_templates').set(canvaTemplateFirestorePayload(validated)).then(function() {
+    adminCanvaState.templates = validated.map(cloneCanvaTemplate);
+    adminCanvaState.savedTemplates = validated.map(cloneCanvaTemplate);
+    setAdminCanvaStatus('Saved and published.', false);
+    return true;
+  }).catch(function(err) {
+    setAdminCanvaStatus(err.message || 'Could not save Canva template settings.', true);
+    return false;
+  }).finally(function() {
+    adminCanvaState.saving = false;
+    renderAdminCanvaTemplates();
+  });
+}
+
+function uploadAdminCanvaPreviewImage(id, file) {
+  if (!guardAdminScreen() || !file) return Promise.resolve(false);
+  var allowedTypes = ['image/jpeg','image/png','image/webp'];
+  if (allowedTypes.indexOf(file.type) === -1) { setAdminCanvaStatus('Preview image must be JPEG, PNG or WebP.', true); return Promise.resolve(false); }
+  if (file.size <= 0 || file.size > 2 * 1024 * 1024) { setAdminCanvaStatus('Preview image must be 2 MB or smaller.', true); return Promise.resolve(false); }
+  var form = new FormData();
+  form.set('templateId', id);
+  form.set('file', file);
+  setAdminCanvaStatus('Uploading preview image...', false);
+  return workerFetchWithFirebaseAuthRaw('/admin/canva-template-preview-image', { method:'POST', body:form }).then(parseWorkerResponse).then(function(data) {
+    var url = data.previewImageUrl || data.hostedUrl || '';
+    if (!isSafeHttpUrl(url, false)) throw new Error('Upload did not return a permanent http or https URL.');
+    updateAdminCanvaTemplate(id, 'previewImageUrl', url);
+    setAdminCanvaStatus('Preview image uploaded. Save changes to publish it.', false);
+    renderAdminCanvaTemplates();
+    return true;
+  }).catch(function(err) {
+    setAdminCanvaStatus(err.message || 'Preview image upload failed.', true);
+    return false;
+  });
 }
 
 function openNewsBriefSocialModal() {
@@ -10450,6 +10862,7 @@ function offerNewsBriefSocialWorkflow(articleContext) {
   newsBriefSocialState.creativeImageUrl = newsBriefSocialImageFromArticle(articleContext);
   newsBriefSocialState.canvaDesignUrl = '';
   newsBriefSocialState.canvaConfirmed = false;
+  newsBriefSocialState.templateConfigSnapshot = null;
   newsBriefSocialState.imageUrl = newsBriefSocialState.creativeImageUrl;
   newsBriefSocialState.imageUrlEdited = false;
   newsBriefSocialState.dirty = false;
@@ -10472,8 +10885,17 @@ function startNewsBriefSocialWorkflow() {
   document.getElementById('workflow').style.display = 'none';
   document.getElementById('landing-cards').style.display = 'none';
   document.getElementById('landing-news-brief-social').style.display = 'flex';
-  populateNewsBriefSocialScreen();
-  if (!newsBriefSocialState.options.length) generateNewsBriefSocialOptions();
+  var status = document.getElementById('news-social-status');
+  if (status) status.textContent = 'Loading Canva template settings...';
+  return loadCanvaTemplatesFromFirestore().then(function(templates) {
+    newsBriefSocialState.templateConfigSnapshot = templates.map(cloneCanvaTemplate);
+  }).catch(function(err) {
+    console.warn('Canva template config load failed; using defaults:', err && err.message ? err.message : err);
+    newsBriefSocialState.templateConfigSnapshot = NEWS_BRIEF_SOCIAL_CANVA_DEFAULTS.map(cloneCanvaTemplate);
+  }).then(function() {
+    populateNewsBriefSocialScreen();
+    if (!newsBriefSocialState.options.length) generateNewsBriefSocialOptions();
+  });
 }
 
 function confirmLeaveNewsBriefSocialWorkflow(onContinue) {
@@ -10552,11 +10974,16 @@ function newsBriefSocialLoadExistingCalendarEntry() {
 }
 
 function newsBriefSocialTemplateByKey(key) {
-  return NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES.find(function(t){ return t.key === key; }) || null;
+  var templates = typeof currentNewsBriefSocialTemplates === 'function' ? currentNewsBriefSocialTemplates() : NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES;
+  return templates.find(function(t){ return t.key === key || t.id === key; }) || null;
 }
 
 function newsBriefSocialFieldLabel(template, field) {
   return (template && template.labels && template.labels[field]) || field;
+}
+
+function isNewsBriefSocialBulletTemplate(template) {
+  return !!(template && template.id === 'template3');
 }
 
 function newsBriefSocialImageFromArticle(articleContext) {
@@ -10622,7 +11049,15 @@ function newsBriefSocialContinueToCreative() {
 function renderNewsBriefSocialTemplates() {
   var wrap = document.getElementById('news-social-template-options');
   if (!wrap) return;
-  wrap.innerHTML = NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES.map(function(template, idx) {
+  var templates = currentNewsBriefSocialTemplates().filter(function(template) { return template.enabled !== false; });
+  if (newsBriefSocialState.templateKey && !templates.some(function(template) { return template.key === newsBriefSocialState.templateKey; })) {
+    newsBriefSocialState.templateKey = '';
+    newsBriefSocialState.templateName = '';
+    newsBriefSocialState.templateDesignId = '';
+    newsBriefSocialState.templateUrl = '';
+    newsBriefSocialState.creativeFields = {};
+  }
+  wrap.innerHTML = templates.map(function(template, idx) {
     var selected = template.key === newsBriefSocialState.templateKey;
     return '<div class="news-social-template-card '+(selected ? 'selected' : '')+'" role="button" aria-selected="'+(selected ? 'true' : 'false')+'" onclick="selectNewsBriefSocialTemplate(\''+template.key+'\')">'
       + '<a href="'+escapeHtml(template.url)+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="Preview '+escapeHtml(template.name)+' in Canva">'
@@ -10641,7 +11076,7 @@ function renderNewsBriefSocialTemplates() {
 
 function selectNewsBriefSocialTemplate(key) {
   var template = newsBriefSocialTemplateByKey(key);
-  if (!template) return;
+  if (!template || template.enabled === false) return;
   newsBriefSocialState.templateKey = template.key;
   newsBriefSocialState.templateName = template.name;
   newsBriefSocialState.templateDesignId = template.designId;
@@ -10654,7 +11089,8 @@ function selectNewsBriefSocialTemplate(key) {
 }
 
 function newsBriefSocialContinueToCreativeFields() {
-  if (!newsBriefSocialState.templateKey) { alert('Please select a Canva template first.'); return; }
+  var selectedTemplate = newsBriefSocialTemplateByKey(newsBriefSocialState.templateKey);
+  if (!selectedTemplate || selectedTemplate.enabled === false) { alert('Please select a Canva template first.'); return; }
   newsBriefSocialState.stage = 'creative';
   newsBriefSocialState.creativeFields = {};
   newsBriefSocialState.canvaConfirmed = false;
@@ -10675,7 +11111,7 @@ function fallbackNewsBriefCreativeFields() {
   var article = newsBriefSocialState.article || {};
   var headline = String(article.title || 'Wocult story').replace(/\s+/g,' ').trim();
   var standfirst = String(article.standfirst || article.shortIntro || article.subtitle || stripHtml(article.summary || article.body || '') || '').replace(/\s+/g,' ').trim();
-  if (newsBriefSocialState.templateKey === 'template_3') {
+  if (isNewsBriefSocialBulletTemplate(newsBriefSocialTemplateByKey(newsBriefSocialState.templateKey))) {
     return {
       headline: headline,
       bullet1: standfirst || 'A workplace story worth tracking',
@@ -10690,7 +11126,11 @@ function initialNewsBriefCreativeFieldsForTemplate(template) {
   var article = newsBriefSocialState.article || {};
   var headline = String(article.title || '').replace(/\s+/g,' ').trim();
   var standfirst = String(article.standfirst || article.shortIntro || article.subtitle || '').replace(/\s+/g,' ').trim();
-  if (template && template.key === 'template_3') return {headline:headline, bullet1:'', bullet2:'', bullet3:''};
+  if (isNewsBriefSocialBulletTemplate(template)) {
+    var values = { headline: headline };
+    (template.fields || []).filter(function(field) { return /^bullet/.test(field); }).forEach(function(field) { values[field] = ''; });
+    return values;
+  }
   return {headline:headline, subtext:standfirst};
 }
 
@@ -10699,7 +11139,7 @@ function renderNewsBriefSelectedTemplateSummary(targetId) {
   if (!target) return;
   var template = newsBriefSocialTemplateByKey(newsBriefSocialState.templateKey);
   if (!template) { target.innerHTML = ''; return; }
-  var idx = NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES.findIndex(function(t){ return t.key === template.key; }) + 1;
+  var idx = currentNewsBriefSocialTemplates().findIndex(function(t){ return t.key === template.key || t.id === template.id; }) + 1;
   target.innerHTML = '<div style="border:1px solid var(--bdr);border-radius:8px;background:#fff;padding:12px">'
     + '<div class="hint" style="font-weight:700">Template '+idx+'</div>'
     + '<div style="font-size:16px;font-weight:700;color:var(--blk);margin:4px 0">'+escapeHtml(template.name)+'</div>'
@@ -10712,10 +11152,13 @@ function renderNewsBriefSelectedTemplateSummary(targetId) {
 function validateNewsBriefCreativeFields(data) {
   var template = newsBriefSocialTemplateByKey(newsBriefSocialState.templateKey);
   if (!template) throw new Error('No template selected.');
-  if (template.key === 'template_3') {
+  if (isNewsBriefSocialBulletTemplate(template)) {
     var bullets = Array.isArray(data && data.bullets) ? data.bullets : [];
-    if (!data || !data.headline || bullets.length !== 3) throw new Error('Template 3 needs headline and three bullets.');
-    return {headline:String(data.headline).trim(), bullet1:String(bullets[0]).trim(), bullet2:String(bullets[1]).trim(), bullet3:String(bullets[2]).trim()};
+    var bulletFields = (template.fields || []).filter(function(field) { return /^bullet/.test(field); });
+    if (!data || !data.headline || bullets.length < bulletFields.length) throw new Error('Template 3 needs headline and bullets.');
+    var out = { headline: String(data.headline).trim() };
+    bulletFields.forEach(function(field, index) { out[field] = String(bullets[index]).trim(); });
+    return out;
   }
   if (!data || !data.headline || !data.subtext) throw new Error('Template needs headline and subtext.');
   return {headline:String(data.headline).trim(), subtext:String(data.subtext).trim()};
@@ -10727,7 +11170,7 @@ function generateNewsBriefCreativeFields(regenerate) {
   if (!template) return;
   var article = newsBriefSocialState.article || {};
   var status = document.getElementById('news-social-creative-status');
-  if (template.key !== 'template_3') {
+  if (!isNewsBriefSocialBulletTemplate(template)) {
     newsBriefSocialState.creativeFields = initialNewsBriefCreativeFieldsForTemplate(template);
     newsBriefSocialState.creativeGenerating = false;
     newsBriefSocialState.dirty = true;
@@ -10741,7 +11184,19 @@ function generateNewsBriefCreativeFields(regenerate) {
   newsBriefSocialState.creativeGenerating = true;
   if (status) status.textContent = regenerate ? 'Regenerating bullets...' : 'Generating bullets...';
   renderNewsBriefCreativeFields();
-  var prompt = 'Generate structured JSON only for Wocult Canva Template 3 bullets. Required JSON shape: {"bullets":["...","...","..."]}. Requirements: British English; factual and grounded only in the submitted story; no invented figures, quotations, people or claims; generate exactly three concise bullets; each bullet must be a distinct fact or implication; do not repeat the headline; no source labels; no URLs; no hashtags; no emojis; no generic promotional language; respect a soft limit of 70 characters per bullet.\n\nHeadline, not to repeat:\n'+(article.title || '')+'\n\nStandfirst:\n'+(article.standfirst || article.shortIntro || article.subtitle || '')+'\n\nBody or summary:\n'+stripHtml(article.body || article.summary || '')+'\n\nSource context, not for inclusion:\n'+(article.sourceName || article.source || '')+'\n\nStory URL context, not for inclusion:\n'+newsBriefSocialArticleUrl();
+  var bulletFields = (template.fields || []).filter(function(field) { return /^bullet/.test(field); });
+  if (!bulletFields.length) {
+    newsBriefSocialState.creativeFields = initialNewsBriefCreativeFieldsForTemplate(template);
+    newsBriefSocialState.creativeGenerating = false;
+    newsBriefSocialState.dirty = true;
+    if (status) status.textContent = 'Headline was filled from the News Brief. No bullet fields are configured.';
+    markUnsavedChanges();
+    renderNewsBriefCreativeFields();
+    renderNewsBriefSocialCanvaHandoff();
+    return Promise.resolve(newsBriefSocialState.creativeFields);
+  }
+  var bulletCount = Math.max(1, bulletFields.length);
+  var prompt = 'Generate structured JSON only for Wocult Canva Template 3 bullets. Required JSON shape: {"bullets":["..."]}. Requirements: British English; factual and grounded only in the submitted story; no invented figures, quotations, people or claims; generate exactly '+bulletCount+' concise bullets; each bullet must be a distinct fact or implication; do not repeat the headline; no source labels; no URLs; no hashtags; no emojis; no generic promotional language; respect a soft limit of 70 characters per bullet.\n\nHeadline, not to repeat:\n'+(article.title || '')+'\n\nStandfirst:\n'+(article.standfirst || article.shortIntro || article.subtitle || '')+'\n\nBody or summary:\n'+stripHtml(article.body || article.summary || '')+'\n\nSource context, not for inclusion:\n'+(article.sourceName || article.source || '')+'\n\nStory URL context, not for inclusion:\n'+newsBriefSocialArticleUrl();
   return fetch(WORKER+'/generate', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -10749,20 +11204,16 @@ function generateNewsBriefCreativeFields(regenerate) {
   }).then(function(r){ return r.json(); }).then(function(data) {
     var parsed = parseGeneratedJson(extractGeneratedText(data));
     var generated = validateNewsBriefCreativeFields(Object.assign({headline:newsBriefSocialState.creativeFields.headline}, parsed.parsed));
-    newsBriefSocialState.creativeFields = Object.assign({}, newsBriefSocialState.creativeFields, {
-      bullet1: cleanNewsBriefSocialCopy(generated.bullet1),
-      bullet2: cleanNewsBriefSocialCopy(generated.bullet2),
-      bullet3: cleanNewsBriefSocialCopy(generated.bullet3)
-    });
+    var patch = {};
+    bulletFields.forEach(function(field) { patch[field] = cleanNewsBriefSocialCopy(generated[field]); });
+    newsBriefSocialState.creativeFields = Object.assign({}, newsBriefSocialState.creativeFields, patch);
     if (status) status.textContent = regenerate ? 'Bullets regenerated.' : 'Bullets ready. Edit before opening Canva.';
   }).catch(function(err) {
     console.error('Creative field generation failed:', err);
     var fallback = fallbackNewsBriefCreativeFields();
-    newsBriefSocialState.creativeFields = Object.assign({}, newsBriefSocialState.creativeFields, {
-      bullet1: fallback.bullet1,
-      bullet2: fallback.bullet2,
-      bullet3: fallback.bullet3
-    });
+    var fallbackPatch = {};
+    bulletFields.forEach(function(field, index) { fallbackPatch[field] = fallback[field] || ('Prepared Wocult point ' + (index + 1)); });
+    newsBriefSocialState.creativeFields = Object.assign({}, newsBriefSocialState.creativeFields, fallbackPatch);
     if (status) status.textContent = 'Bullets could not be generated. A deterministic fallback is ready to edit.';
   }).finally(function() {
     newsBriefSocialState.creativeGenerating = false;
@@ -10779,7 +11230,7 @@ function renderNewsBriefCreativeFields() {
   var template = newsBriefSocialTemplateByKey(newsBriefSocialState.templateKey);
   if (!template) { wrap.innerHTML = ''; return; }
   var regen = document.getElementById('news-social-regenerate-creative-btn');
-  if (regen) regen.style.display = template.key === 'template_3' ? 'inline-flex' : 'none';
+  if (regen) regen.style.display = isNewsBriefSocialBulletTemplate(template) ? 'inline-flex' : 'none';
   if (newsBriefSocialState.creativeGenerating) {
     wrap.innerHTML = '<div class="hint" style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:#fff">Generating Canva text fields...</div>';
     var loadingBtn = document.getElementById('news-social-continue-canva-btn');

@@ -4,3 +4,4 @@ compatibility_date = "2026-04-26"
 
 [vars]
 NEWS_BRIEF_MAX_ITEMS_PER_RUN = "1"
+WEBFLOW_SITE_ID = "6953cd76905788ee99a03a6c"

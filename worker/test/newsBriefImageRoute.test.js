@@ -8,6 +8,7 @@ const env = {
   WEBFLOW_SITE_ID: 'site-1',
   WEBFLOW_NEWS_COLLECTION_ID: 'news-collection',
   FIREBASE_PROJECT_ID: 'wocult-tasks',
+  FIREBASE_WEB_API_KEY: 'firebase-web-api-key',
   FIREBASE_ACCESS_TOKEN: 'firebase-access-token',
   UNSPLASH_ACCESS_KEY: 'unsplash-key',
   NEWS_BRIEF_MAX_ITEMS_PER_RUN: '1',
@@ -88,6 +89,24 @@ function imageForm(overrides = {}) {
   return form;
 }
 
+function previewImageForm(overrides = {}) {
+  const form = new FormData();
+  form.set('templateId', 'template1');
+  form.set('file', new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])], 'preview.png', { type: 'image/png' }));
+  Object.entries(overrides).forEach(([key, value]) => form.set(key, value));
+  return form;
+}
+
+function firebaseAuthed(path, init = {}, token = 'firebase-id-token') {
+  return new Request('https://worker.test' + path, {
+    ...init,
+    headers: {
+      Authorization: 'Bearer ' + token,
+      ...(init.headers || {}),
+    },
+  });
+}
+
 test('valid staff token can search Unsplash without returning the key', async (t) => {
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
@@ -121,6 +140,95 @@ test('unauthenticated Unsplash search and image upload are blocked with CORS', a
   const upload = await worker.fetch(new Request('https://worker.test/news-briefs/image', { method: 'POST', body: imageForm() }), env);
   assert.equal(upload.status, 401);
   assert.equal(upload.headers.get('Access-Control-Allow-Origin'), '*');
+});
+
+test('admin Canva preview upload rejects unauthenticated users', async () => {
+  const res = await worker.fetch(new Request('https://worker.test/admin/canva-template-preview-image', {
+    method: 'POST',
+    body: previewImageForm(),
+  }), env);
+  const body = await res.json();
+  assert.equal(res.status, 401);
+  assert.equal(body.error, 'Unauthorized');
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
+});
+
+test('admin Canva preview upload rejects authenticated non-admin users', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url).startsWith('https://identitytoolkit.googleapis.com/v1/accounts:lookup')) {
+      return new Response(JSON.stringify({ users: [{ email: 'staff@example.com', localId: 'staff-1' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error('Non-admin request must not reach Webflow');
+  });
+  const res = await worker.fetch(firebaseAuthed('/admin/canva-template-preview-image', {
+    method: 'POST',
+    body: previewImageForm(),
+  }), env);
+  const body = await res.json();
+  assert.equal(res.status, 403);
+  assert.equal(body.error, 'Forbidden');
+  assert.equal(calls.length, 1);
+});
+
+test('admin Canva preview upload accepts verified admin user and returns permanent Webflow URL', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url).startsWith('https://identitytoolkit.googleapis.com/v1/accounts:lookup')) {
+      assert.equal(JSON.parse(options.body).idToken, 'firebase-id-token');
+      return new Response(JSON.stringify({ users: [{ email: 'anmadaan@gmail.com', localId: 'admin-1' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(url) === 'https://api.webflow.com/v2/sites/site-1/assets') {
+      const body = JSON.parse(options.body);
+      assert.match(body.fileName, /^wocult-canva-template1-\d+\.png$/);
+      return new Response(JSON.stringify({
+        id: 'admin-asset-1',
+        uploadUrl: 'https://uploads.webflow.com/admin-asset-1',
+        hostedUrl: 'https://cdn.webflow.com/admin-asset-1.png',
+        uploadDetails: { key: 'asset-key' },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(url) === 'https://uploads.webflow.com/admin-asset-1') return new Response('', { status: 201 });
+    if (String(url) === 'https://api.webflow.com/v2/assets/admin-asset-1') return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    throw new Error('Unexpected fetch: ' + url);
+  });
+  const res = await worker.fetch(firebaseAuthed('/admin/canva-template-preview-image', {
+    method: 'POST',
+    body: previewImageForm(),
+  }), env);
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.webflowAssetId, 'admin-asset-1');
+  assert.equal(body.previewImageUrl, 'https://cdn.webflow.com/admin-asset-1.png');
+  assert.equal(calls.some((call) => call.url.includes('/documents/articles/')), false);
+});
+
+test('admin Canva preview upload rejects SVG and spoofed image content before Webflow', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url).startsWith('https://identitytoolkit.googleapis.com/v1/accounts:lookup')) {
+      return new Response(JSON.stringify({ users: [{ email: 'anmadaan@gmail.com', localId: 'admin-1' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error('Invalid preview image must not reach Webflow');
+  });
+  const svg = await worker.fetch(firebaseAuthed('/admin/canva-template-preview-image', {
+    method: 'POST',
+    body: previewImageForm({ file: new File(['<svg><script>alert(1)</script></svg>'], 'preview.svg', { type: 'image/svg+xml' }) }),
+  }), env);
+  assert.equal(svg.status, 400);
+  assert.equal((await svg.json()).error, 'Preview image must be JPEG, PNG or WebP');
+
+  const spoofed = await worker.fetch(firebaseAuthed('/admin/canva-template-preview-image', {
+    method: 'POST',
+    body: previewImageForm({ file: new File(['<html><script>alert(1)</script></html>'], 'preview.png', { type: 'image/png' }) }),
+  }), env);
+  assert.equal(spoofed.status, 400);
+  assert.equal((await spoofed.json()).error, 'Preview image content does not match its file type');
+  assert.equal(calls.filter((call) => call.url === 'https://api.webflow.com/v2/sites/site-1/assets').length, 0);
 });
 
 test('image route uploads one Webflow asset, updates existing item and writes Firebase metadata', async (t) => {

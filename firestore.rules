@@ -1,0 +1,247 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isWocultStaff() {
+      return request.auth != null
+        && request.auth.token.email in [
+          "poorvi.arya23@gmail.com",
+          "divya.madaan@gmail.com",
+          "anmadaan@gmail.com"
+        ];
+    }
+
+    function isCanvaAdmin() {
+      return request.auth != null
+        && request.auth.token.email == "anmadaan@gmail.com";
+    }
+
+    function isSafeCanvaUrl(value) {
+      return value is string
+        && value.matches('^https?://.+');
+    }
+
+    function isSafePreviewImageUrl(value) {
+      return value is string
+        && (
+          value.matches('^https?://.+')
+          || value in [
+            "assets/canva-template-1.png",
+            "assets/canva-template-2.png",
+            "assets/canva-template-3.png"
+          ]
+        );
+    }
+
+    function isValidCanvaFieldShape(field) {
+      return field.keys().hasOnly(["id", "type", "label"])
+        && field.id is string
+        && field.label is string;
+    }
+
+    function isValidCanvaFields(fields) {
+      return fields is list
+        && isValidCanvaFieldList(fields);
+    }
+
+    function isValidCanvaFieldType(type) {
+      return type in ["headline", "subtitle", "bullet"];
+    }
+
+    function isValidCanvaFields1(fields) {
+      let t0 = fields[0].type;
+      return isValidCanvaFieldShape(fields[0])
+        && t0 == "headline";
+    }
+
+    function isValidCanvaFields2(fields) {
+      let t0 = fields[0].type;
+      let t1 = fields[1].type;
+      return isValidCanvaFieldShape(fields[0])
+        && isValidCanvaFieldShape(fields[1])
+        && isValidCanvaFieldType(t0)
+        && isValidCanvaFieldType(t1)
+        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) == 1
+        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) <= 1;
+    }
+
+    function isValidCanvaFields3(fields) {
+      let t0 = fields[0].type;
+      let t1 = fields[1].type;
+      let t2 = fields[2].type;
+      return isValidCanvaFieldShape(fields[0])
+        && isValidCanvaFieldShape(fields[1])
+        && isValidCanvaFieldShape(fields[2])
+        && isValidCanvaFieldType(t0)
+        && isValidCanvaFieldType(t1)
+        && isValidCanvaFieldType(t2)
+        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) + (t2 == "headline" ? 1 : 0) == 1
+        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) + (t2 == "subtitle" ? 1 : 0) <= 1;
+    }
+
+    function isValidCanvaFields4(fields) {
+      let t0 = fields[0].type;
+      let t1 = fields[1].type;
+      let t2 = fields[2].type;
+      let t3 = fields[3].type;
+      return isValidCanvaFieldShape(fields[0])
+        && isValidCanvaFieldShape(fields[1])
+        && isValidCanvaFieldShape(fields[2])
+        && isValidCanvaFieldShape(fields[3])
+        && isValidCanvaFieldType(t0)
+        && isValidCanvaFieldType(t1)
+        && isValidCanvaFieldType(t2)
+        && isValidCanvaFieldType(t3)
+        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) + (t2 == "headline" ? 1 : 0) + (t3 == "headline" ? 1 : 0) == 1
+        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) + (t2 == "subtitle" ? 1 : 0) + (t3 == "subtitle" ? 1 : 0) <= 1;
+    }
+
+    function isValidCanvaFields5(fields) {
+      let t0 = fields[0].type;
+      let t1 = fields[1].type;
+      let t2 = fields[2].type;
+      let t3 = fields[3].type;
+      let t4 = fields[4].type;
+      return isValidCanvaFieldShape(fields[0])
+        && isValidCanvaFieldShape(fields[1])
+        && isValidCanvaFieldShape(fields[2])
+        && isValidCanvaFieldShape(fields[3])
+        && isValidCanvaFieldShape(fields[4])
+        && isValidCanvaFieldType(t0)
+        && isValidCanvaFieldType(t1)
+        && isValidCanvaFieldType(t2)
+        && isValidCanvaFieldType(t3)
+        && isValidCanvaFieldType(t4)
+        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) + (t2 == "headline" ? 1 : 0) + (t3 == "headline" ? 1 : 0) + (t4 == "headline" ? 1 : 0) == 1
+        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) + (t2 == "subtitle" ? 1 : 0) + (t3 == "subtitle" ? 1 : 0) + (t4 == "subtitle" ? 1 : 0) <= 1;
+    }
+
+    function isValidCanvaFields6(fields) {
+      let t0 = fields[0].type;
+      let t1 = fields[1].type;
+      let t2 = fields[2].type;
+      let t3 = fields[3].type;
+      let t4 = fields[4].type;
+      let t5 = fields[5].type;
+      return isValidCanvaFieldShape(fields[0])
+        && isValidCanvaFieldShape(fields[1])
+        && isValidCanvaFieldShape(fields[2])
+        && isValidCanvaFieldShape(fields[3])
+        && isValidCanvaFieldShape(fields[4])
+        && isValidCanvaFieldShape(fields[5])
+        && isValidCanvaFieldType(t0)
+        && isValidCanvaFieldType(t1)
+        && isValidCanvaFieldType(t2)
+        && isValidCanvaFieldType(t3)
+        && isValidCanvaFieldType(t4)
+        && isValidCanvaFieldType(t5)
+        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) + (t2 == "headline" ? 1 : 0) + (t3 == "headline" ? 1 : 0) + (t4 == "headline" ? 1 : 0) + (t5 == "headline" ? 1 : 0) == 1
+        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) + (t2 == "subtitle" ? 1 : 0) + (t3 == "subtitle" ? 1 : 0) + (t4 == "subtitle" ? 1 : 0) + (t5 == "subtitle" ? 1 : 0) <= 1;
+    }
+
+    function isValidCanvaFields7(fields) {
+      let t0 = fields[0].type;
+      let t1 = fields[1].type;
+      let t2 = fields[2].type;
+      let t3 = fields[3].type;
+      let t4 = fields[4].type;
+      let t5 = fields[5].type;
+      let t6 = fields[6].type;
+      return isValidCanvaFieldShape(fields[0])
+        && isValidCanvaFieldShape(fields[1])
+        && isValidCanvaFieldShape(fields[2])
+        && isValidCanvaFieldShape(fields[3])
+        && isValidCanvaFieldShape(fields[4])
+        && isValidCanvaFieldShape(fields[5])
+        && isValidCanvaFieldShape(fields[6])
+        && isValidCanvaFieldType(t0)
+        && isValidCanvaFieldType(t1)
+        && isValidCanvaFieldType(t2)
+        && isValidCanvaFieldType(t3)
+        && isValidCanvaFieldType(t4)
+        && isValidCanvaFieldType(t5)
+        && isValidCanvaFieldType(t6)
+        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) + (t2 == "headline" ? 1 : 0) + (t3 == "headline" ? 1 : 0) + (t4 == "headline" ? 1 : 0) + (t5 == "headline" ? 1 : 0) + (t6 == "headline" ? 1 : 0) == 1
+        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) + (t2 == "subtitle" ? 1 : 0) + (t3 == "subtitle" ? 1 : 0) + (t4 == "subtitle" ? 1 : 0) + (t5 == "subtitle" ? 1 : 0) + (t6 == "subtitle" ? 1 : 0) == 1;
+    }
+
+    function isValidCanvaFieldList(fields) {
+      let size = fields.size();
+      return (size == 1 && isValidCanvaFields1(fields))
+        || (size == 2 && isValidCanvaFields2(fields))
+        || (size == 3 && isValidCanvaFields3(fields))
+        || (size == 4 && isValidCanvaFields4(fields))
+        || (size == 5 && isValidCanvaFields5(fields))
+        || (size == 6 && isValidCanvaFields6(fields))
+        || (size == 7 && isValidCanvaFields7(fields));
+    }
+
+    function isValidCanvaTemplate(template) {
+      return template.keys().hasOnly([
+          "name",
+          "description",
+          "canvaUrl",
+          "previewImageUrl",
+          "enabled",
+          "fields"
+        ])
+        && template.name is string
+        && template.description is string
+        && isSafeCanvaUrl(template.canvaUrl)
+        && isSafePreviewImageUrl(template.previewImageUrl)
+        && template.enabled is bool
+        && isValidCanvaFields(template.fields);
+    }
+
+    function validCanvaConfiguration() {
+      return request.resource.data.keys().hasOnly([
+          "template1",
+          "template2",
+          "template3"
+        ])
+        && isValidCanvaTemplate(request.resource.data.template1)
+        && isValidCanvaTemplate(request.resource.data.template2)
+        && isValidCanvaTemplate(request.resource.data.template3);
+    }
+
+    match /editorial_config/canva_templates {
+      allow read: if request.auth != null;
+
+      allow create: if
+        isCanvaAdmin()
+        && validCanvaConfiguration();
+
+      allow update: if
+        isCanvaAdmin()
+        && validCanvaConfiguration();
+
+      allow delete: if false;
+    }
+
+    match /news_brief_automation/{candidateId} {
+      allow read: if isWocultStaff();
+      allow update: if isWocultStaff();
+      allow create, delete: if false;
+
+      match /activity/{activityId} {
+        allow read: if isWocultStaff();
+        allow create: if isWocultStaff();
+        allow update, delete: if false;
+      }
+    }
+
+    match /news_brief_automation_runs/{runId} {
+      allow read: if isWocultStaff();
+      allow write: if false;
+    }
+
+    match /{collection}/{document=**} {
+      allow read, write: if
+        collection != "news_brief_automation"
+        && collection != "news_brief_automation_runs"
+        && request.path !=
+          /databases/$(database)/documents/editorial_config/canva_templates;
+    }
+  }
+}

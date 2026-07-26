@@ -30,8 +30,9 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.4 for Canva social workflow regression fixes', () => {
-  assert.match(html, />15\.4<\/div>/);
+test('dashboard version badge is 15.5 for Admin Canva template settings', () => {
+  assert.match(html, />15\.5<\/div>/);
+  assert.doesNotMatch(html, />15\.4<\/div>/);
   assert.doesNotMatch(html, />15\.3<\/div>/);
   assert.doesNotMatch(html, />15\.2<\/div>/);
   assert.doesNotMatch(html, />15\.2\.0<\/div>/);
@@ -618,21 +619,24 @@ test('Canva template preview images are local repository assets', () => {
 
 test('Canva creative generation uses deterministic Template 1 and 2 fields and AI only for Template 3 bullets', () => {
   const generateCreative = functionBlock('generateNewsBriefCreativeFields');
-  assert.match(generateCreative, /template\.key !== 'template_3'/);
+  assert.match(generateCreative, /!isNewsBriefSocialBulletTemplate\(template\)/);
   assert.match(generateCreative, /initialNewsBriefCreativeFieldsForTemplate\(template\)/);
-  assert.match(generateCreative, /Required JSON shape: \{"bullets":\["\.\.\.","\.\.\.","\.\.\."\]\}/);
+  assert.match(generateCreative, /Required JSON shape: \{"bullets":\["\.\.\."\]\}/);
+  assert.match(generateCreative, /generate exactly '\+bulletCount\+' concise bullets/);
+  assert.match(generateCreative, /if \(!bulletFields\.length\)/);
+  assert.match(generateCreative, /No bullet fields are configured/);
   assert.doesNotMatch(generateCreative, /\{"headline":"\.\.\.","subtext":"\.\.\."\}/);
   assert.match(generateCreative, /British English/);
   assert.match(generateCreative, /no invented figures, quotations, people or claims/);
   assert.match(generateCreative, /no hashtags/);
   assert.match(generateCreative, /no emojis/);
   assert.doesNotMatch(generateCreative, /newsBriefSocialState\.options\s*=/);
-  assert.match(generateCreative, /bullet1: cleanNewsBriefSocialCopy\(generated\.bullet1\)/);
+  assert.match(generateCreative, /bulletFields\.forEach\(function\(field\)/);
   const validate = functionBlock('validateNewsBriefCreativeFields');
-  assert.match(validate, /bullets\.length !== 3/);
+  assert.match(validate, /bullets\.length < bulletFields\.length/);
   const initial = functionBlock('initialNewsBriefCreativeFieldsForTemplate');
   assert.match(initial, /headline:headline, subtext:standfirst/);
-  assert.match(initial, /headline:headline, bullet1:''/);
+  assert.match(initial, /values = \{ headline: headline \}/);
   assert.match(functionBlock('renderNewsBriefCreativeFields'), /over soft limit/);
   assert.match(html, /id="news-social-regenerate-creative-btn"[^>]*>Regenerate bullets/);
 });
@@ -706,10 +710,13 @@ test('Template selection visibly selects cards and Stage 3 shows the selected te
   assert.match(renderTemplates, /aria-selected/);
   assert.match(renderTemplates, /Selected/);
   assert.match(renderTemplates, /news-social-template-continue-btn/);
+  assert.match(renderTemplates, /newsBriefSocialState\.templateKey && !templates\.some/);
   const select = functionBlock('selectNewsBriefSocialTemplate');
   assert.match(select, /newsBriefSocialState\.templateKey = template\.key/);
+  assert.match(select, /template\.enabled === false/);
   assert.doesNotMatch(select, /generateNewsBriefSocialOptions/);
   const continueFields = functionBlock('newsBriefSocialContinueToCreativeFields');
+  assert.match(continueFields, /selectedTemplate\.enabled === false/);
   assert.match(continueFields, /generateNewsBriefCreativeFields\(false\)/);
   assert.match(functionBlock('renderNewsBriefSelectedTemplateSummary'), /Change template/);
 });
