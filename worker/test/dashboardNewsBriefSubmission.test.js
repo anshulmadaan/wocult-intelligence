@@ -30,8 +30,9 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.5 for Admin Canva template settings', () => {
-  assert.match(html, />15\.5<\/div>/);
+test('dashboard version badge is 15.6 for Editorial Calendar more entries modal', () => {
+  assert.match(html, />15\.6<\/div>/);
+  assert.doesNotMatch(html, />15\.5<\/div>/);
   assert.doesNotMatch(html, />15\.4<\/div>/);
   assert.doesNotMatch(html, />15\.3<\/div>/);
   assert.doesNotMatch(html, />15\.2<\/div>/);

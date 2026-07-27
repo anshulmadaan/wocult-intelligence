@@ -106,6 +106,18 @@ body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-heigh
 .news-social-review-copy{white-space:pre-wrap;font-size:14px;line-height:1.55;color:var(--blk);margin:8px 0 10px}
 .admin-template-grid{display:grid;grid-template-columns:1fr;gap:16px}.admin-template-card{border:1px solid var(--bdr);border-radius:8px;background:#fff;padding:16px}.admin-template-layout{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:16px;align-items:start}.admin-template-preview{width:100%;aspect-ratio:4/5;object-fit:cover;border:1px solid var(--bdr);border-radius:8px;background:#f3eee6}.admin-field-row{display:grid;grid-template-columns:96px minmax(0,1fr) auto auto;gap:8px;align-items:center;margin:8px 0}.admin-field-row input,.admin-template-card input,.admin-template-card textarea,.admin-template-card select{width:100%;border:1px solid var(--bdr);border-radius:8px;padding:9px 11px;font-size:14px;font-family:system-ui,sans-serif;background:#fff;outline:none}.admin-template-card textarea{min-height:72px;resize:vertical}.admin-template-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.admin-status-error{color:var(--red)}@media(max-width:780px){.admin-template-layout{grid-template-columns:1fr}.admin-field-row{grid-template-columns:1fr}.admin-field-row button{width:100%}}
 .news-image-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.52);z-index:10120;align-items:center;justify-content:center;padding:20px}
+.editorial-more-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.48);z-index:10110;align-items:center;justify-content:center;padding:20px}
+.editorial-more-panel{width:min(680px,96vw);max-height:88vh;display:flex;flex-direction:column;background:#fff;border:1px solid var(--bdr);border-radius:8px;box-shadow:0 24px 80px rgba(0,0,0,0.25);overflow:hidden}
+.editorial-more-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;padding:18px 20px;border-bottom:1px solid var(--bdr);background:var(--gray)}
+.editorial-more-title{font-family:Georgia,serif;font-size:20px;font-weight:700;color:var(--blk);line-height:1.2;margin:0}
+.editorial-more-count{font-size:13px;color:var(--g3);margin-top:4px}
+.editorial-more-list{overflow:auto;min-height:0;padding:12px 20px 20px;display:grid;gap:10px}
+.editorial-more-record{width:100%;text-align:left;border:1px solid var(--bdr);border-left-width:4px;border-radius:8px;background:#fffdf7;padding:11px 12px;cursor:pointer;font-family:inherit;color:var(--blk)}
+.editorial-more-record:focus{outline:2px solid var(--y);outline-offset:2px}
+.editorial-more-record-title{font-size:14px;font-weight:700;line-height:1.35}
+.editorial-more-record-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.editorial-more-pill{font-size:11px;border:1px solid var(--g2);border-radius:999px;background:#fff;padding:2px 7px;color:var(--g3)}
+.editorial-more-empty{padding:20px;color:var(--g3);font-size:14px}
 .news-image-panel{width:min(980px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:8px;border:1px solid var(--bdr);box-shadow:0 24px 80px rgba(0,0,0,0.28);padding:22px}
 .news-image-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
 .news-image-tab{border:1px solid var(--bdr);background:var(--gray);border-radius:8px;padding:9px 13px;font-weight:700;cursor:pointer}
@@ -252,7 +264,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.5</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.6</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -1637,7 +1649,9 @@ var editorialCalendarState = {
   editorOriginal: null,
   editorDirty: false,
   editorRecoveryKey: '',
-  searchOutsideMonth: false
+  searchOutsideMonth: false,
+  moreModalOpen: false,
+  moreModalReturnFocus: null
 };
 var NEWS_BRIEF_SOCIAL_CANVA_TEMPLATE_IDS = ['template1','template2','template3'];
 var NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES = [
@@ -3256,8 +3270,145 @@ function editorialCalendarEntryChipHtml(entry) {
     + '</div>';
 }
 function editorialCalendarShowDayMore(dateKey) {
-  var entries = editorialCalendarFilteredEntries().filter(function(e){return editorialCalendarDateKey(e.publishDate) === dateKey;}).sort(editorialCalendarEntrySort);
-  alert(entries.map(function(e){return (editorialCalendarTimeLabel(e.publishTime) ? editorialCalendarTimeLabel(e.publishTime)+' · ' : '') + (e.title || 'Untitled');}).join('\n'));
+  var entries = editorialCalendarFilteredEntries().filter(function(e){return editorialCalendarDateKey(e.publishDate) === dateKey;}).sort(editorialCalendarEntrySort).slice(3);
+  editorialCalendarOpenMoreModal(dateKey, entries, document.activeElement);
+}
+function editorialCalendarEnsureMoreModal() {
+  var modal = document.getElementById('editorial-calendar-more-modal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'editorial-calendar-more-modal';
+  modal.className = 'editorial-more-modal';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'editorial-calendar-more-title');
+  modal.addEventListener('mousedown', editorialCalendarHandleMoreBackdrop);
+  var panel = document.createElement('div');
+  panel.className = 'editorial-more-panel';
+  var head = document.createElement('div');
+  head.className = 'editorial-more-head';
+  var titleWrap = document.createElement('div');
+  var title = document.createElement('h3');
+  title.id = 'editorial-calendar-more-title';
+  title.className = 'editorial-more-title';
+  var count = document.createElement('div');
+  count.id = 'editorial-calendar-more-count';
+  count.className = 'editorial-more-count';
+  var close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'btn';
+  close.textContent = 'Close';
+  close.addEventListener('click', editorialCalendarCloseMoreModal);
+  var list = document.createElement('div');
+  list.id = 'editorial-calendar-more-list';
+  list.className = 'editorial-more-list';
+  titleWrap.appendChild(title);
+  titleWrap.appendChild(count);
+  head.appendChild(titleWrap);
+  head.appendChild(close);
+  panel.appendChild(head);
+  panel.appendChild(list);
+  modal.appendChild(panel);
+  document.body.appendChild(modal);
+  return modal;
+}
+function editorialCalendarOpenMoreModal(dateKey, entries, returnFocus) {
+  var modal = editorialCalendarEnsureMoreModal();
+  var title = document.getElementById('editorial-calendar-more-title');
+  var count = document.getElementById('editorial-calendar-more-count');
+  var list = document.getElementById('editorial-calendar-more-list');
+  if (!modal || !list) return;
+  var dateLabel = editorialCalendarDateLabel(dateKey);
+  editorialCalendarState.moreModalOpen = true;
+  editorialCalendarState.moreModalReturnFocus = returnFocus && typeof returnFocus.focus === 'function' ? returnFocus : null;
+  if (!modal.dataset.previousBodyOverflow) modal.dataset.previousBodyOverflow = document.body.style.overflow || '';
+  document.body.style.overflow = 'hidden';
+  if (title) title.textContent = dateLabel;
+  if (count) count.textContent = (entries || []).length + ' additional record' + ((entries || []).length === 1 ? '' : 's');
+  editorialCalendarRenderMoreEntries(list, entries || []);
+  modal.style.display = 'flex';
+  document.addEventListener('keydown', editorialCalendarPreventMoreEscape, true);
+  var focusTarget = list.querySelector('button') || modal.querySelector('button');
+  if (focusTarget) focusTarget.focus();
+}
+function editorialCalendarDateLabel(dateKey) {
+  if (!dateKey) return 'Calendar date';
+  var parts = String(dateKey).split('-');
+  if (parts.length !== 3) return String(dateKey);
+  var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  if (!d || isNaN(d.getTime())) return String(dateKey);
+  return d.toLocaleDateString('en-IN', {weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'Asia/Kolkata'});
+}
+function editorialCalendarRenderMoreEntries(list, entries) {
+  while (list.firstChild) list.removeChild(list.firstChild);
+  if (!entries.length) {
+    var empty = document.createElement('div');
+    empty.className = 'editorial-more-empty';
+    empty.textContent = 'No additional records for this date.';
+    list.appendChild(empty);
+    return;
+  }
+  entries.forEach(function(entry) {
+    var item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'editorial-more-record';
+    item.style.borderLeftColor = editorialCalendarStatusColor(entry.status || 'Draft');
+    item.addEventListener('click', function() {
+      editorialCalendarSelectMoreEntry(entry);
+    });
+    var title = document.createElement('div');
+    title.className = 'editorial-more-record-title';
+    var time = editorialCalendarTimeLabel(entry.publishTime);
+    title.textContent = (time ? time + ' ' : '') + (entry.title || 'Untitled');
+    var meta = document.createElement('div');
+    meta.className = 'editorial-more-record-meta';
+    editorialCalendarMoreLabels(entry).forEach(function(label) {
+      var pill = document.createElement('span');
+      pill.className = 'editorial-more-pill';
+      pill.textContent = label;
+      meta.appendChild(pill);
+    });
+    item.appendChild(title);
+    if (meta.childNodes.length) item.appendChild(meta);
+    list.appendChild(item);
+  });
+}
+function editorialCalendarMoreLabels(entry) {
+  var labels = [];
+  if (entry.contentType) labels.push(entry.contentType);
+  (entry.channels || []).forEach(function(channel) { if (channel) labels.push(channel); });
+  if (entry.contentGroup) labels.push(entry.contentGroup);
+  if (entry.originalCollection) labels.push(entry.originalCollection);
+  if (entry.status) labels.push(entry.status);
+  return labels.filter(function(label, index) { return labels.indexOf(label) === index; });
+}
+function editorialCalendarSelectMoreEntry(entry) {
+  editorialCalendarCloseMoreModal({restoreFocus:false});
+  editorialCalendarOpenEditor(entry.id, null, entry.occurrenceDate || '');
+}
+function editorialCalendarPreventMoreEscape(event) {
+  if (editorialCalendarState.moreModalOpen && event.key === 'Escape') {
+    event.preventDefault();
+    editorialCalendarCloseMoreModal();
+  }
+}
+function editorialCalendarHandleMoreBackdrop(event) {
+  if (event.target === event.currentTarget) editorialCalendarCloseMoreModal();
+}
+function editorialCalendarCloseMoreModal(options) {
+  options = options || {};
+  var modal = document.getElementById('editorial-calendar-more-modal');
+  if (modal) modal.style.display = 'none';
+  if (modal && modal.dataset.previousBodyOverflow !== undefined) {
+    document.body.style.overflow = modal.dataset.previousBodyOverflow;
+    delete modal.dataset.previousBodyOverflow;
+  }
+  document.removeEventListener('keydown', editorialCalendarPreventMoreEscape, true);
+  editorialCalendarState.moreModalOpen = false;
+  if (options.restoreFocus !== false && editorialCalendarState.moreModalReturnFocus && typeof editorialCalendarState.moreModalReturnFocus.focus === 'function') {
+    editorialCalendarState.moreModalReturnFocus.focus();
+  }
+  editorialCalendarState.moreModalReturnFocus = null;
 }
 function editorialCalendarDefaultEntry(dateKey) {
   var user = currentUser || {};
