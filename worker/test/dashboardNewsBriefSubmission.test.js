@@ -30,8 +30,9 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.6 for Editorial Calendar more entries modal', () => {
-  assert.match(html, />15\.6<\/div>/);
+test('dashboard version badge is 15.7 for calendar Canva creative preview', () => {
+  assert.match(html, />15\.7<\/div>/);
+  assert.doesNotMatch(html, />15\.6<\/div>/);
   assert.doesNotMatch(html, />15\.5<\/div>/);
   assert.doesNotMatch(html, />15\.4<\/div>/);
   assert.doesNotMatch(html, />15\.3<\/div>/);
@@ -671,9 +672,12 @@ test('Canva handoff and calendar save reuse News Brief image and persist templat
   assert.match(save, /platform:'LinkedIn'/);
   assert.match(save, /collectionRef\.add\(data\)/);
   assert.match(save, /socialTemplateKey:template\.key/);
+  assert.match(save, /canvaTemplateId:template\.key/);
+  assert.match(save, /canvaTemplateName:template\.name/);
   assert.match(save, /canvaTemplateDesignId:template\.designId/);
   assert.match(save, /canvaTemplateUrl:template\.url/);
-  assert.match(save, /data\.canvaDesignUrl = newsBriefSocialState\.canvaDesignUrl/);
+  assert.match(save, /canvaDesignUrl:canvaDesignUrl/);
+  assert.match(save, /canvaCreativeImageUrl:canvaCreativeImageUrl/);
   assert.match(save, /creativeHeadline:newsBriefSocialState\.creativeFields\.headline/);
   assert.match(save, /if \(template\.key === 'template_3'\) data\.creativeBullets/);
   assert.match(save, /contentCopy:contentHtml/);
@@ -687,7 +691,7 @@ test('Canva handoff and calendar save reuse News Brief image and persist templat
 
 test('Social workflow reset clears Canva template state without changing article image data or feature flags', () => {
   const reset = functionBlock('resetNewsBriefSocialState');
-  for (const field of ['stage', 'templateKey', 'templateName', 'templateDesignId', 'templateUrl', 'creativeGenerating', 'creativeFields', 'creativeImageUrl', 'canvaDesignUrl', 'canvaConfirmed']) {
+  for (const field of ['stage', 'templateKey', 'templateName', 'templateDesignId', 'templateUrl', 'creativeGenerating', 'creativeFields', 'creativeImageUrl', 'canvaCreativeImageUrl', 'canvaDesignUrl', 'canvaConfirmed']) {
     assert.match(reset, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
   assert.doesNotMatch(reset, /socialImageAssetId|socialImageBlobUrl|socialImageEdited/);
@@ -846,6 +850,7 @@ test('calendar save creates one entry with final review data and excludes blob i
       creativeFields: { headline: 'News title', subtext: 'Standfirst text' },
       canvaConfirmed: true,
       canvaDesignUrl: 'https://www.canva.com/design/copy',
+      canvaCreativeImageUrl: 'https://cdn.webflow.com/canva-creative.jpg',
       creativeImageUrl: 'blob:http://localhost/image',
       imageUrl: 'blob:http://localhost/image',
     },
@@ -871,6 +876,9 @@ test('calendar save creates one entry with final review data and excludes blob i
   assert.equal(addCalls[0].creativeHeadline, 'News title');
   assert.equal(addCalls[0].creativeSubtext, 'Standfirst text');
   assert.equal(addCalls[0].canvaDesignUrl, 'https://www.canva.com/design/copy');
+  assert.equal(addCalls[0].canvaCreativeImageUrl, 'https://cdn.webflow.com/canva-creative.jpg');
+  assert.equal(addCalls[0].canvaTemplateId, 'template_1');
+  assert.equal(addCalls[0].canvaTemplateName, 'Full-bleed gradient');
   assert.equal(Object.hasOwn(addCalls[0], 'imageUrl'), false);
   assert.equal(Object.hasOwn(addCalls[0], 'creativeBullets'), false);
 
@@ -885,12 +893,14 @@ test('calendar save creates one entry with final review data and excludes blob i
     creativeFields: { headline: 'News title', bullet1: 'First fact', bullet2: 'Second fact', bullet3: 'Third fact' },
     canvaConfirmed: true,
     canvaDesignUrl: '',
+    canvaCreativeImageUrl: 'https://cdn.webflow.com/finished-canva.jpg',
     creativeImageUrl: 'https://cdn.webflow.com/news.jpg',
     imageUrl: 'https://cdn.webflow.com/news.jpg',
   };
   await context.saveNewsBriefSocialToCalendar();
   assert.equal(addCalls.length, 2);
   assert.equal(addCalls[1].socialTemplateKey, 'template_3');
+  assert.equal(addCalls[1].canvaCreativeImageUrl, 'https://cdn.webflow.com/finished-canva.jpg');
   assert.deepEqual(Array.from(addCalls[1].creativeBullets), ['First fact', 'Second fact', 'Third fact']);
   assert.equal(Object.hasOwn(addCalls[1], 'creativeSubtext'), false);
   assert.equal(addCalls[1].imageUrl, 'https://cdn.webflow.com/news.jpg');

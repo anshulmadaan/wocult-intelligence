@@ -264,7 +264,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.6</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.7</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -1171,6 +1171,19 @@ There are no right or wrong answers here. Please answer openly and in your own v
             <div id="ec-image-preview" class="hint">No image selected.</div>
           </div>
         </div>
+        <div class="sfield" style="grid-column:1/-1;border:1px solid var(--bdr);border-radius:8px;background:#fff;padding:14px">
+          <h3 style="font-size:15px;margin:0 0 10px;color:var(--blk)">Canva creative</h3>
+          <div class="hint" style="margin-bottom:10px">Selected template: <span id="ec-canva-template-name">None selected</span></div>
+          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:12px">
+            <div><label for="ec-canva-design-url">Canva creative link</label><input id="ec-canva-design-url" placeholder="Paste Canva design or share link" oninput="editorialCalendarUpdateCanvaCreativePreview();editorialCalendarEditorChanged()" /></div>
+            <a class="btn" id="ec-canva-open-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;text-decoration:none">Open in Canva</a>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:12px">
+            <div><label for="ec-canva-creative-image-url">Finished creative image URL</label><input id="ec-canva-creative-image-url" placeholder="Paste exported Canva creative image URL" oninput="editorialCalendarUpdateCanvaCreativePreview();editorialCalendarEditorChanged()" /></div>
+            <a class="btn" id="ec-canva-open-image-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;text-decoration:none">Open creative image</a>
+          </div>
+          <div id="ec-canva-creative-preview" class="hint" style="border:1px dashed var(--g2);border-radius:8px;background:var(--gray);padding:12px;min-height:48px;display:flex;align-items:center;justify-content:center;text-align:center">No finished creative added</div>
+        </div>
         <div class="sfield" style="grid-column:1/-1">
           <label>Body</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;border:1px solid var(--bdr);border-bottom:none;border-radius:8px 8px 0 0;background:var(--gray);padding:7px">
@@ -1681,6 +1694,7 @@ var newsBriefSocialState = {
   creativeGenerating: false,
   creativeFields: {},
   creativeImageUrl: '',
+  canvaCreativeImageUrl: '',
   canvaDesignUrl: '',
   canvaConfirmed: false,
   templateConfigSnapshot: null,
@@ -3487,6 +3501,7 @@ function editorialCalendarPopulateEditor(entry) {
   var imageInput = document.getElementById('ec-image-url');
   if (imageInput) imageInput.value = entry.imageUrl || entry.image || entry.coverImage || entry.thumbnail || '';
   editorialCalendarUpdateImagePreview();
+  editorialCalendarPopulateCanvaCreative(entry);
   var bodyEditor = document.getElementById('ec-content-copy');
   if (bodyEditor) bodyEditor.innerHTML = editorialCalendarSanitizeHtml(entry.contentCopy || entry.body || entry.description || entry.richTextBody || entry.content || '');
   editorialCalendarUpdateSummaryCount();
@@ -3512,6 +3527,85 @@ function editorialCalendarUpdateSummaryCount() {
   var count = text.trim() ? text.trim().split(/\s+/).length : 0;
   document.getElementById('ec-summary-count').textContent = count + ' / 500 words';
   document.getElementById('ec-summary-count').style.color = count > 500 ? 'var(--red)' : 'var(--g3)';
+}
+function editorialCalendarSafeHttpUrl(value) {
+  var url = String(value || '').trim();
+  if (!url) return '';
+  if (!/^https?:\/\//i.test(url)) return '';
+  if (/^(javascript|data|blob|file):/i.test(url)) return '';
+  return url;
+}
+function editorialCalendarCanvaTemplateId(entry) {
+  entry = entry || {};
+  return entry.canvaTemplateId || entry.socialTemplateKey || entry.templateKey || '';
+}
+function editorialCalendarCanvaTemplateName(entry) {
+  entry = entry || {};
+  return entry.canvaTemplateName || entry.socialTemplateName || entry.templateName || '';
+}
+function editorialCalendarCanvaDesignUrl(entry) {
+  entry = entry || {};
+  return editorialCalendarSafeHttpUrl(entry.canvaDesignUrl || entry.canvaShareUrl || entry.canvaCreativeUrl || '');
+}
+function editorialCalendarCanvaCreativeImageUrl(entry) {
+  entry = entry || {};
+  return editorialCalendarSafeHttpUrl(entry.canvaCreativeImageUrl || entry.finishedCreativeImageUrl || entry.socialCreativeImageUrl || entry.creativeImageUrl || '');
+}
+function editorialCalendarPopulateCanvaCreative(entry) {
+  entry = entry || {};
+  var templateName = editorialCalendarCanvaTemplateName(entry);
+  var templateEl = document.getElementById('ec-canva-template-name');
+  if (templateEl) templateEl.textContent = templateName || 'None selected';
+  var designInput = document.getElementById('ec-canva-design-url');
+  if (designInput) designInput.value = editorialCalendarCanvaDesignUrl(entry);
+  var creativeInput = document.getElementById('ec-canva-creative-image-url');
+  if (creativeInput) creativeInput.value = editorialCalendarCanvaCreativeImageUrl(entry);
+  editorialCalendarUpdateCanvaCreativePreview();
+}
+function editorialCalendarUpdateCanvaCreativePreview() {
+  var designInput = document.getElementById('ec-canva-design-url');
+  var creativeInput = document.getElementById('ec-canva-creative-image-url');
+  var canvaLink = document.getElementById('ec-canva-open-link');
+  var imageLink = document.getElementById('ec-canva-open-image-link');
+  var preview = document.getElementById('ec-canva-creative-preview');
+  var designUrl = editorialCalendarSafeHttpUrl(designInput && designInput.value);
+  var creativeUrl = editorialCalendarSafeHttpUrl(creativeInput && creativeInput.value);
+  if (canvaLink) {
+    canvaLink.href = designUrl || '#';
+    canvaLink.rel = 'noopener noreferrer';
+    canvaLink.style.display = designUrl ? 'inline-flex' : 'none';
+  }
+  if (imageLink) {
+    imageLink.href = creativeUrl || '#';
+    imageLink.rel = 'noopener noreferrer';
+    imageLink.style.display = creativeUrl ? 'inline-flex' : 'none';
+  }
+  if (!preview) return;
+  preview.textContent = '';
+  while (preview.firstChild) preview.removeChild(preview.firstChild);
+  if (!creativeInput || !String(creativeInput.value || '').trim()) {
+    preview.textContent = 'No finished creative added';
+    return;
+  }
+  if (!creativeUrl) {
+    preview.textContent = 'Preview unavailable';
+    return;
+  }
+  var img = document.createElement('img');
+  img.src = creativeUrl;
+  img.alt = 'Finished Canva creative preview';
+  img.style.maxWidth = '100%';
+  img.style.maxHeight = '420px';
+  img.style.height = 'auto';
+  img.style.objectFit = 'contain';
+  img.style.borderRadius = '8px';
+  img.style.border = '1px solid var(--bdr)';
+  img.style.background = '#fff';
+  img.onerror = function() {
+    while (preview.firstChild) preview.removeChild(preview.firstChild);
+    preview.textContent = 'Preview unavailable';
+  };
+  preview.appendChild(img);
 }
 function editorialCalendarEditorChanged() {
   editorialCalendarState.editorDirty = true;
@@ -3548,6 +3642,12 @@ function editorialCalendarCollectEditorData(validate) {
   var contentCopy = bodyEditor ? editorialCalendarSanitizeHtml(bodyEditor.innerHTML).trim() : (original.contentCopy || '');
   var imageInput = document.getElementById('ec-image-url');
   var imageUrl = imageInput ? imageInput.value.trim() : (original.imageUrl || '');
+  var canvaDesignInput = document.getElementById('ec-canva-design-url');
+  var canvaCreativeInput = document.getElementById('ec-canva-creative-image-url');
+  var rawCanvaDesignUrl = canvaDesignInput ? canvaDesignInput.value.trim() : editorialCalendarCanvaDesignUrl(original);
+  var rawCanvaCreativeImageUrl = canvaCreativeInput ? canvaCreativeInput.value.trim() : editorialCalendarCanvaCreativeImageUrl(original);
+  var canvaDesignUrl = editorialCalendarSafeHttpUrl(rawCanvaDesignUrl);
+  var canvaCreativeImageUrl = editorialCalendarSafeHttpUrl(rawCanvaCreativeImageUrl);
   var summaryWords = summary ? summary.split(/\s+/).length : 0;
   var publishDate = document.getElementById('ec-publish-date').value;
   if (validate) {
@@ -3555,7 +3655,11 @@ function editorialCalendarCollectEditorData(validate) {
     if (!type) throw new Error('Content type is required.');
     if (!publishDate) throw new Error('Publish date is required.');
     if (summaryWords > 500) throw new Error('Brief summary must be 500 words or fewer.');
+    if (rawCanvaDesignUrl && !canvaDesignUrl) throw new Error('Canva creative link must start with http:// or https://.');
+    if (rawCanvaCreativeImageUrl && !canvaCreativeImageUrl) throw new Error('Finished creative image URL must start with http:// or https://.');
   }
+  var canvaTemplateId = editorialCalendarCanvaTemplateId(original);
+  var canvaTemplateName = editorialCalendarCanvaTemplateName(original);
   return {
     title:title,
     contentType:type,
@@ -3563,6 +3667,14 @@ function editorialCalendarCollectEditorData(validate) {
     summary:summary,
     contentCopy:contentCopy,
     imageUrl:imageUrl,
+    canvaDesignUrl:canvaDesignUrl,
+    canvaCreativeImageUrl:canvaCreativeImageUrl,
+    canvaTemplateId:canvaTemplateId,
+    canvaTemplateName:canvaTemplateName,
+    socialTemplateKey:original.socialTemplateKey || canvaTemplateId,
+    socialTemplateName:original.socialTemplateName || canvaTemplateName,
+    canvaTemplateDesignId:original.canvaTemplateDesignId || '',
+    canvaTemplateUrl:original.canvaTemplateUrl || '',
     creatorUid:original.creatorUid || user.uid || '',
     creatorEmail:original.creatorEmail || user.email || '',
     creatorName:original.creatorName || user.displayName || user.email || 'Wocult editor',
@@ -10593,6 +10705,7 @@ function resetNewsBriefSocialState() {
     creativeGenerating: false,
     creativeFields: {},
     creativeImageUrl: '',
+    canvaCreativeImageUrl: '',
     canvaDesignUrl: '',
     canvaConfirmed: false,
     templateConfigSnapshot: null,
@@ -11011,6 +11124,7 @@ function offerNewsBriefSocialWorkflow(articleContext) {
   newsBriefSocialState.creativeFields = {};
   newsBriefSocialState.creativeGenerating = false;
   newsBriefSocialState.creativeImageUrl = newsBriefSocialImageFromArticle(articleContext);
+  newsBriefSocialState.canvaCreativeImageUrl = '';
   newsBriefSocialState.canvaDesignUrl = '';
   newsBriefSocialState.canvaConfirmed = false;
   newsBriefSocialState.templateConfigSnapshot = null;
@@ -11662,6 +11776,10 @@ function saveNewsBriefSocialToCalendar() {
   var publishTime = document.getElementById('news-social-publish-time').value || '';
   var calendarStatus = document.getElementById('news-social-calendar-status').value || 'Draft';
   var persistentImageUrl = persistentNewsBriefSocialImageUrl();
+  var canvaDesignUrl = String(newsBriefSocialState.canvaDesignUrl || '').trim();
+  var canvaCreativeImageUrl = String(newsBriefSocialState.canvaCreativeImageUrl || newsBriefSocialState.finishedCreativeImageUrl || newsBriefSocialState.socialCreativeImageUrl || '').trim();
+  if (canvaDesignUrl && !isPersistentImageUrl(canvaDesignUrl)) { alert('Canva creative link must start with http:// or https://.'); return; }
+  if (canvaCreativeImageUrl && !isPersistentImageUrl(canvaCreativeImageUrl)) { alert('Finished creative image URL must start with http:// or https://.'); return; }
   var imageInput = document.getElementById('news-social-image-url');
   if (imageInput) imageInput.value = persistentImageUrl;
   var status = document.getElementById('news-social-save-status');
@@ -11709,8 +11827,12 @@ function saveNewsBriefSocialToCalendar() {
       contentCopy:contentHtml,
       socialTemplateKey:template.key,
       socialTemplateName:template.name,
+      canvaTemplateId:template.key,
+      canvaTemplateName:template.name,
       canvaTemplateDesignId:template.designId,
       canvaTemplateUrl:template.url,
+      canvaDesignUrl:canvaDesignUrl,
+      canvaCreativeImageUrl:canvaCreativeImageUrl,
       creativeHeadline:newsBriefSocialState.creativeFields.headline || '',
       canvaConfirmed:newsBriefSocialState.canvaConfirmed === true,
       owner:owner,
@@ -11734,7 +11856,6 @@ function saveNewsBriefSocialToCalendar() {
       archived:false
     };
     if (persistentImageUrl) data.imageUrl = persistentImageUrl;
-    if (newsBriefSocialState.canvaDesignUrl) data.canvaDesignUrl = newsBriefSocialState.canvaDesignUrl;
     if (template.key !== 'template_3' && newsBriefSocialState.creativeFields.subtext) data.creativeSubtext = newsBriefSocialState.creativeFields.subtext;
     if (template.key === 'template_3') data.creativeBullets = [newsBriefSocialState.creativeFields.bullet1, newsBriefSocialState.creativeFields.bullet2, newsBriefSocialState.creativeFields.bullet3].filter(Boolean);
     var writePromise = entryRef ? entryRef.set(data, {merge:true}).then(function(){ return entryRef; }) : collectionRef.add(data);
