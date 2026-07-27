@@ -933,13 +933,24 @@ export function automationCandidateToArticle(candidate) {
 
 export function buildAutomationNewsFieldData(draft = {}) {
   const title = toSentenceCaseHeadline(draft.title || draft.name || '');
+  const sourcePublishedDate = draft.publishedDate || draft.publishDate;
+  if (!sourcePublishedDate) {
+    throw new Error('Publication date and time are missing.');
+  }
+  const publishedDate = new Date(sourcePublishedDate);
+  if (Number.isNaN(publishedDate.getTime())) {
+    throw new Error('Publication date and time are invalid.');
+  }
+  const publishedIso = publishedDate.toISOString();
   return stripEmptyOptionalFields({
+    publishedDate: publishedIso,
     name: title,
     slug: draft.slug,
     standfirst: draft.standfirst || draft.shortIntro || draft.excerpt || '',
     body: draft.body || '',
     beat: draft.beat || draft.category || 'Future of Work',
-    'published-date': draft.publishedDate || draft.publishDate || new Date().toISOString(),
+    'published-date': publishedIso,
+    'published-iso': publishedIso,
     'source-name': draft.sourceName || draft['source-name'] || '',
     'source-url': draft.sourceUrl || draft['source-url'] || '',
     'seo-description': draft.seoDescription || draft['seo-description'] || draft.standfirst || '',

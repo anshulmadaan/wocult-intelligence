@@ -157,9 +157,39 @@ test('/webflow-news remains on the News collection', async (t) => {
       slug: 'a-news-brief',
       standfirst: 'A short standfirst',
       body: '<p>News body</p>',
+      publishedDate: '2026-07-28T12:15:00.000Z',
     },
   }), env);
   assert.equal(response.status, 200);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://api.webflow.com/v2/collections/6a4d6ad32871d46ed1edc6a4/items');
+  const payload = JSON.parse(calls[0].options.body);
+  assert.equal(payload.fieldData.publishedDate, '2026-07-28T12:15:00.000Z');
+  assert.equal(payload.fieldData['published-date'], '2026-07-28T12:15:00.000Z');
+  assert.equal(payload.fieldData['published-iso'], '2026-07-28T12:15:00.000Z');
+});
+
+test('/webflow-news rejects missing publication timestamp without replacing it', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url: String(url), options });
+    return new Response(JSON.stringify({ id: 'wf-news-1' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+
+  const response = await worker.fetch(authedRequest('/webflow-news', {
+    fieldData: {
+      title: 'A news brief',
+      slug: 'a-news-brief',
+      standfirst: 'A short standfirst',
+      body: '<p>News body</p>',
+    },
+  }), env);
+  assert.equal(response.status, 400);
+  assert.equal(calls.length, 0);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.match(body.error, /Publication date and time are missing\./);
 });

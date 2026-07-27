@@ -12158,7 +12158,11 @@ function collectNewsBriefData(writerName) {
 
 function buildNewsBriefFieldData(d) {
   var title = normalizeNewsHeadline(d.title || d.name);
-  var publishedDate = new Date().toISOString();
+  var sourcePublishedDate = d.publishedDate || d.publishDate;
+  if (!sourcePublishedDate) {
+    throw new Error('Publication date and time are missing.');
+  }
+  var publishedIso = toWebflowDateTime(sourcePublishedDate);
   var seoDescription = limitSeoDescription(d.seoDescription || d.excerpt || d.standfirst || d.shortIntro || '');
   return {
     title: title,
@@ -12167,8 +12171,9 @@ function buildNewsBriefFieldData(d) {
     standfirst: d.standfirst || d.shortIntro || d.excerpt || '',
     body: cleanNewsBriefBody(title, d.standfirst || d.shortIntro || d.excerpt, d.body),
     beat: d.beat || d.category || 'Future of Work',
-    publishedDate: publishedDate,
-    'published-date': publishedDate,
+    publishedDate: publishedIso,
+    'published-date': publishedIso,
+    'published-iso': publishedIso,
     'source-name': d.sourceName,
     'source-url': d.sourceUrl,
     'seo-description': seoDescription,

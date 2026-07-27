@@ -99,15 +99,23 @@ export default {
     const buildNewsFieldData = (payload) => {
       const data = payload.fieldData || payload;
       const title = toSentenceCaseHeadline(data.title || data.name);
-      const publishedDate = toWebflowDateTime(data.publishedDate || data.publishDate || data.date || data['published-date'] || data['publish-date'] || new Date());
+      const sourcePublishedDate = data.publishedDate || data.publishDate || data.date || data['published-date'] || data['publish-date'];
+      if (!sourcePublishedDate) {
+        const err = new Error('Publication date and time are missing.');
+        err.status = 400;
+        throw err;
+      }
+      const publishedDate = toWebflowDateTime(sourcePublishedDate);
       const seoDescription = limitSeoDescription(data.seoDescription || data['seo-description'] || data.standfirst || data.excerpt || data.shortIntro || data['short-story-intro'] || '');
       return stripEmptyOptionalFields({
+        publishedDate,
         name: title,
         slug: data.slug,
         standfirst: data.standfirst || data.shortIntro || data['short-story-intro'] || data['story-intro-para'] || data.excerpt || '',
         body: data.body || '',
         beat: normalizeNewsBeat(data.beat || data.category || data.cat || 'Future of Work'),
         'published-date': publishedDate,
+        'published-iso': publishedDate,
         'source-name': data.sourceName || data['source-name'] || data.sourceTitle || data['source-title'] || data.source || '',
         'source-url': data.sourceUrl || data.sourceURL || data['source-url'] || data.url || '',
         'seo-description': seoDescription,
@@ -744,7 +752,7 @@ export default {
 
         return jsonResponse(webflowData, webflowRes.status);
       } catch (e) {
-        return jsonResponse({ error: e.message }, 500);
+        return jsonResponse({ ok: false, error: e.message }, e.status || 500);
       }
     }
 

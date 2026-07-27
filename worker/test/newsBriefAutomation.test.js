@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import {
   automationCandidateToArticle,
+  buildAutomationNewsFieldData,
   callClaudeJson,
   candidateFromTrackerItem,
   clusterKey,
@@ -329,6 +330,29 @@ test('default flags are safe when environment variables are absent', () => {
   assert.equal(config.webflowEnabled, false);
   assert.equal(config.dryRun, true);
   assert.equal(config.minScore, 75);
+});
+
+test('automation Webflow News field data reuses generated publication timestamp', () => {
+  const fieldData = buildAutomationNewsFieldData({
+    ...goodDraft,
+    publishedDate: '2026-07-28T12:15:00.000Z',
+    publishDate: '2026-07-27T01:00:00.000Z',
+  });
+  assert.equal(fieldData.publishedDate, '2026-07-28T12:15:00.000Z');
+  assert.equal(fieldData['published-date'], '2026-07-28T12:15:00.000Z');
+  assert.equal(fieldData['published-iso'], '2026-07-28T12:15:00.000Z');
+
+  const fallbackFieldData = buildAutomationNewsFieldData({
+    ...goodDraft,
+    publishedDate: '',
+    publishDate: '2026-07-29T05:30:00.000Z',
+  });
+  assert.equal(fallbackFieldData['published-date'], '2026-07-29T05:30:00.000Z');
+  assert.equal(fallbackFieldData['published-iso'], '2026-07-29T05:30:00.000Z');
+  assert.throws(
+    () => buildAutomationNewsFieldData({ ...goodDraft, publishedDate: '', publishDate: '' }),
+    /Publication date and time are missing\./
+  );
 });
 
 test('automation run fetches only the configured News Tracker API and skips existing items', async () => {

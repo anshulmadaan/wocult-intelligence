@@ -219,15 +219,33 @@ test('News Brief Webflow field data preserves headline casing and uses fresh ISO
     slug: 'jpmorgan-plans-india-gcc-hires',
     standfirst: 'AI is redirecting India tech hiring.',
     body: '<p>Body</p>',
-    publishedDate: '2026-07-23',
+    publishedDate: '2026-07-23T09:15:30.000Z',
   });
   assert.equal(fieldData.title, 'JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts');
   assert.equal(fieldData.name, 'JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts');
-  assert.equal(fieldData['published-date'], '2026-07-23T14:37:52.123Z');
-  assert.equal(fieldData.publishedDate, '2026-07-23T14:37:52.123Z');
-  assert.notEqual(fieldData['published-date'], '2026-07-23');
-  assert.notEqual(fieldData['published-date'], '2026-07-23T00:00:00Z');
-  assert.match(functionBlock('buildNewsBriefFieldData'), /'published-date': publishedDate/);
+  assert.equal(fieldData['published-date'], '2026-07-23T09:15:30.000Z');
+  assert.equal(fieldData.publishedDate, '2026-07-23T09:15:30.000Z');
+  assert.equal(fieldData['published-iso'], '2026-07-23T09:15:30.000Z');
+  assert.notEqual(fieldData['published-date'], '2026-07-23T14:37:52.123Z');
+  const publishDateFallback = context.buildNewsBriefFieldData({
+    title: 'Fallback date story',
+    slug: 'fallback-date-story',
+    standfirst: 'A standfirst.',
+    body: '<p>Body</p>',
+    publishDate: '2026-07-24T10:20:00.000Z',
+  });
+  assert.equal(publishDateFallback['published-date'], '2026-07-24T10:20:00.000Z');
+  assert.equal(publishDateFallback['published-iso'], '2026-07-24T10:20:00.000Z');
+  assert.throws(
+    () => context.buildNewsBriefFieldData({ title: 'Missing date', slug: 'missing-date', body: '<p>Body</p>' }),
+    /Publication date and time are missing\./
+  );
+  const build = functionBlock('buildNewsBriefFieldData');
+  assert.match(build, /var sourcePublishedDate = d\.publishedDate \|\| d\.publishDate/);
+  assert.match(build, /var publishedIso = toWebflowDateTime\(sourcePublishedDate\)/);
+  assert.doesNotMatch(build, /new Date\(\)\.toISOString\(\)/);
+  assert.match(build, /'published-date': publishedIso/);
+  assert.match(build, /'published-iso': publishedIso/);
 });
 
 test('News Brief Webflow failure state preserves Firebase save and retries only Webflow', () => {
