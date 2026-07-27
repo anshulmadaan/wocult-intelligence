@@ -30,8 +30,9 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.8 for Canva public link workflow', () => {
-  assert.match(html, />15\.8<\/div>/);
+test('dashboard version badge is 15.9 for submit without creative workflow', () => {
+  assert.match(html, />15\.9<\/div>/);
+  assert.doesNotMatch(html, />15\.8<\/div>/);
   assert.doesNotMatch(html, />15\.7<\/div>/);
   assert.doesNotMatch(html, />15\.6<\/div>/);
   assert.doesNotMatch(html, />15\.5<\/div>/);
@@ -673,15 +674,16 @@ test('Canva handoff and calendar save reuse News Brief image and persist templat
   assert.doesNotMatch(save, /socialImageUrl:/);
   assert.match(save, /platform:'LinkedIn'/);
   assert.match(save, /collectionRef\.add\(data\)/);
-  assert.match(save, /socialTemplateKey:template\.key/);
-  assert.match(save, /canvaTemplateId:template\.key/);
-  assert.match(save, /canvaTemplateName:template\.name/);
-  assert.match(save, /canvaTemplateDesignId:template\.designId/);
-  assert.match(save, /canvaTemplateUrl:template\.url/);
-  assert.match(save, /canvaDesignUrl:canvaDesignUrl/);
+  assert.match(save, /var templateKey = template \? template\.key/);
+  assert.match(save, /if \(templateKey\) data\.socialTemplateKey = templateKey/);
+  assert.match(save, /if \(templateKey\) data\.canvaTemplateId = templateKey/);
+  assert.match(save, /if \(templateName\) data\.canvaTemplateName = templateName/);
+  assert.match(save, /if \(templateDesignId\) data\.canvaTemplateDesignId = templateDesignId/);
+  assert.match(save, /if \(templateUrl\) data\.canvaTemplateUrl = templateUrl/);
+  assert.match(save, /if \(canvaDesignUrl\) data\.canvaDesignUrl = canvaDesignUrl/);
   assert.doesNotMatch(save, /canvaCreativeImageUrl|finishedCreativeImageUrl|socialCreativeImageUrl/);
-  assert.match(save, /creativeHeadline:newsBriefSocialState\.creativeFields\.headline/);
-  assert.match(save, /if \(template\.key === 'template_3'\) data\.creativeBullets/);
+  assert.match(save, /data\.creativeHeadline = newsBriefSocialState\.creativeFields\.headline/);
+  assert.match(save, /if \(!withoutCreative && template\.key === 'template_3'\) data\.creativeBullets/);
   assert.match(save, /contentCopy:contentHtml/);
   assert.match(functionBlock('newsBriefSocialSetCanvaConfirmed'), /newsBriefSocialState\.stage = 'calendar'/);
   assert.match(functionBlock('newsBriefSocialSetCanvaConfirmed'), /newsBriefSocialState\.stage === 'calendar'\) newsBriefSocialState\.stage = 'canva'/);

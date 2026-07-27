@@ -53,7 +53,7 @@ function createHarness(overrides = {}) {
     'editorial-calendar-editor-title','ec-title','ec-content-type','ec-content-type-other','ec-content-type-other-wrap',
     'ec-summary','ec-summary-count','ec-owner','ec-publish-date','ec-publish-time','ec-status','ec-image-url','ec-image-preview',
     'ec-canva-template-name','ec-canva-design-url','ec-canva-open-link','ec-canva-missing-state','ec-canva-add-link-btn',
-    'ec-content-copy','editorial-calendar-archive-btn','editorial-calendar-restore-btn','editorial-calendar-delete-btn',
+    'ec-canva-create-btn','ec-content-copy','editorial-calendar-archive-btn','editorial-calendar-restore-btn','editorial-calendar-delete-btn',
     'editorial-calendar-editor-status'
   ].forEach((id) => element(id));
   element('ec-content-type').value = 'Social post';
@@ -114,6 +114,7 @@ function createHarness(overrides = {}) {
     functionBlock('editorialCalendarCanvaTemplateName'),
     functionBlock('editorialCalendarCanvaDesignUrl'),
     functionBlock('editorialCalendarPopulateCanvaCreative'),
+    functionBlock('editorialCalendarCanvaCreateAvailable'),
     functionBlock('editorialCalendarUpdateCanvaCreativeLink'),
     functionBlock('editorialCalendarFocusCanvaLink'),
     functionBlock('editorialCalendarSocialContextFromEntry'),
@@ -164,8 +165,17 @@ test('Missing Canva link shows empty state and Add Canva link focuses field', ()
   context.editorialCalendarPopulateEditor({ ...validEntry(), canvaDesignUrl: '' });
   assert.equal(elements.get('ec-canva-missing-state').style.display, 'block');
   assert.equal(elements.get('ec-canva-open-link').style.display, 'none');
+  assert.equal(elements.get('ec-canva-create-btn').style.display, 'inline-flex');
   context.editorialCalendarFocusCanvaLink();
   assert.equal(elements.get('ec-canva-design-url').focused, true);
+});
+
+test('Calendar Canva section hides Create creative when a safe public link exists', () => {
+  const { context, elements } = createHarness();
+  context.editorialCalendarPopulateEditor(validEntry());
+  assert.equal(elements.get('ec-canva-open-link').style.display, 'inline-flex');
+  assert.equal(elements.get('ec-canva-add-link-btn').style.display, 'none');
+  assert.equal(elements.get('ec-canva-create-btn').style.display, 'none');
 });
 
 test('Calendar save allows missing Canva link and does not clear historical creative image data', async () => {
@@ -198,6 +208,18 @@ test('Create Canva creative reuses social workflow and retains originating calen
   assert.equal(context.offeredArticle.imageUrl, 'https://cdn.webflow.com/article-image.jpg');
 });
 
+test('Create creative falls back to LinkedIn copy stage when record has no usable copy', () => {
+  const { context } = createHarness();
+  const entry = { ...validEntry(), contentCopy: '', summary: '', body: '', canvaDesignUrl: '' };
+  context.editorialCalendarState.editorOriginal = entry;
+  context.editorialCalendarPopulateEditor(entry);
+  context.editorialCalendarCreateCanvaCreative();
+  assert.equal(context.startedSocialWorkflow, true);
+  assert.equal(context.newsBriefSocialState.calendarEntryId, 'calendar-1');
+  assert.equal(context.newsBriefSocialState.stage, 'linkedin');
+  assert.equal(context.newsBriefSocialState.options.length, 0);
+});
+
 test('Editorial Calendar Canva implementation removes finished creative preview workflow', () => {
   assert.doesNotMatch(html, /ec-canva-creative-image-url|ec-canva-creative-preview|ec-canva-open-image-link/);
   assert.doesNotMatch(html, /Finished creative image URL|Open creative image|No finished creative added/);
@@ -205,4 +227,5 @@ test('Editorial Calendar Canva implementation removes finished creative preview 
   assert.doesNotMatch(functionBlock('editorialCalendarCollectEditorData'), /canvaCreativeImageUrl/);
   assert.match(functionBlock('editorialCalendarCreateCanvaCreative'), /offerNewsBriefSocialWorkflow/);
   assert.match(functionBlock('editorialCalendarCreateCanvaCreative'), /startNewsBriefSocialWorkflow/);
+  assert.match(html, />Create creative<\/button>/);
 });
