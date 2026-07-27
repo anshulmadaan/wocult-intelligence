@@ -264,7 +264,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.7</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.8</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -827,10 +827,10 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
           <button class="btn" onclick="copyNewsBriefCreativeAllText()">Copy all text</button>
           <button class="btn" onclick="copyNewsBriefSocialImage()">Copy image</button>
-          <button class="btn" onclick="downloadNewsBriefSocialImage()">Download image</button>
-          <a class="btn-lg btn-y" id="news-social-open-canva-link" href="#" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Open template in Canva</a>
+          <button class="btn" onclick="downloadNewsBriefSocialImage(event)">Download image</button>
+          <button class="btn-lg btn-y" id="news-social-open-canva-link" type="button" onclick="openSelectedNewsBriefSocialCanvaTemplate(event)">Open template in Canva</button>
         </div>
-        <div class="sfield"><label>Canva creative link</label><input id="news-social-canva-design-url" placeholder="Paste the share link for the completed Canva creative" oninput="newsBriefSocialSetCanvaDesignUrl(this.value)" /></div>
+        <div class="sfield"><label>Canva creative link</label><input id="news-social-canva-design-url" placeholder="Paste the public Canva link with Anyone with the link can view access" oninput="newsBriefSocialSetCanvaDesignUrl(this.value)" /></div>
         <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;color:var(--blk)"><input id="news-social-canva-confirmed" type="checkbox" onchange="newsBriefSocialSetCanvaConfirmed(this.checked)" /> I have finished editing in Canva</label>
       </section>
       <section id="news-social-calendar-section" class="news-social-stage" hidden>
@@ -856,6 +856,23 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       <div id="news-social-calendar-actions" style="display:none;gap:10px;flex-wrap:wrap">
         <button class="btn-lg btn-y" id="news-social-save-btn" onclick="saveNewsBriefSocialToCalendar()" style="flex:1">Add to Editorial Calendar</button>
         <button class="btn-lg" onclick="confirmLeaveNewsBriefSocialWorkflow(skipNewsBriefSocialWorkflow)" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Skip and return home</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="canva-instructions-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:10130;align-items:center;justify-content:center;padding:24px" role="dialog" aria-modal="true" aria-labelledby="canva-instructions-title" onmousedown="handleCanvaInstructionsBackdrop(event)">
+    <div style="background:#fff;border:1px solid var(--bdr);border-radius:8px;max-width:560px;width:100%;padding:22px;box-shadow:0 24px 80px rgba(0,0,0,0.25)">
+      <h3 id="canva-instructions-title" style="font-size:20px;font-family:Georgia,serif;margin:0 0 12px;color:var(--blk)">Before editing in Canva</h3>
+      <ol style="font-size:14px;line-height:1.65;color:var(--blk);padding-left:20px;margin:0 0 18px">
+        <li>Make a copy of this template. Do not edit the Wocult master.</li>
+        <li>Complete the creative in your copied design.</li>
+        <li>Set sharing to “Anyone with the link can view”.</li>
+        <li>Copy the public Canva link.</li>
+        <li>Paste that public link into the Canva creative link field before saving to the Editorial Calendar.</li>
+      </ol>
+      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+        <button class="btn" id="canva-instructions-back-btn" type="button" onclick="closeCanvaInstructionsModal()">Back</button>
+        <button class="btn-lg btn-y" id="canva-instructions-open-btn" type="button" onclick="confirmCanvaInstructionsOpen()">I understand, open Canva</button>
       </div>
     </div>
   </div>
@@ -1174,15 +1191,15 @@ There are no right or wrong answers here. Please answer openly and in your own v
         <div class="sfield" style="grid-column:1/-1;border:1px solid var(--bdr);border-radius:8px;background:#fff;padding:14px">
           <h3 style="font-size:15px;margin:0 0 10px;color:var(--blk)">Canva creative</h3>
           <div class="hint" style="margin-bottom:10px">Selected template: <span id="ec-canva-template-name">None selected</span></div>
+          <div class="hint" id="ec-canva-missing-state" style="margin-bottom:10px;display:none">Canva creative not added</div>
           <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:12px">
-            <div><label for="ec-canva-design-url">Canva creative link</label><input id="ec-canva-design-url" placeholder="Paste Canva design or share link" oninput="editorialCalendarUpdateCanvaCreativePreview();editorialCalendarEditorChanged()" /></div>
+            <div><label for="ec-canva-design-url">Canva creative link</label><input id="ec-canva-design-url" placeholder="Paste the public Canva link with Anyone with the link can view access" oninput="editorialCalendarUpdateCanvaCreativeLink();editorialCalendarEditorChanged()" /></div>
             <a class="btn" id="ec-canva-open-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;text-decoration:none">Open in Canva</a>
           </div>
-          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:12px">
-            <div><label for="ec-canva-creative-image-url">Finished creative image URL</label><input id="ec-canva-creative-image-url" placeholder="Paste exported Canva creative image URL" oninput="editorialCalendarUpdateCanvaCreativePreview();editorialCalendarEditorChanged()" /></div>
-            <a class="btn" id="ec-canva-open-image-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;text-decoration:none">Open creative image</a>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" type="button" id="ec-canva-add-link-btn" onclick="editorialCalendarFocusCanvaLink()">Add Canva link</button>
+            <button class="btn" type="button" id="ec-canva-create-btn" onclick="editorialCalendarCreateCanvaCreative()">Create Canva creative</button>
           </div>
-          <div id="ec-canva-creative-preview" class="hint" style="border:1px dashed var(--g2);border-radius:8px;background:var(--gray);padding:12px;min-height:48px;display:flex;align-items:center;justify-content:center;text-align:center">No finished creative added</div>
         </div>
         <div class="sfield" style="grid-column:1/-1">
           <label>Body</label>
@@ -1694,11 +1711,15 @@ var newsBriefSocialState = {
   creativeGenerating: false,
   creativeFields: {},
   creativeImageUrl: '',
-  canvaCreativeImageUrl: '',
   canvaDesignUrl: '',
   canvaConfirmed: false,
   templateConfigSnapshot: null,
+  calendarSourceEntry: null,
   dirty: false
+};
+var canvaInstructionsState = {
+  url: '',
+  returnFocus: null
 };
 var adminCanvaState = {
   loading: false,
@@ -1858,11 +1879,49 @@ window.addEventListener('pageshow', function() {
 });
 window.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
+    var canvaModal = document.getElementById('canva-instructions-modal');
+    if (canvaModal && canvaModal.style.display === 'flex') { closeCanvaInstructionsModal(); return; }
     var draftModal = document.getElementById('draft-type-modal');
     if (draftModal && draftModal.style.display === 'flex') { closeDraftTypeModal(); return; }
     closeEditorialTrackerOverlay();
   }
 });
+function openCanvaInstructionsModal(url, returnFocus) {
+  var safeUrl = editorialCalendarSafeHttpUrl(url);
+  if (!safeUrl) return false;
+  var modal = document.getElementById('canva-instructions-modal');
+  if (!modal) return false;
+  canvaInstructionsState.url = safeUrl;
+  canvaInstructionsState.returnFocus = returnFocus && typeof returnFocus.focus === 'function' ? returnFocus : null;
+  modal.style.display = 'flex';
+  var back = document.getElementById('canva-instructions-back-btn');
+  if (back) back.focus();
+  return true;
+}
+function closeCanvaInstructionsModal() {
+  var modal = document.getElementById('canva-instructions-modal');
+  if (modal) modal.style.display = 'none';
+  if (canvaInstructionsState.returnFocus && typeof canvaInstructionsState.returnFocus.focus === 'function') canvaInstructionsState.returnFocus.focus();
+  canvaInstructionsState.url = '';
+  canvaInstructionsState.returnFocus = null;
+}
+function confirmCanvaInstructionsOpen() {
+  var url = canvaInstructionsState.url;
+  closeCanvaInstructionsModal();
+  if (url) window.open(url, '_blank', 'noopener,noreferrer');
+}
+function handleCanvaInstructionsBackdrop(event) {
+  if (event.target === event.currentTarget) closeCanvaInstructionsModal();
+}
+function openSelectedNewsBriefSocialCanvaTemplate(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  var template = newsBriefSocialTemplateByKey(newsBriefSocialState.templateKey);
+  if (!template || !template.url) return;
+  openCanvaInstructionsModal(template.url, event && event.currentTarget);
+}
 function updateTopUpdatedVisibility(show) {
   var el = document.getElementById('top-updated-status');
   if (el) el.style.display = show ? 'inline-flex' : 'none';
@@ -3547,10 +3606,6 @@ function editorialCalendarCanvaDesignUrl(entry) {
   entry = entry || {};
   return editorialCalendarSafeHttpUrl(entry.canvaDesignUrl || entry.canvaShareUrl || entry.canvaCreativeUrl || '');
 }
-function editorialCalendarCanvaCreativeImageUrl(entry) {
-  entry = entry || {};
-  return editorialCalendarSafeHttpUrl(entry.canvaCreativeImageUrl || entry.finishedCreativeImageUrl || entry.socialCreativeImageUrl || entry.creativeImageUrl || '');
-}
 function editorialCalendarPopulateCanvaCreative(entry) {
   entry = entry || {};
   var templateName = editorialCalendarCanvaTemplateName(entry);
@@ -3558,54 +3613,67 @@ function editorialCalendarPopulateCanvaCreative(entry) {
   if (templateEl) templateEl.textContent = templateName || 'None selected';
   var designInput = document.getElementById('ec-canva-design-url');
   if (designInput) designInput.value = editorialCalendarCanvaDesignUrl(entry);
-  var creativeInput = document.getElementById('ec-canva-creative-image-url');
-  if (creativeInput) creativeInput.value = editorialCalendarCanvaCreativeImageUrl(entry);
-  editorialCalendarUpdateCanvaCreativePreview();
+  editorialCalendarUpdateCanvaCreativeLink();
 }
-function editorialCalendarUpdateCanvaCreativePreview() {
+function editorialCalendarUpdateCanvaCreativeLink() {
   var designInput = document.getElementById('ec-canva-design-url');
-  var creativeInput = document.getElementById('ec-canva-creative-image-url');
   var canvaLink = document.getElementById('ec-canva-open-link');
-  var imageLink = document.getElementById('ec-canva-open-image-link');
-  var preview = document.getElementById('ec-canva-creative-preview');
+  var missing = document.getElementById('ec-canva-missing-state');
   var designUrl = editorialCalendarSafeHttpUrl(designInput && designInput.value);
-  var creativeUrl = editorialCalendarSafeHttpUrl(creativeInput && creativeInput.value);
   if (canvaLink) {
     canvaLink.href = designUrl || '#';
     canvaLink.rel = 'noopener noreferrer';
     canvaLink.style.display = designUrl ? 'inline-flex' : 'none';
   }
-  if (imageLink) {
-    imageLink.href = creativeUrl || '#';
-    imageLink.rel = 'noopener noreferrer';
-    imageLink.style.display = creativeUrl ? 'inline-flex' : 'none';
-  }
-  if (!preview) return;
-  preview.textContent = '';
-  while (preview.firstChild) preview.removeChild(preview.firstChild);
-  if (!creativeInput || !String(creativeInput.value || '').trim()) {
-    preview.textContent = 'No finished creative added';
-    return;
-  }
-  if (!creativeUrl) {
-    preview.textContent = 'Preview unavailable';
-    return;
-  }
-  var img = document.createElement('img');
-  img.src = creativeUrl;
-  img.alt = 'Finished Canva creative preview';
-  img.style.maxWidth = '100%';
-  img.style.maxHeight = '420px';
-  img.style.height = 'auto';
-  img.style.objectFit = 'contain';
-  img.style.borderRadius = '8px';
-  img.style.border = '1px solid var(--bdr)';
-  img.style.background = '#fff';
-  img.onerror = function() {
-    while (preview.firstChild) preview.removeChild(preview.firstChild);
-    preview.textContent = 'Preview unavailable';
+  if (missing) missing.style.display = designUrl ? 'none' : 'block';
+}
+function editorialCalendarFocusCanvaLink() {
+  var input = document.getElementById('ec-canva-design-url');
+  if (input) input.focus();
+}
+function editorialCalendarSocialContextFromEntry(entry) {
+  entry = entry || {};
+  return {
+    articleId:entry.originalRecordId || entry.id || editorialCalendarState.editorEntryId || '',
+    title:entry.title || '',
+    standfirst:entry.summary || '',
+    summary:entry.summary || '',
+    body:entry.contentCopy || '',
+    imageUrl:entry.imageUrl || entry.image || entry.coverImage || entry.thumbnail || '',
+    webflowImageUrl:entry.imageUrl || '',
+    newsImage:entry.imageUrl || '',
+    submittedStoryUrl:entry.publishedUrl || entry.originalRecordLink || '',
+    sourceUrl:entry.sourceUrl || '',
+    contentType:'news_brief',
+    sourceType:'news_brief',
+    firebaseData:{
+      imageUrl:entry.imageUrl || '',
+      webflowImageUrl:entry.imageUrl || '',
+      newsImage:entry.imageUrl || ''
+    }
   };
-  preview.appendChild(img);
+}
+function editorialCalendarCreateCanvaCreative() {
+  var entry = Object.assign({}, editorialCalendarState.editorOriginal || {}, editorialCalendarCollectEditorData(false), {
+    id:editorialCalendarState.editorEntryId || (editorialCalendarState.editorOriginal && editorialCalendarState.editorOriginal.id) || ''
+  });
+  if (!entry.id) { fbToast('Save this calendar entry before creating a Canva creative.', false); return; }
+  var context = editorialCalendarSocialContextFromEntry(entry);
+  offerNewsBriefSocialWorkflow(context);
+  newsBriefSocialState.calendarEntryId = entry.id;
+  newsBriefSocialState.calendarSourceEntry = entry;
+  newsBriefSocialState.stage = 'template';
+  newsBriefSocialState.canvaDesignUrl = editorialCalendarCanvaDesignUrl(entry);
+  newsBriefSocialState.templateKey = editorialCalendarCanvaTemplateId(entry);
+  newsBriefSocialState.templateName = editorialCalendarCanvaTemplateName(entry);
+  newsBriefSocialState.templateDesignId = entry.canvaTemplateDesignId || '';
+  newsBriefSocialState.templateUrl = entry.canvaTemplateUrl || '';
+  newsBriefSocialState.options = [{label:'Calendar post', text:stripHtml(entry.contentCopy || entry.summary || entry.title || '')}];
+  newsBriefSocialState.selectedIndex = 0;
+  newsBriefSocialState.creativeFields = {};
+  newsBriefSocialState.canvaConfirmed = false;
+  newsBriefSocialState.dirty = false;
+  startNewsBriefSocialWorkflow();
 }
 function editorialCalendarEditorChanged() {
   editorialCalendarState.editorDirty = true;
@@ -3643,11 +3711,8 @@ function editorialCalendarCollectEditorData(validate) {
   var imageInput = document.getElementById('ec-image-url');
   var imageUrl = imageInput ? imageInput.value.trim() : (original.imageUrl || '');
   var canvaDesignInput = document.getElementById('ec-canva-design-url');
-  var canvaCreativeInput = document.getElementById('ec-canva-creative-image-url');
   var rawCanvaDesignUrl = canvaDesignInput ? canvaDesignInput.value.trim() : editorialCalendarCanvaDesignUrl(original);
-  var rawCanvaCreativeImageUrl = canvaCreativeInput ? canvaCreativeInput.value.trim() : editorialCalendarCanvaCreativeImageUrl(original);
   var canvaDesignUrl = editorialCalendarSafeHttpUrl(rawCanvaDesignUrl);
-  var canvaCreativeImageUrl = editorialCalendarSafeHttpUrl(rawCanvaCreativeImageUrl);
   var summaryWords = summary ? summary.split(/\s+/).length : 0;
   var publishDate = document.getElementById('ec-publish-date').value;
   if (validate) {
@@ -3656,7 +3721,6 @@ function editorialCalendarCollectEditorData(validate) {
     if (!publishDate) throw new Error('Publish date is required.');
     if (summaryWords > 500) throw new Error('Brief summary must be 500 words or fewer.');
     if (rawCanvaDesignUrl && !canvaDesignUrl) throw new Error('Canva creative link must start with http:// or https://.');
-    if (rawCanvaCreativeImageUrl && !canvaCreativeImageUrl) throw new Error('Finished creative image URL must start with http:// or https://.');
   }
   var canvaTemplateId = editorialCalendarCanvaTemplateId(original);
   var canvaTemplateName = editorialCalendarCanvaTemplateName(original);
@@ -3668,7 +3732,6 @@ function editorialCalendarCollectEditorData(validate) {
     contentCopy:contentCopy,
     imageUrl:imageUrl,
     canvaDesignUrl:canvaDesignUrl,
-    canvaCreativeImageUrl:canvaCreativeImageUrl,
     canvaTemplateId:canvaTemplateId,
     canvaTemplateName:canvaTemplateName,
     socialTemplateKey:original.socialTemplateKey || canvaTemplateId,
@@ -3763,7 +3826,7 @@ function editorialCalendarSaveEntry(submitAndReturn) {
       fbToast('Saved');
       if (submitAndReturn) showEditorialCalendar();
       else {
-        editorialCalendarState.editorOriginal = Object.assign({id:ref.id}, data);
+        editorialCalendarState.editorOriginal = Object.assign({}, original, {id:ref.id}, data);
         editorialCalendarState.editorLoadedVersion = Date.now();
         editorialCalendarState.editorRecoveryKey = 'wocult_ec_recovery_' + ref.id;
         document.getElementById('editorial-calendar-archive-btn').style.display = 'inline-flex';
@@ -10705,10 +10768,10 @@ function resetNewsBriefSocialState() {
     creativeGenerating: false,
     creativeFields: {},
     creativeImageUrl: '',
-    canvaCreativeImageUrl: '',
     canvaDesignUrl: '',
     canvaConfirmed: false,
     templateConfigSnapshot: null,
+    calendarSourceEntry: null,
     dirty: false
   };
   var modal = document.getElementById('news-brief-social-modal');
@@ -10969,7 +11032,7 @@ function testAdminCanvaLink(id) {
   if (idx < 0) return;
   var url = String(adminCanvaState.templates[idx].canvaUrl || '').trim();
   if (!url || !isSafeHttpUrl(url, false)) { setAdminCanvaStatus('Enter a safe http or https Canva URL before testing.', true); return; }
-  window.open(url, '_blank', 'noopener,noreferrer');
+  openCanvaInstructionsModal(url, document.activeElement);
 }
 
 function validateAdminCanvaTemplates(templates) {
@@ -11124,10 +11187,10 @@ function offerNewsBriefSocialWorkflow(articleContext) {
   newsBriefSocialState.creativeFields = {};
   newsBriefSocialState.creativeGenerating = false;
   newsBriefSocialState.creativeImageUrl = newsBriefSocialImageFromArticle(articleContext);
-  newsBriefSocialState.canvaCreativeImageUrl = '';
   newsBriefSocialState.canvaDesignUrl = '';
   newsBriefSocialState.canvaConfirmed = false;
   newsBriefSocialState.templateConfigSnapshot = null;
+  newsBriefSocialState.calendarSourceEntry = null;
   newsBriefSocialState.imageUrl = newsBriefSocialState.creativeImageUrl;
   newsBriefSocialState.imageUrlEdited = false;
   newsBriefSocialState.dirty = false;
@@ -11325,18 +11388,28 @@ function renderNewsBriefSocialTemplates() {
   wrap.innerHTML = templates.map(function(template, idx) {
     var selected = template.key === newsBriefSocialState.templateKey;
     return '<div class="news-social-template-card '+(selected ? 'selected' : '')+'" role="button" aria-selected="'+(selected ? 'true' : 'false')+'" onclick="selectNewsBriefSocialTemplate(\''+template.key+'\')">'
-      + '<a href="'+escapeHtml(template.url)+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="Preview '+escapeHtml(template.name)+' in Canva">'
+      + '<button class="news-social-template-preview-open" type="button" data-canva-url="'+escapeAttr(template.url)+'" aria-label="Preview '+escapeAttr(template.name)+' in Canva" style="display:block;width:100%;padding:0;border:0;background:none;cursor:pointer">'
       + '<img class="news-social-template-preview" src="'+escapeHtml(template.previewImage || '')+'" alt="'+escapeHtml(template.name+' preview')+'" onerror="this.style.display=\'none\';this.parentElement.nextElementSibling.style.display=\'flex\';" />'
-      + '</a><div class="news-social-template-preview-fallback">Preview unavailable</div>'
+      + '</button><div class="news-social-template-preview-fallback">Preview unavailable</div>'
       + '<div class="hint" style="font-weight:700">Template '+(idx + 1)+'</div>'
       + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div style="font-size:16px;font-weight:700;color:var(--blk);margin:4px 0">'+escapeHtml(template.name)+'</div><span style="font-size:11px;color:'+(selected ? 'var(--yd)' : 'var(--g3)')+'">'+(selected ? 'Selected' : 'Select')+'</span></div>'
       + '<div class="hint" style="line-height:1.5;margin-bottom:8px">'+escapeHtml(template.description)+'</div>'
       + '<div class="hint">Fields: '+escapeHtml(template.fields.map(function(field){ return newsBriefSocialFieldLabel(template, field); }).join(', '))+'</div>'
-      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" onclick="event.stopPropagation();selectNewsBriefSocialTemplate(\''+template.key+'\')">'+(selected ? 'Selected' : 'Select template')+'</button><a class="btn" href="'+escapeHtml(template.url)+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="text-decoration:none">Preview in Canva</a></div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" onclick="event.stopPropagation();selectNewsBriefSocialTemplate(\''+template.key+'\')">'+(selected ? 'Selected' : 'Select template')+'</button><button class="btn news-social-template-preview-open" type="button" data-canva-url="'+escapeAttr(template.url)+'">Preview in Canva</button></div>'
       + '</div>';
   }).join('');
+  bindNewsBriefCanvaTemplateOpenButtons(wrap);
   var btn = document.getElementById('news-social-template-continue-btn');
   if (btn) btn.disabled = !newsBriefSocialState.templateKey;
+}
+function bindNewsBriefCanvaTemplateOpenButtons(root) {
+  Array.prototype.slice.call((root || document).querySelectorAll('.news-social-template-preview-open')).forEach(function(btn) {
+    btn.onclick = function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      openCanvaInstructionsModal(btn.getAttribute('data-canva-url'), btn);
+    };
+  });
 }
 
 function selectNewsBriefSocialTemplate(key) {
@@ -11410,8 +11483,9 @@ function renderNewsBriefSelectedTemplateSummary(targetId) {
     + '<div style="font-size:16px;font-weight:700;color:var(--blk);margin:4px 0">'+escapeHtml(template.name)+'</div>'
     + '<div class="hint" style="line-height:1.5;margin-bottom:8px">'+escapeHtml(template.description)+'</div>'
     + '<div class="hint">Fields: '+escapeHtml(template.fields.map(function(field){ return newsBriefSocialFieldLabel(template, field); }).join(', '))+'</div>'
-    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><a class="btn" href="'+escapeHtml(template.url)+'" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Preview in Canva</a><button class="btn" onclick="newsBriefSocialChangeTemplate()">Change template</button></div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn news-social-template-preview-open" type="button" data-canva-url="'+escapeAttr(template.url)+'">Preview in Canva</button><button class="btn" onclick="newsBriefSocialChangeTemplate()">Change template</button></div>'
     + '</div>';
+  bindNewsBriefCanvaTemplateOpenButtons(target);
 }
 
 function validateNewsBriefCreativeFields(data) {
@@ -11777,9 +11851,7 @@ function saveNewsBriefSocialToCalendar() {
   var calendarStatus = document.getElementById('news-social-calendar-status').value || 'Draft';
   var persistentImageUrl = persistentNewsBriefSocialImageUrl();
   var canvaDesignUrl = String(newsBriefSocialState.canvaDesignUrl || '').trim();
-  var canvaCreativeImageUrl = String(newsBriefSocialState.canvaCreativeImageUrl || newsBriefSocialState.finishedCreativeImageUrl || newsBriefSocialState.socialCreativeImageUrl || '').trim();
   if (canvaDesignUrl && !isPersistentImageUrl(canvaDesignUrl)) { alert('Canva creative link must start with http:// or https://.'); return; }
-  if (canvaCreativeImageUrl && !isPersistentImageUrl(canvaCreativeImageUrl)) { alert('Finished creative image URL must start with http:// or https://.'); return; }
   var imageInput = document.getElementById('news-social-image-url');
   if (imageInput) imageInput.value = persistentImageUrl;
   var status = document.getElementById('news-social-save-status');
@@ -11814,6 +11886,8 @@ function saveNewsBriefSocialToCalendar() {
       if (status) status.textContent = 'Updating the existing LinkedIn calendar entry...';
     }
     var user = currentUser || {};
+    var sourceEntry = newsBriefSocialState.calendarSourceEntry || {};
+    var fromCalendarEntry = !!(sourceEntry && sourceEntry.id);
     var collectionRef = db.collection('editorial_calendar');
     var entryRef = foundId ? collectionRef.doc(entryId) : null;
     var storyUrl = newsBriefSocialArticleUrl();
@@ -11832,7 +11906,6 @@ function saveNewsBriefSocialToCalendar() {
       canvaTemplateDesignId:template.designId,
       canvaTemplateUrl:template.url,
       canvaDesignUrl:canvaDesignUrl,
-      canvaCreativeImageUrl:canvaCreativeImageUrl,
       creativeHeadline:newsBriefSocialState.creativeFields.headline || '',
       canvaConfirmed:newsBriefSocialState.canvaConfirmed === true,
       owner:owner,
@@ -11841,9 +11914,9 @@ function saveNewsBriefSocialToCalendar() {
       status:calendarStatus,
       sourceUrl:storyUrl || article.sourceUrl || '',
       publishedUrl:article.submittedStoryUrl || article.publishedUrl || '',
-      originalCollection:'articles',
-      originalRecordId:newsBriefSocialState.articleId,
-      originalRecordLink:storyUrl || article.sourceUrl || '',
+      originalCollection:fromCalendarEntry ? (sourceEntry.originalCollection || '') : 'articles',
+      originalRecordId:fromCalendarEntry ? (sourceEntry.originalRecordId || '') : newsBriefSocialState.articleId,
+      originalRecordLink:sourceEntry.originalRecordLink || storyUrl || article.sourceUrl || '',
       creatorUid:user.uid || '',
       creatorEmail:user.email || '',
       creatorName:user.displayName || user.email || 'Wocult editor',
@@ -11862,9 +11935,10 @@ function saveNewsBriefSocialToCalendar() {
     return writePromise.then(function(writtenRef) {
       entryRef = writtenRef || entryRef;
       newsBriefSocialState.calendarEntryId = entryRef.id;
+      var previousEntry = (editorialCalendarState.entries || []).find(function(e) { return e.id === entryRef.id; }) || {};
       editorialCalendarState.entries = (editorialCalendarState.entries || []).filter(function(e) {
         return e.id !== entryRef.id;
-      }).concat([Object.assign({id:entryRef.id}, data)]);
+      }).concat([Object.assign({}, previousEntry, {id:entryRef.id}, data)]);
       editorialCalendarState.linkedSourceKeys['articles:' + newsBriefSocialState.articleId] = entryRef.id;
       return editorialCalendarLogActivity(entryRef.id, 'Created entry', 'Created from news brief social workflow.');
     }).then(function() {
@@ -13422,15 +13496,44 @@ function copyNewsBriefSocialImage() {
   });
 }
 
-function downloadNewsBriefSocialImage() {
+function newsBriefSocialImageDownloadFilename(url) {
+  try {
+    var name = new URL(url).pathname.split('/').pop() || '';
+    if (name && /\.[A-Za-z0-9]{2,5}$/.test(name)) return name.replace(/[^A-Za-z0-9_.-]/g, '_');
+  } catch(e) {}
+  return 'wocult-news-brief-image.jpg';
+}
+
+function downloadNewsBriefSocialImage(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  var status = document.getElementById('news-social-image-transfer-status');
   var url = newsBriefSocialState.creativeImageUrl || newsBriefSocialState.imageUrl || '';
-  if (!url) return;
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = 'wocult-news-brief-image.jpg';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  if (!url) { if (status) status.textContent = 'No News Brief image is available to download.'; return Promise.resolve(false); }
+  if (!isPersistentImageUrl(url)) { if (status) status.textContent = 'The News Brief image URL is not downloadable.'; return Promise.resolve(false); }
+  if (status) status.textContent = 'Downloading image...';
+  return fetch(url, {mode:'cors'}).then(function(response) {
+    if (!response.ok) throw new Error('Image download failed.');
+    return response.blob();
+  }).then(function(blob) {
+    var objectUrl = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = newsBriefSocialImageDownloadFilename(url);
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(objectUrl); }, 0);
+    if (status) status.textContent = 'Image download started.';
+    return true;
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not download image. Copy the image URL and try again.';
+    console.warn('Could not download News Brief image:', err);
+    return false;
+  });
 }
 
 function newsBriefSocialSetCanvaDesignUrl(value) {
@@ -13457,7 +13560,7 @@ function renderNewsBriefSocialCanvaHandoff() {
     checklist.innerHTML = '<div>Template: '+escapeHtml(template.name)+'</div><div>Fields ready: '+(hasFields ? 'Yes' : 'No')+'</div><div>News Brief image: '+((newsBriefSocialState.creativeImageUrl || newsBriefSocialState.imageUrl) ? 'Ready' : 'Not selected')+'</div>';
   }
   var canvaLink = document.getElementById('news-social-open-canva-link');
-  if (canvaLink && template) canvaLink.href = template.url;
+  if (canvaLink && template) canvaLink.disabled = !template.url;
   var canvaInput = document.getElementById('news-social-canva-design-url');
   if (canvaInput && canvaInput.value !== newsBriefSocialState.canvaDesignUrl) canvaInput.value = newsBriefSocialState.canvaDesignUrl || '';
   var confirmed = document.getElementById('news-social-canva-confirmed');
