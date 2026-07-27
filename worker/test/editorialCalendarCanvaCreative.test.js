@@ -33,26 +33,14 @@ class Element {
     this.innerHTML = '';
     this.href = '';
     this.rel = '';
+    this.disabled = false;
+    this.focused = false;
   }
-
-  appendChild(child) {
-    this.children.push(child);
-    return child;
-  }
-
-  removeChild(child) {
-    this.children = this.children.filter((item) => item !== child);
-    this.childNodes = this.children;
-    return child;
-  }
-
-  get firstChild() {
-    return this.children[0] || null;
-  }
-
-  setAttribute(name, value) {
-    this.attributes[name] = String(value);
-  }
+  appendChild(child) { this.children.push(child); return child; }
+  removeChild(child) { this.children = this.children.filter((item) => item !== child); this.childNodes = this.children; return child; }
+  get firstChild() { return this.children[0] || null; }
+  setAttribute(name, value) { this.attributes[name] = String(value); }
+  focus() { this.focused = true; }
 }
 
 function createHarness(overrides = {}) {
@@ -62,30 +50,11 @@ function createHarness(overrides = {}) {
     return elements.get(id);
   }
   [
-    'editorial-calendar-editor-title',
-    'ec-title',
-    'ec-content-type',
-    'ec-content-type-other',
-    'ec-content-type-other-wrap',
-    'ec-summary',
-    'ec-summary-count',
-    'ec-owner',
-    'ec-publish-date',
-    'ec-publish-time',
-    'ec-status',
-    'ec-image-url',
-    'ec-image-preview',
-    'ec-canva-template-name',
-    'ec-canva-design-url',
-    'ec-canva-open-link',
-    'ec-canva-creative-image-url',
-    'ec-canva-open-image-link',
-    'ec-canva-creative-preview',
-    'ec-content-copy',
-    'editorial-calendar-archive-btn',
-    'editorial-calendar-restore-btn',
-    'editorial-calendar-delete-btn',
-    'editorial-calendar-editor-status',
+    'editorial-calendar-editor-title','ec-title','ec-content-type','ec-content-type-other','ec-content-type-other-wrap',
+    'ec-summary','ec-summary-count','ec-owner','ec-publish-date','ec-publish-time','ec-status','ec-image-url','ec-image-preview',
+    'ec-canva-template-name','ec-canva-design-url','ec-canva-open-link','ec-canva-missing-state','ec-canva-add-link-btn',
+    'ec-content-copy','editorial-calendar-archive-btn','editorial-calendar-restore-btn','editorial-calendar-delete-btn',
+    'editorial-calendar-editor-status'
   ].forEach((id) => element(id));
   element('ec-content-type').value = 'Social post';
   element('ec-status').value = 'Draft';
@@ -99,23 +68,12 @@ function createHarness(overrides = {}) {
     console: { warn() {}, error() {} },
     currentUser: { uid: 'user-1', email: 'editor@wocult.com', displayName: 'Editor' },
     firebase: { firestore: { FieldValue: { serverTimestamp: () => 'SERVER_TIME' } } },
-    editorialCalendarState: {
-      editorEntryId: 'calendar-1',
-      editorOriginal: {},
-      editorLoadedVersion: 1,
-    },
+    editorialCalendarState: { editorEntryId: 'calendar-1', editorOriginal: {}, editorLoadedVersion: 1 },
+    newsBriefSocialState: { options: [] },
     db: {
       collection(name) {
         assert.equal(name, 'editorial_calendar');
-        return {
-          doc(id) {
-            return {
-              id,
-              get: async () => ({ exists: true, data: () => ({ updatedAt: { seconds: 0 } }) }),
-              set: async (payload) => { writes.push(payload); },
-            };
-          },
-        };
+        return { doc: (id) => ({ id, get: async () => ({ exists: true, data: () => ({ updatedAt: { seconds: 0 } }) }), set: async (payload) => { writes.push(payload); } }) };
       },
     },
     guardStaffScreen: () => true,
@@ -126,10 +84,9 @@ function createHarness(overrides = {}) {
     editorialCalendarCheckRecovery() {},
     editorialCalendarActivityDetails: () => '',
     editorialCalendarUpdateOriginalPublishDate: async () => {},
-    fbToast() {},
+    fbToast(message) { context.toast = message; },
     confirm: () => false,
     alert(message) { context.alertMessage = message; },
-    alertMessage: '',
     localStorage: { setItem() {}, getItem() { return null; }, removeItem() {} },
     markUnsavedChanges() {},
     clearTimeout,
@@ -137,7 +94,13 @@ function createHarness(overrides = {}) {
     EDITORIAL_CALENDAR_TYPES: ['Social post', 'News piece', 'Other'],
     EDITORIAL_CALENDAR_STATUSES: ['Draft', 'Working', 'Ready', 'Scheduled', 'Published', 'Cancelled'],
     escapeHtml: (value) => String(value || ''),
+    stripHtml: (value) => String(value || '').replace(/<[^>]+>/g, ''),
     editorialCalendarSanitizeHtml: (value) => String(value || ''),
+    offerNewsBriefSocialWorkflow(articleContext) {
+      context.offeredArticle = articleContext;
+      context.newsBriefSocialState = { articleId: articleContext.articleId, article: articleContext, options: [] };
+    },
+    startNewsBriefSocialWorkflow() { context.startedSocialWorkflow = true; },
     ...overrides,
   };
   vm.createContext(context);
@@ -150,9 +113,11 @@ function createHarness(overrides = {}) {
     functionBlock('editorialCalendarCanvaTemplateId'),
     functionBlock('editorialCalendarCanvaTemplateName'),
     functionBlock('editorialCalendarCanvaDesignUrl'),
-    functionBlock('editorialCalendarCanvaCreativeImageUrl'),
     functionBlock('editorialCalendarPopulateCanvaCreative'),
-    functionBlock('editorialCalendarUpdateCanvaCreativePreview'),
+    functionBlock('editorialCalendarUpdateCanvaCreativeLink'),
+    functionBlock('editorialCalendarFocusCanvaLink'),
+    functionBlock('editorialCalendarSocialContextFromEntry'),
+    functionBlock('editorialCalendarCreateCanvaCreative'),
     functionBlock('editorialCalendarPopulateEditor'),
     functionBlock('editorialCalendarUpdateSummaryCount'),
     functionBlock('editorialCalendarCollectEditorData'),
@@ -167,132 +132,77 @@ function validEntry() {
     title: 'LinkedIn: Story',
     contentType: 'Social post',
     channels: ['LinkedIn'],
-    summary: 'Notes',
-    contentCopy: '<p>Post body</p>',
+    summary: 'Standfirst notes',
+    contentCopy: '<p>LinkedIn post body</p>',
     owner: 'Editor',
     publishDate: '2026-07-28',
     publishTime: '09:30',
     status: 'Draft',
     imageUrl: 'https://cdn.webflow.com/article-image.jpg',
-    canvaDesignUrl: ' https://example.com/design ',
-    canvaCreativeImageUrl: 'https://cdn.webflow.com/finished-creative.jpg',
+    canvaDesignUrl: ' https://example.com/public-design ',
     canvaTemplateId: 'template_1',
     canvaTemplateName: 'Full-bleed gradient',
-    canvaTemplateUrl: 'https://cdn.webflow.com/template-preview.jpg',
+    canvaTemplateUrl: 'https://canva.link/master-template',
+    canvaCreativeImageUrl: 'https://historical.example.com/old-creative.jpg',
+    recurrence: { frequency: 'Weekly' },
+    occurrenceDate: '2026-07-28',
   };
 }
 
-test('Editorial Calendar editor loads Canva creative fields and safe preview links', () => {
+test('Editorial Calendar public Canva link loads, edits and opens safely', () => {
   const { context, elements } = createHarness();
   context.editorialCalendarPopulateEditor(validEntry());
-
   assert.equal(elements.get('ec-canva-template-name').textContent, 'Full-bleed gradient');
-  assert.equal(elements.get('ec-canva-design-url').value, 'https://example.com/design');
-  assert.equal(elements.get('ec-canva-creative-image-url').value, 'https://cdn.webflow.com/finished-creative.jpg');
-  assert.equal(elements.get('ec-canva-open-link').href, 'https://example.com/design');
+  assert.equal(elements.get('ec-canva-design-url').value, 'https://example.com/public-design');
+  assert.equal(elements.get('ec-canva-open-link').href, 'https://example.com/public-design');
   assert.equal(elements.get('ec-canva-open-link').rel, 'noopener noreferrer');
-  assert.equal(elements.get('ec-canva-open-image-link').href, 'https://cdn.webflow.com/finished-creative.jpg');
-  assert.equal(elements.get('ec-canva-open-image-link').rel, 'noopener noreferrer');
-  const previewImg = elements.get('ec-canva-creative-preview').children[0];
-  assert.equal(previewImg.src, 'https://cdn.webflow.com/finished-creative.jpg');
+  assert.equal(elements.get('ec-canva-missing-state').style.display, 'none');
 });
 
-test('Editorial Calendar Canva preview never falls back to article or template images', () => {
+test('Missing Canva link shows empty state and Add Canva link focuses field', () => {
   const { context, elements } = createHarness();
-  context.editorialCalendarPopulateEditor({
-    ...validEntry(),
-    canvaCreativeImageUrl: '',
-    imageUrl: 'https://cdn.webflow.com/article-image.jpg',
-    canvaTemplateUrl: 'https://cdn.webflow.com/template-preview.jpg',
-  });
-  const preview = elements.get('ec-canva-creative-preview');
-  assert.equal(preview.textContent, 'No finished creative added');
-  assert.equal(preview.children.length, 0);
+  context.editorialCalendarPopulateEditor({ ...validEntry(), canvaDesignUrl: '' });
+  assert.equal(elements.get('ec-canva-missing-state').style.display, 'block');
+  assert.equal(elements.get('ec-canva-open-link').style.display, 'none');
+  context.editorialCalendarFocusCanvaLink();
+  assert.equal(elements.get('ec-canva-design-url').focused, true);
 });
 
-test('Editorial Calendar Canva creative image preview handles invalid and failed image states safely', () => {
-  const { context, elements } = createHarness();
-  elements.get('ec-canva-creative-image-url').value = 'javascript:alert(1)';
-  context.editorialCalendarUpdateCanvaCreativePreview();
-  assert.equal(elements.get('ec-canva-creative-preview').textContent, 'Preview unavailable');
-  assert.equal(elements.get('ec-canva-open-image-link').style.display, 'none');
-
-  elements.get('ec-canva-creative-image-url').value = 'https://cdn.webflow.com/broken.jpg';
-  context.editorialCalendarUpdateCanvaCreativePreview();
-  const img = elements.get('ec-canva-creative-preview').children[0];
-  img.onerror();
-  assert.equal(elements.get('ec-canva-creative-preview').textContent, 'Preview unavailable');
-  assert.equal(elements.get('ec-canva-creative-image-url').value, 'https://cdn.webflow.com/broken.jpg');
-});
-
-test('Editorial Calendar save updates canonical Canva fields and preserves article image', async () => {
+test('Calendar save allows missing Canva link and does not clear historical creative image data', async () => {
   const { context, elements, writes } = createHarness();
   context.editorialCalendarState.editorOriginal = validEntry();
   context.editorialCalendarPopulateEditor(validEntry());
-  elements.get('ec-title').value = 'LinkedIn: Edited story';
-  elements.get('ec-canva-design-url').value = 'https://example.com/edited-design';
-  elements.get('ec-canva-creative-image-url').value = 'https://cdn.webflow.com/edited-creative.jpg';
-  elements.get('ec-image-url').value = 'https://cdn.webflow.com/article-image.jpg';
-  context.editorialCalendarSaveEntry(false);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-
-  assert.equal(writes.length, 1);
-  assert.equal(writes[0].title, 'LinkedIn: Edited story');
-  assert.equal(writes[0].imageUrl, 'https://cdn.webflow.com/article-image.jpg');
-  assert.equal(writes[0].canvaDesignUrl, 'https://example.com/edited-design');
-  assert.equal(writes[0].canvaCreativeImageUrl, 'https://cdn.webflow.com/edited-creative.jpg');
-  assert.equal(writes[0].canvaTemplateId, 'template_1');
-  assert.equal(writes[0].canvaTemplateName, 'Full-bleed gradient');
-});
-
-test('Editorial Calendar Canva URL validation accepts HTTP(S) and rejects unsafe schemes', () => {
-  const { context, elements } = createHarness();
-  context.editorialCalendarPopulateEditor(validEntry());
-  for (const value of ['blob:https://x', 'data:image/png;base64,abc', 'file:///tmp/a.png', 'javascript:alert(1)']) {
-    elements.get('ec-canva-design-url').value = value;
-    assert.throws(() => context.editorialCalendarCollectEditorData(true), /Canva creative link must start/);
-    elements.get('ec-canva-design-url').value = 'https://example.com/design';
-    elements.get('ec-canva-creative-image-url').value = value;
-    assert.throws(() => context.editorialCalendarCollectEditorData(true), /Finished creative image URL must start/);
-  }
-  elements.get('ec-canva-design-url').value = 'http://example.com/design';
-  elements.get('ec-canva-creative-image-url').value = 'https://cdn.webflow.com/creative.jpg';
-  assert.doesNotThrow(() => context.editorialCalendarCollectEditorData(true));
-});
-
-test('Older calendar records without Canva fields still open and save with blank canonical fields', async () => {
-  const { context, elements, writes } = createHarness();
-  const oldRecord = {
-    id: 'calendar-1',
-    title: 'Old record',
-    contentType: 'Social post',
-    channels: ['LinkedIn'],
-    summary: '',
-    contentCopy: 'Body',
-    owner: 'Editor',
-    publishDate: '2026-07-28',
-    publishTime: '',
-    status: 'Draft',
-    imageUrl: 'https://cdn.webflow.com/article-image.jpg',
-  };
-  context.editorialCalendarState.editorOriginal = oldRecord;
-  context.editorialCalendarPopulateEditor(oldRecord);
-  assert.equal(elements.get('ec-canva-template-name').textContent, 'None selected');
-  assert.equal(elements.get('ec-canva-creative-preview').textContent, 'No finished creative added');
+  elements.get('ec-canva-design-url').value = '';
   context.editorialCalendarSaveEntry(false);
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(writes[0].canvaDesignUrl, '');
-  assert.equal(writes[0].canvaCreativeImageUrl, '');
+  assert.equal(writes[0].canvaTemplateId, 'template_1');
+  assert.equal(writes[0].canvaTemplateName, 'Full-bleed gradient');
+  assert.equal(Object.hasOwn(writes[0], 'canvaCreativeImageUrl'), false);
   assert.equal(writes[0].imageUrl, 'https://cdn.webflow.com/article-image.jpg');
 });
 
-test('Editorial Calendar Canva implementation avoids unsafe rendering and duplicate static IDs', () => {
-  assert.match(html, /<h3[^>]*>Canva creative<\/h3>/);
-  assert.match(functionBlock('editorialCalendarUpdateCanvaCreativePreview'), /document\.createElement\('img'\)/);
-  assert.doesNotMatch(functionBlock('editorialCalendarUpdateCanvaCreativePreview'), /innerHTML\s*=/);
-  assert.doesNotMatch(functionBlock('editorialCalendarUpdateCanvaCreativePreview'), /ec-image-url|canvaTemplateUrl|templatePreview/);
-  assert.match(functionBlock('editorialCalendarCollectEditorData'), /canvaCreativeImageUrl:canvaCreativeImageUrl/);
-  const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
-  const adminDupes = ids.filter((id, index) => id.startsWith('ec-canva-') && ids.indexOf(id) !== index);
-  assert.deepEqual(adminDupes, []);
+test('Create Canva creative reuses social workflow and retains originating calendar record', () => {
+  const { context, elements } = createHarness();
+  context.editorialCalendarState.editorOriginal = validEntry();
+  context.editorialCalendarPopulateEditor(validEntry());
+  elements.get('ec-canva-design-url').value = 'https://example.com/public-design';
+  context.editorialCalendarCreateCanvaCreative();
+  assert.equal(context.startedSocialWorkflow, true);
+  assert.equal(context.newsBriefSocialState.calendarEntryId, 'calendar-1');
+  assert.equal(context.newsBriefSocialState.stage, 'template');
+  assert.equal(context.newsBriefSocialState.canvaDesignUrl, 'https://example.com/public-design');
+  assert.equal(context.newsBriefSocialState.templateKey, 'template_1');
+  assert.equal(context.newsBriefSocialState.calendarSourceEntry.id, 'calendar-1');
+  assert.equal(context.newsBriefSocialState.calendarSourceEntry.occurrenceDate, '2026-07-28');
+  assert.equal(context.offeredArticle.imageUrl, 'https://cdn.webflow.com/article-image.jpg');
+});
+
+test('Editorial Calendar Canva implementation removes finished creative preview workflow', () => {
+  assert.doesNotMatch(html, /ec-canva-creative-image-url|ec-canva-creative-preview|ec-canva-open-image-link/);
+  assert.doesNotMatch(html, /Finished creative image URL|Open creative image|No finished creative added/);
+  assert.doesNotMatch(functionBlock('saveNewsBriefSocialToCalendar'), /canvaCreativeImageUrl|finishedCreativeImageUrl|socialCreativeImageUrl/);
+  assert.doesNotMatch(functionBlock('editorialCalendarCollectEditorData'), /canvaCreativeImageUrl/);
+  assert.match(functionBlock('editorialCalendarCreateCanvaCreative'), /offerNewsBriefSocialWorkflow/);
+  assert.match(functionBlock('editorialCalendarCreateCanvaCreative'), /startNewsBriefSocialWorkflow/);
 });
