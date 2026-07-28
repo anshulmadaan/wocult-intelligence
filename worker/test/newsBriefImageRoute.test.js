@@ -76,6 +76,12 @@ function imageForm(overrides = {}) {
   form.set('altText', 'AI search goes mainstream in India');
   form.set('imageSource', 'unsplash');
   form.set('imageRequestId', 'article-1:unsplash-1:wocult-ai-search-goes-mainstream-in-india-a7k3.jpg');
+  form.set('finalWidth', '1200');
+  form.set('finalHeight', '630');
+  form.set('sourceWidth', '1600');
+  form.set('sourceHeight', '900');
+  form.set('finalFormat', 'image/jpeg');
+  form.set('finalFileSize', '9');
   form.set('unsplashMetadata', JSON.stringify({
     unsplashPhotoId: 'unsplash-1',
     unsplashPhotographerName: 'Photographer',
@@ -538,6 +544,62 @@ test('image route rejects invalid file before Webflow', async (t) => {
   const res = await worker.fetch(authed('/news-briefs/image', { method: 'POST', body: form }), env);
   assert.equal(res.status, 400);
   assert.equal(calls.length, 0);
+});
+
+test('image route rejects images that fail News Brief final image requirements before external calls', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    throw new Error('Invalid prepared image must not call external services');
+  });
+
+  const wrongDimensions = imageForm({ finalWidth: '1199', finalHeight: '630' });
+  const wrongDimensionsRes = await worker.fetch(authed('/news-briefs/image', { method: 'POST', body: wrongDimensions }), env);
+  assert.equal(wrongDimensionsRes.status, 400);
+  assert.equal((await wrongDimensionsRes.json()).error, 'Processed image must be exactly 1200 x 630 pixels');
+
+  const smallSource = imageForm({ sourceWidth: '1199' });
+  const smallSourceRes = await worker.fetch(authed('/news-briefs/image', { method: 'POST', body: smallSource }), env);
+  assert.equal(smallSourceRes.status, 400);
+  assert.equal((await smallSourceRes.json()).error, 'Source image width must be at least 1200 pixels');
+
+  const large = new Uint8Array(200 * 1024);
+  large[0] = 0xff; large[1] = 0xd8; large[2] = 0xff; large[large.length - 1] = 0xd9;
+  const largeForm = imageForm({ finalFileSize: String(large.length) });
+  largeForm.set('file', new File([large], 'image.jpg', { type: 'image/jpeg' }));
+  const largeRes = await worker.fetch(authed('/news-briefs/image', { method: 'POST', body: largeForm }), env);
+  assert.equal(largeRes.status, 400);
+  assert.equal((await largeRes.json()).error, 'Processed JPEG must be below 200 KB');
+  assert.equal(calls.length, 0);
+});
+
+test('image route stores 1200 by 630 metadata for accepted News Brief images', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    const entry = { url: String(url), options };
+    calls.push(entry);
+    if (entry.url.includes('/documents/articles/article-1') && options.method !== 'PATCH') {
+      return new Response(JSON.stringify(articleDoc()), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (entry.url.includes('/documents/articles/article-1') && options.method === 'PATCH') {
+      return new Response(JSON.stringify(articleDoc()), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (entry.url === 'https://api.webflow.com/v2/sites/site-1/assets') {
+      return new Response(JSON.stringify({ id: 'asset-1', uploadUrl: 'https://uploads.webflow.com/asset-1', hostedUrl: 'https://cdn.webflow.com/asset-1.jpg', uploadDetails: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (entry.url === 'https://uploads.webflow.com/asset-1') return new Response('', { status: 201 });
+    if (entry.url === 'https://api.webflow.com/v2/assets/asset-1') return new Response('{}', { status: 200 });
+    if (entry.url.includes('/collections/news-collection/items/wf-news-1')) return new Response(JSON.stringify({ id: 'wf-news-1' }), { status: 200 });
+    if (entry.url === 'https://api.unsplash.com/photos/unsplash-1/download') return new Response('{}', { status: 200 });
+    throw new Error('Unexpected fetch ' + entry.url);
+  });
+  const res = await worker.fetch(authed('/news-briefs/image', { method: 'POST', body: imageForm() }), env);
+  assert.equal(res.status, 200);
+  const finalPatch = calls.filter((c) => c.url.includes('/documents/articles/article-1') && c.options.method === 'PATCH').pop();
+  assert.match(finalPatch.options.body, /"imageWidth"/);
+  assert.match(finalPatch.options.body, /"1200"/);
+  assert.match(finalPatch.options.body, /"imageHeight"/);
+  assert.match(finalPatch.options.body, /"630"/);
 });
 
 test('Firebase document and Webflow item IDs must match', async (t) => {

@@ -57,6 +57,37 @@ const REQUIRED_DRAFT_FIELDS = [
   'sourceName',
   'sourceUrl',
 ];
+const NEWS_BRIEF_HEADLINE_HARD_MAX = 70;
+const NEWS_BRIEF_STANDFIRST_HARD_MAX = 155;
+const NEWS_BRIEF_SLUG_MAX = 60;
+const NEWS_BRIEF_SLUG_STOPWORDS = new Set(['a','an','the','and','or','but','for','from','with','without','into','onto','over','under','after','before','as','at','by','in','of','on','to','is','are','was','were','be','been','being','this','that','these','those','it','its']);
+
+export function generateNewsBriefSlugFromHeadline(headline) {
+  let words = String(headline || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .replace(/-/g, ' ')
+    .split(/\s+/)
+    .map((word) => word.replace(/[^a-z0-9]/g, ''))
+    .filter((word) => word && !NEWS_BRIEF_SLUG_STOPWORDS.has(word));
+  if (!words.length) words = ['news', 'brief'];
+  while (words.length > 1 && words.join('-').length >= NEWS_BRIEF_SLUG_MAX) words.pop();
+  return words.join('-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'news-brief';
+}
+
+function isValidNewsBriefSlug(slug) {
+  const s = String(slug || '').trim();
+  return s.length > 0 && s.length < NEWS_BRIEF_SLUG_MAX && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s);
+}
+
+function newsBriefEditorialRulesPrompt() {
+  return `Headline: target length 55 to 60 characters including spaces; recommended ceiling 70 characters; hard maximum 70 characters; sentence case; front-load the most important development; preserve correct casing for names, companies, places, products, visa categories and acronyms; avoid vague clickbait; do not add filler merely to reach the target; remain accurate to the source.
+Standfirst: target length 110 to 125 characters including spaces; hard maximum 155 characters; front-load the meaning so the first 125 characters still form a useful and understandable thought; write one complete thought; add context, consequence or tension beyond the headline; do not repeat or paraphrase the headline; do not duplicate the first body paragraph; avoid generic openings such as "The development comes as"; avoid promotional language and unsupported conclusions; remain accurate to the source.
+Slug: derive from the final headline; under 60 characters; lowercase; hyphenated; punctuation removed; unnecessary stopwords removed when meaning remains clear; truncated only at a word boundary; never cut a word midway; no trailing hyphen; no number, hash or random suffix unless there is a genuine collision; preserve important names and search terms.`;
+}
 
 export function getAutomationConfig(env = {}) {
   return {
@@ -272,6 +303,9 @@ export function validateDraft(value) {
   if (value.body && !/<p[\s>]/i.test(value.body)) errors.push('body_not_html_paragraphs');
   const words = stripHtml(value.body || '').split(/\s+/).filter(Boolean).length;
   if (words < 180 || words > 500) errors.push('body_word_count_outside_news_brief_range');
+  if (String(value.title || '').trim().length > NEWS_BRIEF_HEADLINE_HARD_MAX) errors.push('headline_over_70_characters');
+  if (String(value.standfirst || '').trim().length > NEWS_BRIEF_STANDFIRST_HARD_MAX) errors.push('standfirst_over_155_characters');
+  if (!isValidNewsBriefSlug(value.slug || generateNewsBriefSlugFromHeadline(value.title))) errors.push('slug_invalid');
   return { ok: errors.length === 0, errors };
 }
 
@@ -435,6 +469,7 @@ export function buildDraftPrompt(candidate) {
   return `Write a reported Wocult news brief after verification. Return ONLY valid JSON with title, slug, shortIntro, intro40, excerpt, standfirst, body, readTime, writerName, publishedDate, beat, sourceName, sourceUrl, imageUrl, seoDescription, wocultAngle, verificationNote.
 
 Rules: 250-400 words, British English, fact-led, for working professionals, no invented quotes or unsupported numbers, valid HTML paragraphs in body only.
+${newsBriefEditorialRulesPrompt()}
 
 Candidate and verified sources:
 ${JSON.stringify(candidate, null, 2)}`;
@@ -933,6 +968,11 @@ export function automationCandidateToArticle(candidate) {
 
 export function buildAutomationNewsFieldData(draft = {}) {
   const title = toSentenceCaseHeadline(draft.title || draft.name || '');
+  const slug = generateNewsBriefSlugFromHeadline(title);
+  const standfirst = String(draft.standfirst || draft.shortIntro || draft.excerpt || '').replace(/\s+/g, ' ').trim();
+  if (title.length > NEWS_BRIEF_HEADLINE_HARD_MAX) throw new Error('Headline must be 70 characters or fewer.');
+  if (standfirst.length > NEWS_BRIEF_STANDFIRST_HARD_MAX) throw new Error('Standfirst must be 155 characters or fewer.');
+  if (!isValidNewsBriefSlug(slug)) throw new Error('Slug must be lowercase, hyphenated, under 60 characters and must not end with a hyphen.');
   const sourcePublishedDate = draft.publishedDate || draft.publishDate;
   if (!sourcePublishedDate) {
     throw new Error('Publication date and time are missing.');
@@ -945,8 +985,8 @@ export function buildAutomationNewsFieldData(draft = {}) {
   return stripEmptyOptionalFields({
     publishedDate: publishedIso,
     name: title,
-    slug: draft.slug,
-    standfirst: draft.standfirst || draft.shortIntro || draft.excerpt || '',
+    slug,
+    standfirst,
     body: draft.body || '',
     beat: draft.beat || draft.category || 'Future of Work',
     'published-date': publishedIso,

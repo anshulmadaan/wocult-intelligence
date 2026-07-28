@@ -96,22 +96,55 @@ export default {
       }
       return cleaned;
     };
+    const NEWS_BRIEF_HEADLINE_HARD_MAX = 70;
+    const NEWS_BRIEF_STANDFIRST_HARD_MAX = 155;
+    const NEWS_BRIEF_SLUG_MAX = 60;
+    const NEWS_BRIEF_SLUG_STOPWORDS = new Set(['a','an','the','and','or','but','for','from','with','without','into','onto','over','under','after','before','as','at','by','in','of','on','to','is','are','was','were','be','been','being','this','that','these','those','it','its']);
+    const generateNewsBriefSlugFromHeadline = (headline) => {
+      let words = String(headline || '')
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/&/g, ' and ')
+        .replace(/[^a-z0-9\s-]/g, ' ')
+        .replace(/-/g, ' ')
+        .split(/\s+/)
+        .map((word) => word.replace(/[^a-z0-9]/g, ''))
+        .filter((word) => word && !NEWS_BRIEF_SLUG_STOPWORDS.has(word));
+      if (!words.length) words = ['news', 'brief'];
+      while (words.length > 1 && words.join('-').length >= NEWS_BRIEF_SLUG_MAX) words.pop();
+      return words.join('-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'news-brief';
+    };
+    const isValidNewsSlug = (slug) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(slug || '').trim()) && String(slug || '').trim().length < NEWS_BRIEF_SLUG_MAX;
+    const requireNewsField = (condition, message) => {
+      if (!condition) {
+        const err = new Error(message);
+        err.status = 400;
+        throw err;
+      }
+    };
     const buildNewsFieldData = (payload) => {
       const data = payload.fieldData || payload;
       const title = toSentenceCaseHeadline(data.title || data.name);
+      const standfirst = String(data.standfirst || data.shortIntro || data['short-story-intro'] || data['story-intro-para'] || data.excerpt || '').replace(/\s+/g, ' ').trim();
+      const slug = String(data.slug || generateNewsBriefSlugFromHeadline(title)).trim();
       const sourcePublishedDate = data.publishedDate || data.publishDate || data.date || data['published-date'] || data['publish-date'];
       if (!sourcePublishedDate) {
         const err = new Error('Publication date and time are missing.');
         err.status = 400;
         throw err;
       }
+      requireNewsField(title, 'Headline is required.');
+      requireNewsField(title.length <= NEWS_BRIEF_HEADLINE_HARD_MAX, 'Headline must be 70 characters or fewer.');
+      requireNewsField(standfirst.length <= NEWS_BRIEF_STANDFIRST_HARD_MAX, 'Standfirst must be 155 characters or fewer.');
+      requireNewsField(slug && isValidNewsSlug(slug), 'Slug must be lowercase, hyphenated, under 60 characters and must not end with a hyphen.');
       const publishedDate = toWebflowDateTime(sourcePublishedDate);
       const seoDescription = limitSeoDescription(data.seoDescription || data['seo-description'] || data.standfirst || data.excerpt || data.shortIntro || data['short-story-intro'] || '');
       return stripEmptyOptionalFields({
         publishedDate,
         name: title,
-        slug: data.slug,
-        standfirst: data.standfirst || data.shortIntro || data['short-story-intro'] || data['story-intro-para'] || data.excerpt || '',
+        slug,
+        standfirst,
         body: data.body || '',
         beat: normalizeNewsBeat(data.beat || data.category || data.cat || 'Future of Work'),
         'published-date': publishedDate,
@@ -505,12 +538,20 @@ export default {
         const file = form.get('file');
         const unsplashMetadata = parseJsonText(String(form.get('unsplashMetadata') || '{}')) || {};
         if (purpose !== 'article') return jsonResponse({ ok: false, error: 'Invalid image purpose' }, 400);
-        const maxBytes = 100 * 1024;
+        const maxBytes = 200 * 1024;
+        const finalWidth = Number(form.get('finalWidth') || 0);
+        const finalHeight = Number(form.get('finalHeight') || 0);
+        const sourceWidth = Number(form.get('sourceWidth') || 0);
+        const finalFormat = safeImageText(form.get('finalFormat'), 40);
+        const finalFileSize = Number(form.get('finalFileSize') || 0);
         if (!firebaseDocId || !webflowItemId || !filename || !imageRequestId) return jsonResponse({ ok: false, error: 'Missing required image metadata' }, 400);
         if (!/^wocult-[a-z0-9-]+-[a-z0-9]{4}\.jpg$/.test(filename)) return jsonResponse({ ok: false, error: 'Invalid image filename' }, 400);
         if (!(file instanceof File)) return jsonResponse({ ok: false, error: 'Processed JPEG file is required' }, 400);
+        if (finalWidth !== 1200 || finalHeight !== 630) return jsonResponse({ ok: false, error: 'Processed image must be exactly 1200 x 630 pixels' }, 400);
+        if (sourceWidth < 1200) return jsonResponse({ ok: false, error: 'Source image width must be at least 1200 pixels' }, 400);
+        if (finalFormat && finalFormat !== 'image/jpeg') return jsonResponse({ ok: false, error: 'Final image format must be JPEG' }, 400);
         if (file.type !== 'image/jpeg') return jsonResponse({ ok: false, error: 'Only processed JPEG images are accepted' }, 400);
-        if (file.size <= 0 || file.size >= maxBytes) return jsonResponse({ ok: false, error: 'Processed JPEG must be below 100 KB' }, 400);
+        if (file.size <= 0 || file.size >= maxBytes || (finalFileSize && finalFileSize >= maxBytes)) return jsonResponse({ ok: false, error: 'Processed JPEG must be below 200 KB' }, 400);
         const probe = new Uint8Array(await file.slice(0, 3).arrayBuffer());
         if (probe[0] !== 0xff || probe[1] !== 0xd8 || probe[2] !== 0xff) return jsonResponse({ ok: false, error: 'Invalid JPEG file' }, 400);
         const article = await getArticleDoc(firebaseDocId);
@@ -540,8 +581,8 @@ export default {
           imageStatus: 'completed',
           imageSource,
           imageFilename: filename,
-          imageWidth: 1050,
-          imageHeight: 700,
+          imageWidth: 1200,
+          imageHeight: 630,
           imageFileSize: file.size,
           imageAltText: altText,
           imageUpdatedAt: new Date().toISOString(),

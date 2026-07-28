@@ -169,6 +169,40 @@ test('/webflow-news remains on the News collection', async (t) => {
   assert.equal(payload.fieldData['published-iso'], '2026-07-28T12:15:00.000Z');
 });
 
+test('/webflow-news enforces News Brief headline, standfirst and slug hard limits before Webflow', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url: String(url), options });
+    return new Response('{}', { status: 200 });
+  });
+
+  const base = {
+    fieldData: {
+      title: 'A valid news headline for Wocult readers about hiring',
+      slug: 'valid-news-headline-hiring',
+      standfirst: 'A concise standfirst below the hard maximum.',
+      body: '<p>News body</p>',
+      publishedDate: '2026-07-28T12:15:00.000Z',
+    },
+  };
+
+  const tooLongHeadline = await worker.fetch(authedRequest('/webflow-news', {
+    fieldData: { ...base.fieldData, title: 'x'.repeat(71) },
+  }), env);
+  assert.equal(tooLongHeadline.status, 400);
+
+  const tooLongStandfirst = await worker.fetch(authedRequest('/webflow-news', {
+    fieldData: { ...base.fieldData, standfirst: 'x'.repeat(156) },
+  }), env);
+  assert.equal(tooLongStandfirst.status, 400);
+
+  const badSlug = await worker.fetch(authedRequest('/webflow-news', {
+    fieldData: { ...base.fieldData, slug: 'bad slug-' },
+  }), env);
+  assert.equal(badSlug.status, 400);
+  assert.equal(calls.length, 0);
+});
+
 test('/webflow-news rejects missing publication timestamp without replacing it', async (t) => {
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, options) => {

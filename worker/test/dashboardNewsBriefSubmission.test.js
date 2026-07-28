@@ -155,6 +155,7 @@ test('News Brief submit path records Firebase success before Webflow and prevent
 test('News Brief generation prompts choose a distinct Wocult-relevant standfirst angle', () => {
   const generate = functionBlock('generateNewsBrief');
   const manual = functionBlock('generateManualNewsBriefFields');
+  const rules = functionBlock('newsBriefEditorialRulesPrompt');
   for (const block of [generate, manual]) {
     assert.match(block, /WOCULT AUDIENCE/);
     assert.match(block, /people navigating work in India, including employees, managers, jobseekers, independent professionals and business leaders/);
@@ -165,7 +166,8 @@ test('News Brief generation prompts choose a distinct Wocult-relevant standfirst
     assert.match(block, /Use Wocult(?:\\+)?'?s audience context to select the angle/);
     assert.match(block, /Do not mechanically mention "working professionals", "Indian professionals" or "employees"/);
     assert.match(block, /do not explicitly explain that it is "what this means for working professionals"/);
-    assert.match(block, /140 to 200 characters/);
+    assert.match(block, /newsBriefEditorialRulesPrompt\(\)/);
+    assert.doesNotMatch(block, /140 to 200 characters/);
     assert.match(block, /distinct angle not already expressed by the headline/);
     assert.match(block, /Do not use a generic explanation that the story matters to working professionals/i);
     assert.match(block, /Include the company, number or place only when needed to make the angle clear/i);
@@ -178,6 +180,12 @@ test('News Brief generation prompts choose a distinct Wocult-relevant standfirst
     assert.doesNotMatch(block, /explain what it means for Indian working professionals/i);
     assert.doesNotMatch(block, /what this means for employees/i);
   }
+  assert.match(rules, /Target length: 110 to 125 characters/);
+  assert.match(rules, /Hard maximum: 155 characters/);
+  assert.match(rules, /Target length: 55 to 60 characters/);
+  assert.match(rules, /Hard maximum: 70 characters/);
+  assert.match(rules, /Derived from the final headline/);
+  assert.doesNotMatch(rules, /140 to 200 characters/);
 });
 
 test('News headline normalization preserves proper nouns and acronyms without destructive lowercasing', () => {
@@ -209,9 +217,17 @@ test('News Brief Webflow field data preserves headline casing and uses fresh ISO
   };
   vm.createContext(context);
   vm.runInContext([
+    'var NEWS_BRIEF_HEADLINE_TARGET_MIN = 55, NEWS_BRIEF_HEADLINE_TARGET_MAX = 60, NEWS_BRIEF_HEADLINE_HARD_MAX = 70;',
+    'var NEWS_BRIEF_STANDFIRST_TARGET_MIN = 110, NEWS_BRIEF_STANDFIRST_TARGET_MAX = 125, NEWS_BRIEF_STANDFIRST_HARD_MAX = 155;',
+    'var NEWS_BRIEF_SLUG_MAX = 60;',
+    "var NEWS_BRIEF_SLUG_STOPWORDS = {a:1,an:1,the:1,and:1,or:1,but:1,for:1,from:1,with:1,without:1,into:1,onto:1,over:1,under:1,after:1,before:1,as:1,at:1,by:1,in:1,of:1,on:1,to:1,is:1,are:1,was:1,were:1,be:1,been:1,being:1,this:1,that:1,these:1,those:1,it:1,its:1};",
     functionBlock('normalizeNewsHeadline'),
     functionBlock('toSentenceCaseHeadline'),
     functionBlock('toWebflowDateTime'),
+    functionBlock('generateNewsBriefSlugFromHeadline'),
+    functionBlock('newsBriefLengthState'),
+    functionBlock('newsBriefSlugState'),
+    functionBlock('validateNewsBriefCmsData'),
     functionBlock('buildNewsBriefFieldData'),
   ].join('\n'), context);
   const fieldData = context.buildNewsBriefFieldData({
@@ -246,6 +262,53 @@ test('News Brief Webflow field data preserves headline casing and uses fresh ISO
   assert.doesNotMatch(build, /new Date\(\)\.toISOString\(\)/);
   assert.match(build, /'published-date': publishedIso/);
   assert.match(build, /'published-iso': publishedIso/);
+});
+
+test('News Brief editorial validation enforces hard limits while allowing target warnings', () => {
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext([
+    'var document = { getElementById(){ return null; } };',
+    'var NEWS_BRIEF_HEADLINE_TARGET_MIN = 55, NEWS_BRIEF_HEADLINE_TARGET_MAX = 60, NEWS_BRIEF_HEADLINE_HARD_MAX = 70;',
+    'var NEWS_BRIEF_STANDFIRST_TARGET_MIN = 110, NEWS_BRIEF_STANDFIRST_TARGET_MAX = 125, NEWS_BRIEF_STANDFIRST_HARD_MAX = 155;',
+    'var NEWS_BRIEF_SLUG_MAX = 60;',
+    "var NEWS_BRIEF_SLUG_STOPWORDS = {a:1,an:1,the:1,and:1,or:1,but:1,for:1,from:1,with:1,without:1,into:1,onto:1,over:1,under:1,after:1,before:1,as:1,at:1,by:1,in:1,of:1,on:1,to:1,is:1,are:1,was:1,were:1,be:1,been:1,being:1,this:1,that:1,these:1,those:1,it:1,its:1};",
+    functionBlock('generateNewsBriefSlugFromHeadline'),
+    functionBlock('newsBriefLengthState'),
+    functionBlock('newsBriefSlugState'),
+    functionBlock('validateNewsBriefCmsData'),
+  ].join('\n'), context);
+  assert.equal(context.newsBriefLengthState('headline', 'x'.repeat(54)).block, false);
+  assert.equal(context.newsBriefLengthState('headline', 'x'.repeat(55)).state, 'target');
+  assert.equal(context.newsBriefLengthState('headline', 'x'.repeat(65)).block, false);
+  assert.equal(context.newsBriefLengthState('headline', 'x'.repeat(71)).block, true);
+  assert.equal(context.newsBriefLengthState('standfirst', 'x'.repeat(109)).block, false);
+  assert.equal(context.newsBriefLengthState('standfirst', 'x'.repeat(110)).state, 'target');
+  assert.equal(context.newsBriefLengthState('standfirst', 'x'.repeat(140)).block, false);
+  assert.equal(context.newsBriefLengthState('standfirst', 'x'.repeat(156)).block, true);
+  assert.equal(context.newsBriefSlugState('valid-news-slug').block, false);
+  assert.equal(context.newsBriefSlugState('bad slug').block, true);
+  assert.equal(context.newsBriefSlugState('bad-slug-').block, true);
+  assert.equal(context.newsBriefSlugState('a'.repeat(60)).block, true);
+});
+
+test('News Brief slug helper is deterministic, lowercase and truncates on word boundaries', () => {
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext([
+    'var NEWS_BRIEF_SLUG_MAX = 60;',
+    "var NEWS_BRIEF_SLUG_STOPWORDS = {a:1,an:1,the:1,and:1,or:1,but:1,for:1,from:1,with:1,without:1,into:1,onto:1,over:1,under:1,after:1,before:1,as:1,at:1,by:1,in:1,of:1,on:1,to:1,is:1,are:1,was:1,were:1,be:1,been:1,being:1,this:1,that:1,these:1,those:1,it:1,its:1};",
+    functionBlock('generateNewsBriefSlugFromHeadline'),
+  ].join('\n'), context);
+  const slug = context.generateNewsBriefSlugFromHeadline('The JPMorgan, India GCC hiring plan shows AI services demand in 2026!');
+  assert.equal(slug, 'jpmorgan-india-gcc-hiring-plan-shows-ai-services-demand');
+  assert.equal(slug.length < 60, true);
+  assert.equal(slug.endsWith('-'), false);
+  assert.equal(slug.includes(','), false);
+  assert.equal(slug.includes('the-'), false);
+  const long = context.generateNewsBriefSlugFromHeadline('Capgemini campus creche case raises safety questions for working parents across Bengaluru technology offices');
+  assert.equal(long.length < 60, true);
+  assert.doesNotMatch(long, /offic$/);
 });
 
 test('News Brief Webflow failure state preserves Firebase save and retries only Webflow', () => {
@@ -535,8 +598,9 @@ test('News Brief image search, crop, filename and skip paths preserve submitted 
   assert.match(functionBlock('searchNewsBriefUnsplash'), /newsBriefImageState\.query = query/);
   assert.match(functionBlock('searchNewsBriefUnsplash'), /\/news-briefs\/unsplash-search/);
   assert.match(functionBlock('handleNewsBriefComputerImage'), /\^image\\\/\(jpeg\|png\|webp\)\$/);
-  assert.match(functionBlock('newsBriefImageTargetConfig'), /width:1050/);
-  assert.match(functionBlock('newsBriefImageTargetConfig'), /height:700/);
+  assert.match(functionBlock('newsBriefImageTargetConfig'), /width:1200/);
+  assert.match(functionBlock('newsBriefImageTargetConfig'), /height:630/);
+  assert.match(functionBlock('newsBriefImageTargetConfig'), /200 \* 1024/);
   assert.match(functionBlock('getNewsBriefCropDrawRect'), /newsBriefImageTargetConfig/);
   assert.match(functionBlock('canvasToJpegBlob'), /image\/jpeg/);
   assert.match(functionBlock('processNewsBriefImageOutput'), /target\.maxBytes/);
@@ -664,14 +728,14 @@ test('Canva creative generation uses deterministic Template 1 and 2 fields and A
   assert.match(html, /id="news-social-regenerate-creative-btn"[^>]*>Regenerate bullets/);
 });
 
-test('Canva workflow reuses the News Brief image while article crop remains 1050 by 700', () => {
+test('Canva workflow reuses the final validated News Brief image while article crop remains 1200 by 630', () => {
   const config = functionBlock('newsBriefImageTargetConfig');
   assert.doesNotMatch(config, /width:1080/);
   assert.doesNotMatch(config, /height:1350/);
   assert.doesNotMatch(config, /500 \* 1024/);
-  assert.match(config, /width:1050/);
-  assert.match(config, /height:700/);
-  assert.match(config, /maxBytes:100 \* 1024/);
+  assert.match(config, /width:1200/);
+  assert.match(config, /height:630/);
+  assert.match(config, /maxBytes:200 \* 1024/);
   assert.doesNotMatch(functionBlock('uploadNewsBriefImageToWorker'), /form\.append\('purpose'/);
   assert.doesNotMatch(functionBlock('useSelectedNewsBriefImage'), /newsBriefImageState\.mode === 'social'/);
   assert.match(functionBlock('newsBriefSocialImageFromArticle'), /articleContext\.imageUrl/);
@@ -802,6 +866,9 @@ test('frontend article image upload uses original request shape and stores perma
   assert.equal(form.get('filename'), 'wocult-headline-a7k3.jpg');
   assert.equal(form.get('imageRequestId'), 'article-1:upload-1:wocult-headline-a7k3.jpg');
   assert.equal(form.get('purpose'), null);
+  assert.equal(form.get('finalWidth'), '1200');
+  assert.equal(form.get('finalHeight'), '630');
+  assert.equal(form.get('finalFormat'), 'image/jpeg');
   assert.equal(form.get('file').type, 'image/jpeg');
   const updated = context.updateNewsBriefSocialContextWithImage({ articleId: 'article-1', firebaseData: {} }, result);
   assert.equal(updated.webflowImageUrl, 'https://cdn.webflow.com/news-image.jpg');

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import {
   automationCandidateToArticle,
+  buildDraftPrompt,
   buildAutomationNewsFieldData,
   callClaudeJson,
   candidateFromTrackerItem,
@@ -10,6 +11,7 @@ import {
   createStoryFingerprint,
   deterministicEligibility,
   getAutomationConfig,
+  generateNewsBriefSlugFromHeadline,
   handleAutomationRequest,
   normalizeNewsTrackerResponse,
   normalizeQualificationResponse,
@@ -276,6 +278,31 @@ test('draft JSON validation catches missing and malformed drafts', () => {
   assert.equal(validateDraft(goodDraft).ok, true);
   assert.equal(validateDraft({ ...goodDraft, body: 'plain text' }).ok, false);
   assert.equal(validateDraft({ ...goodDraft, sourceUrl: '' }).ok, false);
+  assert.equal(validateDraft({ ...goodDraft, title: 'x'.repeat(71) }).errors.includes('headline_over_70_characters'), true);
+  assert.equal(validateDraft({ ...goodDraft, standfirst: 'x'.repeat(156) }).errors.includes('standfirst_over_155_characters'), true);
+  assert.equal(validateDraft({ ...goodDraft, slug: 'bad slug-' }).errors.includes('slug_invalid'), true);
+});
+
+test('automation draft prompt includes current News Brief headline, standfirst and slug rules', () => {
+  const prompt = buildDraftPrompt({ headline: baseItem.headline });
+  assert.match(prompt, /target length 55 to 60 characters/);
+  assert.match(prompt, /hard maximum 70 characters/);
+  assert.match(prompt, /target length 110 to 125 characters/);
+  assert.match(prompt, /hard maximum 155 characters/);
+  assert.match(prompt, /derive from the final headline/);
+  assert.match(prompt, /under 60 characters/);
+  assert.doesNotMatch(prompt, /140 to 200/);
+});
+
+test('automation slug helper removes stopwords and truncates only at word boundaries', () => {
+  const slug = generateNewsBriefSlugFromHeadline('The JPMorgan, India GCC hiring plan shows AI services demand in 2026!');
+  assert.equal(slug, 'jpmorgan-india-gcc-hiring-plan-shows-ai-services-demand');
+  assert.equal(slug.length < 60, true);
+  assert.equal(slug.endsWith('-'), false);
+  assert.doesNotMatch(slug, /the|,/);
+  const long = generateNewsBriefSlugFromHeadline('Capgemini campus creche case raises safety questions for working parents across Bengaluru technology offices');
+  assert.equal(long.length < 60, true);
+  assert.doesNotMatch(long, /offic$/);
 });
 
 test('approval email renders readable HTML and recipient-specific links', () => {
@@ -339,6 +366,7 @@ test('automation Webflow News field data reuses generated publication timestamp'
     publishDate: '2026-07-27T01:00:00.000Z',
   });
   assert.equal(fieldData.publishedDate, '2026-07-28T12:15:00.000Z');
+  assert.equal(fieldData.slug, generateNewsBriefSlugFromHeadline(goodDraft.title));
   assert.equal(fieldData['published-date'], '2026-07-28T12:15:00.000Z');
   assert.equal(fieldData['published-iso'], '2026-07-28T12:15:00.000Z');
 
