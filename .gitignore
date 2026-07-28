@@ -3,6 +3,7 @@ node_modules/
 .dev.vars
 .env
 dist/
+tmp/
 .DS_Store
 
 .dev.vars*
