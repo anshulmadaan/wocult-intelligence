@@ -474,7 +474,7 @@ export default {
           'image/webp': 'webp',
         };
         const maxBytes = 2 * 1024 * 1024;
-        if (!['template1', 'template2', 'template3'].includes(templateId)) return jsonResponse({ ok: false, error: 'Invalid template ID' }, 400);
+        if (!['template1', 'template2', 'template3', 'template4'].includes(templateId)) return jsonResponse({ ok: false, error: 'Invalid template ID' }, 400);
         if (!(file instanceof File)) return jsonResponse({ ok: false, error: 'Preview image file is required' }, 400);
         if (!allowedTypes.has(file.type)) return jsonResponse({ ok: false, error: 'Preview image must be JPEG, PNG or WebP' }, 400);
         if (file.size <= 0 || file.size > maxBytes) return jsonResponse({ ok: false, error: 'Preview image must be 2 MB or smaller' }, 400);

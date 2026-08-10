@@ -25,6 +25,8 @@ service cloud.firestore {
     function isSafePreviewImageUrl(value) {
       return value is string
         && (
+          value == ""
+          ||
           value.matches('^https?://.+')
           || value in [
             "assets/canva-template-1.png",
@@ -198,11 +200,13 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly([
           "template1",
           "template2",
-          "template3"
+          "template3",
+          "template4"
         ])
         && isValidCanvaTemplate(request.resource.data.template1)
         && isValidCanvaTemplate(request.resource.data.template2)
-        && isValidCanvaTemplate(request.resource.data.template3);
+        && isValidCanvaTemplate(request.resource.data.template3)
+        && isValidCanvaTemplate(request.resource.data.template4);
     }
 
     match /editorial_config/canva_templates {

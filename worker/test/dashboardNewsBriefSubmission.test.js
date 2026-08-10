@@ -30,8 +30,9 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.9 for submit without creative workflow', () => {
-  assert.match(html, />15\.9<\/div>/);
+test('dashboard version badge is 15.10 for submit without creative workflow', () => {
+  assert.match(html, />15\.10<\/div>/);
+  assert.doesNotMatch(html, />15\.9<\/div>/);
   assert.doesNotMatch(html, />15\.8<\/div>/);
   assert.doesNotMatch(html, />15\.7<\/div>/);
   assert.doesNotMatch(html, />15\.6<\/div>/);
@@ -595,8 +596,9 @@ test('Manual long-view workflow and shared social success path are present', () 
   assert.match(functionBlock('renderLongViewSubmissionSuccess'), /Work on socials/);
 });
 
-test('Canva social workflow defines the three frozen templates and staged UI', () => {
+test('Canva social workflow defines Admin-managed template defaults and staged UI', () => {
   assert.match(html, /NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES/);
+  assert.match(html, /NEWS_BRIEF_SOCIAL_CANVA_TEMPLATE_IDS = \['template1','template2','template3','template4'\]/);
   assert.match(html, /key:'template_1'/);
   assert.match(html, /Full-bleed gradient/);
   assert.match(html, /DAHQCSJUww0/);
@@ -611,6 +613,12 @@ test('Canva social workflow defines the three frozen templates and staged UI', (
   assert.match(html, /DAHQRDKQRrY/);
   assert.match(html, /previewImage:'assets\/canva-template-3\.png'/);
   assert.match(html, /https:\/\/canva\.link\/zftpd3ly8z8tn9k/);
+  assert.match(html, /id:'template4'/);
+  assert.match(html, /key:'template4'/);
+  assert.match(html, /name:'Template 4'/);
+  assert.match(html, /description:'Headline \+ Sub-title'/);
+  assert.match(html, /https:\/\/canva\.link\/z1j5ppsibdvb01l/);
+  assert.match(html, /previewImage:''/);
   assert.match(html, /news-social-template-preview/);
   assert.match(html, /class="btn news-social-template-preview-open"/);
   assert.match(html, /function openCanvaInstructionsModal/);
@@ -664,6 +672,90 @@ test('Canva creative generation uses deterministic Template 1 and 2 fields and A
   assert.match(html, /id="news-social-regenerate-creative-btn"[^>]*>Regenerate bullets/);
 });
 
+test('Template 4 appears after Template 3 and uses deterministic headline plus standfirst without AI', async () => {
+  const context = {
+    NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES: [
+      { id: 'template1', key: 'template_1', name: 'Template 1', url: 'https://canva.link/1', enabled: true, fields: ['headline', 'subtext'], labels: { headline: 'Headline', subtext: 'Sub-title' }, limits: { headline: 72, subtext: 140 } },
+      { id: 'template2', key: 'template_2', name: 'Template 2', url: 'https://canva.link/2', enabled: true, fields: ['headline', 'subtext'], labels: { headline: 'Headline', subtext: 'Sub-title' }, limits: { headline: 72, subtext: 140 } },
+      { id: 'template3', key: 'template_3', name: 'Template 3', url: 'https://canva.link/3', enabled: true, fields: ['headline', 'bullet1', 'bullet2', 'bullet3'], labels: {}, limits: {} },
+      { id: 'template4', key: 'template4', name: 'Template 4', url: 'https://canva.link/z1j5ppsibdvb01l', enabled: true, fields: ['headline', 'subtext'], labels: { headline: 'Headline', subtext: 'Sub-title' }, limits: { headline: 72, subtext: 140 } },
+    ],
+    NEWS_BRIEF_SOCIAL_CANVA_DEFAULTS: [],
+    newsBriefSocialState: {
+      templateConfigSnapshot: null,
+      templateKey: '',
+      templateName: '',
+      templateDesignId: '',
+      templateUrl: '',
+      creativeFields: {},
+      article: { title: 'Exact News Brief headline', standfirst: 'Exact News Brief standfirst' },
+    },
+    document: { getElementById: () => null },
+    guardStaffScreen: () => true,
+    markUnsavedChanges() {},
+    renderNewsBriefSocialTemplates() {},
+    renderNewsBriefCreativeFields() {},
+    renderNewsBriefSocialCanvaHandoff() {},
+    fetch: async () => { throw new Error('AI must not be called for Template 4'); },
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    functionBlock('currentNewsBriefSocialTemplates'),
+    functionBlock('newsBriefSocialTemplateByKey'),
+    functionBlock('isNewsBriefSocialBulletTemplate'),
+    functionBlock('selectNewsBriefSocialTemplate'),
+    functionBlock('initialNewsBriefCreativeFieldsForTemplate'),
+    functionBlock('generateNewsBriefCreativeFields'),
+  ].join('\n'), context);
+  assert.equal(JSON.stringify(context.NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES.map((template) => template.id)), JSON.stringify(['template1', 'template2', 'template3', 'template4']));
+  context.newsBriefSocialState.templateConfigSnapshot = context.NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES;
+  context.selectNewsBriefSocialTemplate('template4');
+  assert.equal(context.newsBriefSocialState.templateKey, 'template4');
+  assert.equal(context.newsBriefSocialState.templateName, 'Template 4');
+  assert.equal(context.newsBriefSocialState.templateUrl, 'https://canva.link/z1j5ppsibdvb01l');
+  const fields = await context.generateNewsBriefCreativeFields(false);
+  assert.equal(JSON.stringify(fields), JSON.stringify({ headline: 'Exact News Brief headline', subtext: 'Exact News Brief standfirst' }));
+});
+
+test('Disabled Template 4 disappears from social workflow without affecting missing preview rendering', () => {
+  const context = {
+    currentNewsBriefSocialTemplates: () => [
+      { id: 'template1', key: 'template_1', name: 'Template 1', description: 'Headline + Sub-title', url: 'https://canva.link/1', previewImage: 'assets/canva-template-1.png', enabled: true, fields: ['headline', 'subtext'], labels: { headline: 'Headline', subtext: 'Sub-title' }, limits: {} },
+      { id: 'template2', key: 'template_2', name: 'Template 2', description: 'Headline + Sub-title', url: 'https://canva.link/2', previewImage: 'assets/canva-template-2.png', enabled: true, fields: ['headline', 'subtext'], labels: { headline: 'Headline', subtext: 'Sub-title' }, limits: {} },
+      { id: 'template3', key: 'template_3', name: 'Template 3', description: 'Bullets', url: 'https://canva.link/3', previewImage: 'assets/canva-template-3.png', enabled: true, fields: ['headline', 'bullet1'], labels: {}, limits: {} },
+      { id: 'template4', key: 'template4', name: 'Template 4', description: 'Headline + Sub-title', url: 'https://canva.link/z1j5ppsibdvb01l', previewImage: '', enabled: false, fields: ['headline', 'subtext'], labels: { headline: 'Headline', subtext: 'Sub-title' }, limits: {} },
+    ],
+    newsBriefSocialState: { templateKey: '', templateName: '', templateDesignId: '', templateUrl: '', creativeFields: {} },
+    escapeHtml: (value) => String(value ?? ''),
+    escapeAttr: (value) => String(value ?? ''),
+    newsBriefSocialFieldLabel: (template, field) => (template.labels && template.labels[field]) || field,
+    bindNewsBriefCanvaTemplateOpenButtons() {},
+    document: {
+      getElementById(id) {
+        if (id === 'news-social-template-options') return context.wrap;
+        if (id === 'news-social-template-continue-btn') return { disabled: false };
+        return null;
+      },
+    },
+    wrap: { innerHTML: '' },
+  };
+  vm.createContext(context);
+  vm.runInContext(functionBlock('renderNewsBriefSocialTemplates'), context);
+  context.renderNewsBriefSocialTemplates();
+  assert.doesNotMatch(context.wrap.innerHTML, /template4/);
+  assert.doesNotMatch(context.wrap.innerHTML, /z1j5ppsibdvb01l/);
+  context.currentNewsBriefSocialTemplates = () => [
+    { id: 'template1', key: 'template_1', name: 'Template 1', description: 'Headline + Sub-title', url: 'https://canva.link/1', previewImage: 'assets/canva-template-1.png', enabled: true, fields: ['headline', 'subtext'], labels: { headline: 'Headline', subtext: 'Sub-title' }, limits: {} },
+    { id: 'template2', key: 'template_2', name: 'Template 2', description: 'Headline + Sub-title', url: 'https://canva.link/2', previewImage: 'assets/canva-template-2.png', enabled: true, fields: ['headline', 'subtext'], labels: { headline: 'Headline', subtext: 'Sub-title' }, limits: {} },
+    { id: 'template3', key: 'template_3', name: 'Template 3', description: 'Bullets', url: 'https://canva.link/3', previewImage: 'assets/canva-template-3.png', enabled: true, fields: ['headline', 'bullet1'], labels: {}, limits: {} },
+    { id: 'template4', key: 'template4', name: 'Template 4', description: 'Headline + Sub-title', url: 'https://canva.link/z1j5ppsibdvb01l', previewImage: '', enabled: true, fields: ['headline', 'subtext'], labels: { headline: 'Headline', subtext: 'Sub-title' }, limits: {} },
+  ];
+  context.renderNewsBriefSocialTemplates();
+  assert.match(context.wrap.innerHTML, /Template 4/);
+  assert.match(context.wrap.innerHTML, /template4/);
+  assert.match(context.wrap.innerHTML, /Preview unavailable/);
+});
+
 test('Canva workflow reuses the News Brief image while article crop remains 1050 by 700', () => {
   const config = functionBlock('newsBriefImageTargetConfig');
   assert.doesNotMatch(config, /width:1080/);
@@ -709,6 +801,70 @@ test('Canva handoff and calendar save reuse News Brief image and persist templat
   assert.match(functionBlock('renderNewsBriefSocialFinalReview'), /Final LinkedIn post/);
   assert.match(functionBlock('renderNewsBriefSocialFinalReview'), /Canva creative link/);
   assert.doesNotMatch(functionBlock('renderNewsBriefSocialFinalReview'), /newsBriefSocialArticleUrl\(\)/);
+});
+
+test('Template 4 master URL remains separate from saved public Canva design URL', async () => {
+  const writes = [];
+  const context = {
+    currentUser: { uid: 'user-1', email: 'editor@wocult.com', displayName: 'Editor' },
+    firebase: { firestore: { FieldValue: { serverTimestamp: () => 'SERVER_TIME' } } },
+    editorialCalendarState: { entries: [], linkedSourceKeys: {} },
+    guardStaffScreen: () => true,
+    clearUnsavedChanges() {},
+    document: {
+      getElementById(id) {
+        const values = {
+          'news-social-calendar-title': { value: 'LinkedIn: Headline' },
+          'news-social-owner': { value: 'Editor' },
+          'news-social-publish-date': { value: '2026-07-25' },
+          'news-social-publish-time': { value: '09:30' },
+          'news-social-calendar-status': { value: 'Draft' },
+          'news-social-save-status': { textContent: '' },
+          'news-social-save-btn': { disabled: false, textContent: 'Add to Editorial Calendar' },
+          'news-social-complete': { style: { display: 'none' } },
+        };
+        return values[id] || null;
+      },
+    },
+    db: { collection: () => ({ where() { return this; }, limit() { return this; }, async get() { return { forEach() {} }; }, async add(data) { writes.push(data); return { id: 'calendar-template4' }; } }) },
+    editorialCalendarLogActivity: async () => {},
+    NEWS_BRIEF_SOCIAL_CANVA_TEMPLATES: [
+      { id: 'template4', key: 'template4', name: 'Template 4', designId: '', url: 'https://canva.link/z1j5ppsibdvb01l', fields: ['headline', 'subtext'] },
+    ],
+    newsBriefSocialState: {
+      articleId: 'article-4',
+      article: { title: 'News title', sourceUrl: 'https://reuters.com/story', submittedStoryUrl: 'https://wocult.com/news-title', firebaseData: {} },
+      options: [{ label: 'Edited', text: 'Edited LinkedIn post' }],
+      selectedIndex: 0,
+      saving: false,
+      calendarEntryId: '',
+      templateKey: 'template4',
+      creativeFields: { headline: 'News title', subtext: 'Standfirst text' },
+      canvaConfirmed: true,
+      canvaDesignUrl: 'https://www.canva.com/design/final-copy',
+      creativeImageUrl: '',
+      imageUrl: '',
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    functionBlock('escapeHtml'),
+    functionBlock('newsBriefSocialTemplateByKey'),
+    functionBlock('isPersistentImageUrl'),
+    functionBlock('persistentNewsBriefSocialImageUrl'),
+    functionBlock('newsBriefSocialArticleUrl'),
+    functionBlock('selectedNewsBriefSocialCopy'),
+    functionBlock('newsBriefSocialSummary'),
+    functionBlock('newsBriefTechnicalMessage'),
+    functionBlock('showNewsBriefSocialSaveComplete'),
+    functionBlock('saveNewsBriefSocialToCalendar'),
+  ].join('\n'), context);
+  await context.saveNewsBriefSocialToCalendar();
+  assert.equal(writes[0].canvaTemplateId, 'template4');
+  assert.equal(writes[0].canvaTemplateName, 'Template 4');
+  assert.equal(writes[0].canvaTemplateUrl, 'https://canva.link/z1j5ppsibdvb01l');
+  assert.equal(writes[0].canvaDesignUrl, 'https://www.canva.com/design/final-copy');
+  assert.notEqual(writes[0].canvaTemplateUrl, writes[0].canvaDesignUrl);
 });
 
 test('Social workflow reset clears Canva template state without changing article image data or feature flags', () => {
