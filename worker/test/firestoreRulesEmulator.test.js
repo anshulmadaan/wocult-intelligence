@@ -52,6 +52,7 @@ function validConfig(overrides = {}) {
     template1: template({ name: 'Wocult Template 1', previewImageUrl: 'assets/canva-template-1.png' }),
     template2: template({ name: 'Wocult Template 2', previewImageUrl: 'assets/canva-template-2.png' }),
     template3: template({ name: 'Wocult Template 3', previewImageUrl: 'assets/canva-template-3.png' }),
+    template4: template({ name: 'Wocult Template 4', previewImageUrl: '' }),
     ...overrides,
   };
 }
@@ -82,6 +83,15 @@ function dashboardDefaultConfig() {
         field('bullet', 'Bullet 1', 'bullet1'),
         field('bullet', 'Bullet 2', 'bullet2'),
         field('bullet', 'Bullet 3', 'bullet3'),
+      ],
+    }),
+    template4: template({
+      name: 'Wocult Template 4',
+      previewImageUrl: '',
+      canvaUrl: 'https://canva.link/z1j5ppsibdvb01l',
+      fields: [
+        field('headline', 'Headline', 'headline'),
+        field('subtitle', 'Sub-title', 'subtitle'),
       ],
     }),
   });
@@ -183,7 +193,10 @@ test('Canva shape validation rejects missing or extra top-level template keys', 
   const missing3 = validConfig();
   delete missing3.template3;
   await assertAdminWriteDenied(missing3);
-  await assertAdminWriteDenied(validConfig({ template4: template() }));
+  const missing4 = validConfig();
+  delete missing4.template4;
+  await assertAdminWriteDenied(missing4);
+  await assertAdminWriteDenied(validConfig({ template5: template() }));
   await assertAdminWriteDenied({ ...validConfig(), extraTopLevel: true });
 });
 
@@ -279,6 +292,10 @@ test('Canva URL validation accepts UI-normalized safe URLs and local preview fal
     template3: template({
       canvaUrl: 'https://example.com/not-canva-is-allowed',
       previewImageUrl: 'assets/canva-template-3.png',
+    }),
+    template4: template({
+      canvaUrl: 'https://canva.link/z1j5ppsibdvb01l',
+      previewImageUrl: '',
     }),
   })));
 

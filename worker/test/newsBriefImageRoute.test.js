@@ -172,7 +172,7 @@ test('admin Canva preview upload rejects authenticated non-admin users', async (
   assert.equal(calls.length, 1);
 });
 
-test('admin Canva preview upload accepts verified admin user and returns permanent Webflow URL', async (t) => {
+test('admin Canva preview upload accepts verified admin user and returns permanent Webflow URL for Template 4', async (t) => {
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
     calls.push({ url: String(url), options });
@@ -182,7 +182,7 @@ test('admin Canva preview upload accepts verified admin user and returns permane
     }
     if (String(url) === 'https://api.webflow.com/v2/sites/site-1/assets') {
       const body = JSON.parse(options.body);
-      assert.match(body.fileName, /^wocult-canva-template1-\d+\.png$/);
+      assert.match(body.fileName, /^wocult-canva-template4-\d+\.png$/);
       return new Response(JSON.stringify({
         id: 'admin-asset-1',
         uploadUrl: 'https://uploads.webflow.com/admin-asset-1',
@@ -196,17 +196,18 @@ test('admin Canva preview upload accepts verified admin user and returns permane
   });
   const res = await worker.fetch(firebaseAuthed('/admin/canva-template-preview-image', {
     method: 'POST',
-    body: previewImageForm(),
+    body: previewImageForm({ templateId: 'template4' }),
   }), env);
   const body = await res.json();
   assert.equal(res.status, 200);
   assert.equal(body.ok, true);
+  assert.equal(body.templateId, 'template4');
   assert.equal(body.webflowAssetId, 'admin-asset-1');
   assert.equal(body.previewImageUrl, 'https://cdn.webflow.com/admin-asset-1.png');
   assert.equal(calls.some((call) => call.url.includes('/documents/articles/')), false);
 });
 
-test('admin Canva preview upload rejects SVG and spoofed image content before Webflow', async (t) => {
+test('admin Canva preview upload rejects unknown template IDs, SVG and spoofed image content before Webflow', async (t) => {
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
     calls.push({ url: String(url), options });
@@ -215,6 +216,13 @@ test('admin Canva preview upload rejects SVG and spoofed image content before We
     }
     throw new Error('Invalid preview image must not reach Webflow');
   });
+  const unknownTemplate = await worker.fetch(firebaseAuthed('/admin/canva-template-preview-image', {
+    method: 'POST',
+    body: previewImageForm({ templateId: 'template5' }),
+  }), env);
+  assert.equal(unknownTemplate.status, 400);
+  assert.equal((await unknownTemplate.json()).error, 'Invalid template ID');
+
   const svg = await worker.fetch(firebaseAuthed('/admin/canva-template-preview-image', {
     method: 'POST',
     body: previewImageForm({ file: new File(['<svg><script>alert(1)</script></svg>'], 'preview.svg', { type: 'image/svg+xml' }) }),
