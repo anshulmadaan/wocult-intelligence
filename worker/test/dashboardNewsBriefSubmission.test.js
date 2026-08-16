@@ -30,8 +30,9 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.10 for submit without creative workflow', () => {
-  assert.match(html, />15\.10<\/div>/);
+test('dashboard version badge is 15.11 for Webflow validation fix', () => {
+  assert.match(html, />15\.11<\/div>/);
+  assert.doesNotMatch(html, />15\.10<\/div>/);
   assert.doesNotMatch(html, />15\.9<\/div>/);
   assert.doesNotMatch(html, />15\.8<\/div>/);
   assert.doesNotMatch(html, />15\.7<\/div>/);
