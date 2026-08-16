@@ -164,9 +164,10 @@ test('/webflow-news remains on the News collection', async (t) => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://api.webflow.com/v2/collections/6a4d6ad32871d46ed1edc6a4/items');
   const payload = JSON.parse(calls[0].options.body);
-  assert.equal(payload.fieldData.publishedDate, '2026-07-28T12:15:00.000Z');
+  assert.equal(Object.hasOwn(payload.fieldData, 'publishedDate'), false);
   assert.equal(payload.fieldData['published-date'], '2026-07-28T12:15:00.000Z');
   assert.equal(payload.fieldData['published-iso'], '2026-07-28T12:15:00.000Z');
+  assert.equal(payload.fieldData['published-iso'], payload.fieldData['published-date']);
 });
 
 test('/webflow-news rejects missing publication timestamp without replacing it', async (t) => {

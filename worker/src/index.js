@@ -108,7 +108,6 @@ export default {
       const publishedDate = toWebflowDateTime(sourcePublishedDate);
       const seoDescription = limitSeoDescription(data.seoDescription || data['seo-description'] || data.standfirst || data.excerpt || data.shortIntro || data['short-story-intro'] || '');
       return stripEmptyOptionalFields({
-        publishedDate,
         name: title,
         slug: data.slug,
         standfirst: data.standfirst || data.shortIntro || data['short-story-intro'] || data['story-intro-para'] || data.excerpt || '',
