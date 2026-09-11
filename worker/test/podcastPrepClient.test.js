@@ -45,9 +45,26 @@ test('Podcast Prep save cleans up only newly uploaded unregistered audio after F
   assert.match(body, /if \(uploadCompleted && !versionRegistered && storagePath\)/);
   assert.match(body, /storage\.ref\(storagePath\)\.delete\(\)\.catch/);
   assert.match(body, /console\.warn\('Podcast Prep cleanup failed for unregistered audio:'/);
-  assert.match(body, /Please retry without closing this page/);
+  assert.match(body, /Your recording uploaded, but we couldn't finish saving it/);
   assert.doesNotMatch(body, /triggerPodcastPrepTranscription/);
   assert.doesNotMatch(body, /\/podcast-prep\/transcribe/);
+});
+
+test('Podcast Prep guest save confirms authorization and binding before Storage upload', () => {
+  const auth = functionBody('ensurePodcastPrepGuestUploadAuthorization');
+  assert.match(auth, /currentUser\.reload\(\)/);
+  assert.match(auth, /currentUser\.getIdToken\(true\)/);
+  assert.match(auth, /db\.runTransaction\(function\(tx\)/);
+  assert.match(auth, /podcastPrepNormalizeEmail\(latest\.guestEmail \|\| latest\.normalizedGuestEmail\)/);
+  assert.match(auth, /latest\.guestUid && latest\.guestUid !== uid/);
+  assert.match(auth, /patch\.guestUid = uid/);
+  assert.match(auth, /tx\.update\(ref, patch\)/);
+
+  const save = functionBody('savePodcastPrepResponse');
+  assert.match(save, /ensurePodcastPrepGuestUploadAuthorization\(session\)\.then\(function\(authorizedSession\)/);
+  assert.ok(save.indexOf('ensurePodcastPrepGuestUploadAuthorization(session)') < save.indexOf('storage.ref(storagePath).put'));
+  assert.match(save, /state\.session = Object\.assign\(\{\}, state\.session \|\| \{\}, authorizedSession\)/);
+  assert.match(save, /getPodcastRecordingStoragePath\(session\.id, currentUser\.uid, q\.id, versionRef\.id, state\.localBlob\.type\)/);
 });
 
 test('Podcast Prep guest save still advances after persisted audio without automatic transcription', () => {
@@ -58,6 +75,15 @@ test('Podcast Prep guest save still advances after persisted audio without autom
   assert.match(body, /db\.collection\('podcast_sessions'\)\.doc\(session\.id\)\.update\(sessionPatch\)/);
   assert.match(body, /if \(\(state\.session\.questions \|\| \[\]\)\[state\.activeIndex \+ 1\]\) state\.activeIndex \+= 1/);
   assert.match(body, /renderPodcastPrepQuestion\(\)/);
+});
+
+test('Podcast Prep guest save shows friendly retryable upload errors', () => {
+  const body = functionBody('savePodcastPrepResponse');
+  assert.match(body, /console\.warn\('Podcast Prep response save failed:', err\)/);
+  assert.match(body, /We couldn't save your recording\. Your recording is still available on this page\. Please try again\./);
+  assert.match(body, /Your recording uploaded, but we couldn't finish saving it\. Your recording is still available on this page\. Please try again\./);
+  assert.doesNotMatch(body, /Could not upload your response: '\+err\.message/);
+  assert.doesNotMatch(body, /storagePath \+ err\.message/);
 });
 
 test('Podcast Prep final submit does not start transcription', () => {
@@ -75,6 +101,65 @@ test('Podcast Prep staff review exposes explicit transcription, audio download a
   assert.match(render, /Add transcript manually/);
   assert.match(render, /Save transcript/);
   assert.match(render, /podcastPrepEligibleTranscriptionVersions/);
+});
+
+test('Podcast Prep staff dashboard and detail expose copyable guest links without creating sessions', () => {
+  const link = functionBody('buildPodcastPrepLink');
+  assert.match(link, /\?podcastPrep=/);
+
+  const copy = functionBody('copyPodcastPrepLink');
+  assert.match(copy, /navigator\.clipboard\.writeText\(link\)/);
+  assert.match(copy, /Guest link copied\./);
+  assert.doesNotMatch(copy, /db\.collection\('podcast_sessions'\)/);
+
+  const list = functionBody('renderPodcastPrepSessions');
+  assert.match(list, /buildPodcastPrepLink\(s\.id\)/);
+  assert.match(list, /Copy guest link/);
+  assert.match(list, /copyPodcastPrepLink\(/);
+
+  const detail = functionBody('renderPodcastPrepStaffDetail');
+  assert.match(detail, /var guestLink = buildPodcastPrepLink\(session\.id\)/);
+  assert.match(detail, /Guest link/);
+  assert.match(detail, /Copy link/);
+});
+
+test('authenticated top bar shows current Firebase email while preserving Podcast Prep guest controls', () => {
+  assert.match(html, /id="top-auth-email" class="top-auth-email"/);
+  const nav = functionBody('updateAuthenticatedNavigationForMode');
+  assert.match(nav, /email\.textContent = currentUser && currentUser\.email \? currentUser\.email : ''/);
+  assert.match(nav, /email\.style\.display = currentUser && currentUser\.email \? 'inline-flex' : 'none'/);
+  assert.match(nav, /sub\.textContent = isPodcastGuest \? 'Podcast Prep' : 'Editing Studio'/);
+  assert.match(nav, /home\.style\.display = isStaff \? 'inline-flex' : 'none'/);
+  assert.match(nav, /bell\.style\.display = currentUser && !isPodcastGuest \? 'inline-flex' : 'none'/);
+});
+
+test('Podcast Prep talking points are staff-authored, guest read-only and exported', () => {
+  const editor = functionBody('renderPodcastPrepQuestionEditor');
+  assert.match(editor, /Talking points for guest/);
+  assert.match(editor, /data-podcast-talking-index/);
+  assert.match(editor, /syncPodcastPrepTalkingPoints/);
+
+  const create = functionBody('createPodcastPrepSession');
+  assert.match(create, /talkingPoints:String\(q\.talkingPoints\|\|''\)\.trim\(\)/);
+
+  const staff = functionBody('renderPodcastPrepStaffDetail');
+  assert.match(staff, /podcast-question-talking-points/);
+  assert.match(staff, /savePodcastPrepQuestionTalkingPoints/);
+
+  const saveTalking = functionBody('savePodcastPrepQuestionTalkingPoints');
+  assert.match(saveTalking, /questions: questions/);
+  assert.match(saveTalking, /updatedAt: firebase\.firestore\.FieldValue\.serverTimestamp\(\)/);
+  assert.doesNotMatch(saveTalking, /collection\('responses'\)/);
+  assert.doesNotMatch(saveTalking, /collection\('versions'\)/);
+
+  const guest = functionBody('renderPodcastPrepQuestion');
+  assert.match(guest, /Talking points to help you prepare/);
+  assert.match(guest, /String\(q\.talkingPoints \|\| ''\)\.trim\(\)/);
+  assert.doesNotMatch(guest, /textarea[\s\S]*talkingPoints/);
+
+  const docx = functionBody('downloadPodcastPrepDocx');
+  assert.match(docx, /Talking points/);
+  assert.match(docx, /q\.talkingPoints/);
 });
 
 test('Podcast Prep bulk transcription processes eligible responses sequentially and skips completed ones', () => {
@@ -279,6 +364,7 @@ test('Podcast Prep create saves ordered questions, normalized guest email and gu
   const create = functionBody('createPodcastPrepSession');
   assert.match(create, /syncPodcastPrepQuestionEditorFromDom\(\)/);
   assert.match(create, /id:'q'\+\(i\+1\), order:i\+1, question:String\(q\.question\|\|''\)\.trim\(\)/);
+  assert.match(create, /talkingPoints:String\(q\.talkingPoints\|\|''\)\.trim\(\)/);
   assert.match(create, /normalizedGuestEmail: podcastPrepNormalizeEmail\(guestEmail\)/);
   assert.match(create, /guestUid: ''/);
   assert.match(create, /status: 'sent'/);
@@ -318,8 +404,9 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.14', () => {
-  assert.match(html, />15\.14<\/div>/);
+test('application version badge is 15.15', () => {
+  assert.match(html, />15\.15<\/div>/);
+  assert.doesNotMatch(html, />15\.14<\/div>/);
   assert.doesNotMatch(html, />15\.13<\/div>/);
   assert.doesNotMatch(html, />15\.12<\/div>/);
   assert.doesNotMatch(html, />15\.11<\/div>/);

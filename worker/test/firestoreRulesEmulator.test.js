@@ -21,7 +21,7 @@ import {
   uploadBytes,
 } from 'firebase/storage';
 
-const PROJECT_ID = 'demo-no-project';
+const PROJECT_ID = 'demo-wocult-rules';
 const RULES = readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8');
 const STORAGE_RULES = readFileSync(new URL('../../storage.rules', import.meta.url), 'utf8');
 let testEnv;
@@ -169,7 +169,7 @@ function podcastSession(overrides = {}) {
     normalizedGuestEmail: 'guest@example.com',
     guestUid: '',
     guestIntro: 'Intro',
-    questions: [{ id: 'q1', order: 1, question: 'Question?' }],
+    questions: [{ id: 'q1', order: 1, question: 'Question?', talkingPoints: '' }],
     questionCount: 1,
     completedQuestionCount: 0,
     status: 'sent',
@@ -192,7 +192,7 @@ async function assertAdminWriteDenied(payload) {
 }
 
 before(async () => {
-  assert.equal(PROJECT_ID, 'demo-no-project');
+  assert.equal(PROJECT_ID, 'demo-wocult-rules');
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
     firestore: { rules: RULES },
@@ -498,6 +498,7 @@ test('Podcast Prep guest cannot list, mutate staff fields, delete, or overwrite 
   await assertFails(getDocs(collection(guest, 'podcast_sessions')));
   await assertFails(updateDoc(podcastRef(guest), { guestEmail: 'attacker@example.com', updatedAt: new Date() }));
   await assertFails(updateDoc(podcastRef(guest), { normalizedGuestEmail: 'attacker@example.com', updatedAt: new Date() }));
+  await assertFails(updateDoc(podcastRef(guest), { questions: [{ id: 'q1', order: 1, question: 'Question?', talkingPoints: 'Guest edit' }], updatedAt: new Date() }));
   await assertFails(updateDoc(podcastRef(guest), { guestUid: 'attacker-uid', updatedAt: new Date() }));
   await assertFails(updateDoc(podcastRef(guest), { status: 'feedback_shared', updatedAt: new Date() }));
   await assertFails(updateDoc(podcastRef(guest), { status: 'ready', readyAt: new Date(), updatedAt: new Date() }));
@@ -532,6 +533,10 @@ test('Podcast Prep guest cannot list, mutate staff fields, delete, or overwrite 
     transcriptUpdatedAt: new Date(),
     transcriptUpdatedBy: 'staff-uid',
   }));
+  await assertSucceeds(updateDoc(podcastRef(staff), {
+    questions: [{ id: 'q1', order: 1, question: 'Question?', talkingPoints: 'Staff talking points' }],
+    updatedAt: new Date(),
+  }));
 });
 
 test('Podcast Prep guest can preserve feedback_shared status during revisions but cannot set it', async () => {
@@ -559,7 +564,7 @@ test('Podcast Prep Storage recordings are isolated by verified guest email, UID 
     t.skip('Storage emulator not running; run firebase emulators:exec --only firestore,storage.');
     return;
   }
-  await seed('podcast_sessions/podcast-1', podcastSession({ guestUid: 'guest-uid' }));
+  await seed('podcast_sessions/podcast-1', podcastSession({ guestUid: '' }));
   await seed('podcast_sessions/podcast-2', podcastSession({
     sessionId: 'podcast-2',
     guestEmail: 'other@example.com',
@@ -567,7 +572,6 @@ test('Podcast Prep Storage recordings are isolated by verified guest email, UID 
     guestUid: 'other-uid',
   }));
 
-  const guestStorage = authedVerifiedStorage('guest@example.com', 'guest-uid');
   const otherStorage = authedVerifiedStorage('other@example.com', 'other-uid');
   const wrongEmailStorage = authedVerifiedStorage('wrong@example.com', 'wrong-uid');
   const staffStorage = authedVerifiedStorage('anmadaan@gmail.com', 'staff-uid');
@@ -576,6 +580,14 @@ test('Podcast Prep Storage recordings are isolated by verified guest email, UID 
   const guestPath = 'podcast_recordings/podcast-1/guest-uid/q1/v1.webm';
   const otherPath = 'podcast_recordings/podcast-2/other-uid/q1/v1.webm';
 
+  await assertSucceeds(updateDoc(podcastRef(authedVerifiedDb('guest@example.com', 'guest-uid')), {
+    guestUid: 'guest-uid',
+    status: 'opened',
+    openedAt: new Date(),
+    updatedAt: new Date(),
+  }));
+  await assertSucceeds(getDoc(podcastRef(authedVerifiedDb('guest@example.com', 'guest-uid'))));
+  const guestStorage = authedVerifiedStorage('guest@example.com', 'guest-uid');
   await assertSucceeds(uploadBytes(storageRef(guestStorage, guestPath), audio));
   await assertFails(uploadBytes(storageRef(guestStorage, 'podcast_recordings/podcast-1/other-uid/q1/v2.webm'), audio));
   await assertFails(uploadBytes(storageRef(wrongEmailStorage, guestPath), audio));
