@@ -6844,17 +6844,28 @@ function checkPodcastPrepAccess(sessionId) {
     body: JSON.stringify({sessionId:sessionId})
   }).then(parseWorkerResponse);
 }
-function loadPodcastPrepGuestSession(sessionId) {
-  if (!db || !sessionId) { showAccessScreen(); return; }
-  rememberPodcastPrepRoute(sessionId);
+function podcastPrepSignedInEmailHtml() {
+  var email = currentUser && currentUser.email ? currentUser.email : '';
+  if (!email) return '';
+  return '<div class="hint" style="margin-top:4px">Signed in as: '+escapeHtml(email)+'</div>';
+}
+function showPodcastPrepGuestShell() {
   hideAllAppScreens();
-  document.getElementById('podcast-prep-guest-screen').style.display = 'flex';
-  var root = document.getElementById('podcast-prep-guest-content');
-  if (root) root.innerHTML = '<h2>Opening Podcast Prep...</h2><p class="sub">Please wait while we open your preparation room.</p>';
+  var landing = document.getElementById('landing');
+  if (landing) landing.style.display = 'block';
+  var screen = document.getElementById('podcast-prep-guest-screen');
+  if (screen) screen.style.display = 'flex';
+  return document.getElementById('podcast-prep-guest-content');
+}
+function loadPodcastPrepGuestSession(sessionId) {
+  if (!db || !sessionId) { renderPodcastPrepRouteError('This Podcast Prep link is missing or invalid.'); return; }
+  rememberPodcastPrepRoute(sessionId);
+  var root = showPodcastPrepGuestShell();
+  if (root) root.innerHTML = '<h2>Opening Podcast Prep...</h2>'+podcastPrepSignedInEmailHtml()+'<p class="sub">Please wait while we open your preparation room.</p>';
   checkPodcastPrepAccess(sessionId).then(function(access) {
     if (!access.ok) {
       if (access.reason === 'unverified') renderPodcastPrepVerifyEmail();
-      else renderPodcastPrepAccessDenied(access.invitedEmail || 'the invited email address');
+      else renderPodcastPrepAccessDenied();
       return null;
     }
     return db.collection('podcast_sessions').doc(sessionId).get();
@@ -6865,7 +6876,7 @@ function loadPodcastPrepGuestSession(sessionId) {
     var invited = podcastPrepNormalizeEmail(session.guestEmail || session.normalizedGuestEmail);
     var actual = podcastPrepNormalizeEmail(currentUser && currentUser.email);
     if (actual !== invited) {
-      renderPodcastPrepAccessDenied(invited);
+      renderPodcastPrepAccessDenied();
       return null;
     }
     if (!currentUser.emailVerified) {
@@ -6885,16 +6896,21 @@ function loadPodcastPrepGuestSession(sessionId) {
       });
     });
   }).catch(function(err) {
-    if (root) root.innerHTML = '<h2>Could not open Podcast Prep</h2><p class="sub">'+escapeHtml(err.message)+'</p>';
+    console.error('Could not open Podcast Prep session:', err);
+    renderPodcastPrepRouteError("We couldn't open this Podcast Prep session.");
   });
 }
-function renderPodcastPrepAccessDenied(invitedEmail) {
-  var root = document.getElementById('podcast-prep-guest-content');
-  if (root) root.innerHTML = '<h2>Access denied</h2><p class="sub">This Podcast Prep invitation was sent to '+escapeHtml(invitedEmail)+'. Please sign in with that verified email address or contact Wocult.</p>';
+function renderPodcastPrepAccessDenied() {
+  var root = showPodcastPrepGuestShell();
+  if (root) root.innerHTML = '<h2>Access denied</h2>'+podcastPrepSignedInEmailHtml()+'<p class="sub">This Podcast Prep invitation was sent to a different email address.</p><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px"><button class="btn-lg btn-y" onclick="logout()">Logout / Switch account</button></div>';
 }
 function renderPodcastPrepVerifyEmail() {
-  var root = document.getElementById('podcast-prep-guest-content');
-  if (root) root.innerHTML = '<h2>Verify your email</h2><p class="sub">For private Podcast Prep responses, please verify your email before opening this room.</p><button class="btn-lg btn-y" onclick="resendPodcastPrepVerification()">Resend verification email</button><div id="podcast-verify-status" class="hint" style="margin-top:10px"></div>';
+  var root = showPodcastPrepGuestShell();
+  if (root) root.innerHTML = '<h2>Verify your email</h2>'+podcastPrepSignedInEmailHtml()+'<p class="sub">For private Podcast Prep responses, please verify your email before opening this room.</p><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px"><button class="btn-lg btn-y" onclick="resendPodcastPrepVerification()">Resend verification email</button><button class="btn" onclick="logout()">Logout / Switch account</button></div><div id="podcast-verify-status" class="hint" style="margin-top:10px"></div>';
+}
+function renderPodcastPrepRouteError(message) {
+  var root = showPodcastPrepGuestShell();
+  if (root) root.innerHTML = '<h2>Could not open Podcast Prep</h2>'+podcastPrepSignedInEmailHtml()+'<p class="sub">'+escapeHtml(message || "We couldn't open this Podcast Prep session.")+'</p><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px"><button class="btn-lg btn-y" onclick="loadPodcastPrepGuestSession(currentAccessKey || getPodcastPrepIdFromUrl())">Try again</button><button class="btn" onclick="logout()">Sign out</button></div>';
 }
 function resendPodcastPrepVerification() {
   var status = document.getElementById('podcast-verify-status');
@@ -6934,6 +6950,7 @@ function renderPodcastPrepGuestWelcome() {
   var saved = podcastPrepSavedCount();
   if (!root) return;
   root.innerHTML = '<h2>'+escapeHtml(session.podcastTitle || 'Podcast Prep')+'</h2>'
+    + podcastPrepSignedInEmailHtml()
     + '<p class="sub">For '+escapeHtml(session.guestName || 'you')+'</p>'
     + '<div style="padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin:18px 0;line-height:1.7;white-space:pre-line">'+escapeHtml(session.guestIntro || '')+'</div>'
     + '<p class="sub">These are preparation responses, not the final podcast. Record your thoughts in your own words. Each response is saved separately, so you can stop and return later.</p>'
@@ -6946,6 +6963,7 @@ function renderPodcastPrepQuestion() {
   var state = window._podcastPrepGuest;
   var session = state.session || {};
   var questions = session.questions || [];
+  if (!root) return;
   if (!questions.length) { root.innerHTML = '<h2>No questions found.</h2>'; return; }
   var idx = Math.max(0, Math.min(state.activeIndex || 0, questions.length - 1));
   var q = questions[idx];
@@ -6956,7 +6974,7 @@ function renderPodcastPrepQuestion() {
   var feedbackHtml = session.status === 'feedback_shared' || session.status === 'ready'
     ? '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-top:16px"><div style="font-size:13px;font-weight:700;margin-bottom:8px">Wocult feedback</div><div style="font-size:13px;line-height:1.7;white-space:pre-wrap">'+escapeHtml(response.feedback || 'No question-specific feedback yet.')+'</div>'+(response.feedback ? '<button class="btn" onclick="startPodcastPrepRecording()" style="margin-top:10px">Record a revised response</button>' : '')+'</div>' : '';
   var audioId = 'guest-podcast-latest-audio';
-  root.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px"><div><h2 style="margin-bottom:6px">'+escapeHtml(session.podcastTitle||'Podcast Prep')+'</h2><div class="hint">Question '+(idx+1)+' of '+questions.length+' · '+podcastPrepSavedCount()+' of '+questions.length+' responses saved</div></div><button class="btn" onclick="renderPodcastPrepGuestWelcome()">Overview</button></div>'
+  root.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px"><div><h2 style="margin-bottom:6px">'+escapeHtml(session.podcastTitle||'Podcast Prep')+'</h2>'+podcastPrepSignedInEmailHtml()+'<div class="hint">Question '+(idx+1)+' of '+questions.length+' · '+podcastPrepSavedCount()+' of '+questions.length+' responses saved</div></div><button class="btn" onclick="renderPodcastPrepGuestWelcome()">Overview</button></div>'
     + '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-bottom:16px;font-size:17px;line-height:1.6;color:var(--blk)">'+escapeHtml(q.question||'')+'</div>'
     + (latest ? '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);margin-bottom:16px"><div style="font-size:13px;font-weight:700">Saved response '+escapeHtml(latest.versionNumber > 1 ? 'Version '+latest.versionNumber : '')+'</div>'+podcastAudioHtml(latest, audioId)+'<div class="hint" style="margin-top:8px">'+escapeHtml(podcastPrepTranscriptHumanStatus(latest))+'</div><div style="font-size:13px;line-height:1.7;margin-top:8px;white-space:pre-wrap">'+escapeHtml(latest.transcript || '')+'</div></div>' : '')
     + '<div id="podcast-recording-panel" style="padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff"><button class="btn-lg btn-y" id="podcast-record-btn" onclick="startPodcastPrepRecording()">Record response</button><div id="podcast-recording-status" class="hint" style="margin-top:10px"></div><div id="podcast-local-playback" style="margin-top:12px"></div></div>'
@@ -7116,8 +7134,9 @@ function showPodcastPrepSubmitReview() {
   var state = window._podcastPrepGuest;
   var session = state.session || {};
   var questions = session.questions || [];
+  if (!root) return;
   if (podcastPrepSavedCount() !== questions.length) return;
-  root.innerHTML = '<h2>Submit Podcast Prep</h2><p class="sub">Every question has a saved response. Submission does not need to wait for transcripts.</p>'
+  root.innerHTML = '<h2>Submit Podcast Prep</h2>'+podcastPrepSignedInEmailHtml()+'<p class="sub">Every question has a saved response. Submission does not need to wait for transcripts.</p>'
     + '<div style="display:flex;flex-direction:column;gap:10px;margin:18px 0">'+questions.map(function(q,i){ return '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:#fff"><b>Question '+(i+1)+'</b><br>'+escapeHtml(q.question||'')+'<div class="hint">Response saved</div></div>'; }).join('')+'</div>'
     + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="renderPodcastPrepQuestion()">Back</button><button class="btn-lg btn-y" onclick="submitPodcastPrepFinal()">Submit Podcast Prep</button></div><div id="podcast-submit-status" class="hint" style="margin-top:10px"></div>';
 }

@@ -5,7 +5,7 @@ import test from 'node:test';
 const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
 
 function functionBody(name) {
-  const start = html.indexOf(`function ${name}`);
+  const start = html.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} not found`);
   const brace = html.indexOf('{', start);
   let depth = 0;
@@ -119,4 +119,81 @@ test('Podcast Prep DOCX export includes manual transcripts and not_requested sta
   assert.match(body, /Transcript being prepared\./);
   assert.match(body, /Transcript unavailable\./);
   assert.doesNotMatch(body, /triggerPodcastPrepTranscription/);
+});
+
+test('Podcast Prep guest shell reopens hidden landing parent before rendering guest UI', () => {
+  const shell = functionBody('showPodcastPrepGuestShell');
+  assert.match(shell, /hideAllAppScreens\(\)/);
+  assert.match(shell, /document\.getElementById\('landing'\)/);
+  assert.match(shell, /landing\.style\.display = 'block'/);
+  assert.match(shell, /document\.getElementById\('podcast-prep-guest-screen'\)/);
+  assert.match(shell, /screen\.style\.display = 'flex'/);
+
+  const loader = functionBody('loadPodcastPrepGuestSession');
+  assert.match(loader, /var root = showPodcastPrepGuestShell\(\)/);
+  assert.doesNotMatch(loader, /hideAllAppScreens\(\);\s*document\.getElementById\('podcast-prep-guest-screen'\)\.style\.display = 'flex'/);
+});
+
+test('Podcast Prep route remains ahead of Guest Writer and preserves session id through sign-in', () => {
+  const router = functionBody('routeSignedInUser');
+  assert.match(router, /var podcastPrepId = getPodcastPrepIdFromUrl\(\) \|\| sessionStorage\.getItem\('wocultPodcastPrepSessionId'\) \|\| ''/);
+  assert.match(router, /if \(podcastPrepId\) \{/);
+  assert.match(router, /rememberPodcastPrepRoute\(podcastPrepId\)/);
+  assert.match(router, /loadPodcastPrepGuestSession\(podcastPrepId\)/);
+  assert.ok(router.indexOf('if (podcastPrepId) {') < router.indexOf("currentAccessMode = 'guest_writer'"));
+
+  const remember = functionBody('rememberPodcastPrepRoute');
+  assert.match(remember, /sessionStorage\.setItem\('wocultAccessMode', 'podcast_prep_guest'\)/);
+  assert.match(remember, /sessionStorage\.setItem\('wocultPodcastPrepSessionId', sessionId\)/);
+
+  const boot = html.slice(html.indexOf('var accessKeyFromUrl ='), html.indexOf('</script>', html.indexOf('var accessKeyFromUrl =')));
+  assert.match(boot, /if \(podcastPrepFromUrl\) \{/);
+  assert.ok(boot.indexOf('if (podcastPrepFromUrl) {') < boot.indexOf("accessKeyFromUrl && accessKeyFromUrl.trim().toUpperCase().indexOf('INT-')"));
+});
+
+test('Podcast Prep guest states visibly show authenticated email and never render blank errors', () => {
+  const email = functionBody('podcastPrepSignedInEmailHtml');
+  assert.match(email, /currentUser && currentUser\.email/);
+  assert.match(email, /Signed in as:/);
+
+  const welcome = functionBody('renderPodcastPrepGuestWelcome');
+  assert.match(welcome, /podcastPrepSignedInEmailHtml\(\)/);
+  assert.match(welcome, /Continue Preparation|Start Preparation/);
+
+  const question = functionBody('renderPodcastPrepQuestion');
+  assert.match(question, /if \(!root\) return/);
+  assert.match(question, /podcastPrepSignedInEmailHtml\(\)/);
+  assert.match(question, /Question '\+\(idx\+1\)\+'/);
+
+  const review = functionBody('showPodcastPrepSubmitReview');
+  assert.match(review, /if \(!root\) return/);
+  assert.match(review, /podcastPrepSignedInEmailHtml\(\)/);
+
+  const denied = functionBody('renderPodcastPrepAccessDenied');
+  assert.match(denied, /showPodcastPrepGuestShell\(\)/);
+  assert.match(denied, /This Podcast Prep invitation was sent to a different email address/);
+  assert.match(denied, /podcastPrepSignedInEmailHtml\(\)/);
+  assert.doesNotMatch(denied, /invitedEmail/);
+
+  const verify = functionBody('renderPodcastPrepVerifyEmail');
+  assert.match(verify, /showPodcastPrepGuestShell\(\)/);
+  assert.match(verify, /podcastPrepSignedInEmailHtml\(\)/);
+  assert.match(verify, /Resend verification email/);
+
+  const routeError = functionBody('renderPodcastPrepRouteError');
+  assert.match(routeError, /showPodcastPrepGuestShell\(\)/);
+  assert.match(routeError, /Could not open Podcast Prep/);
+  assert.match(routeError, /Try again/);
+  assert.match(routeError, /Sign out/);
+});
+
+test('Podcast Prep guest access-check and invalid session failures render useful states', () => {
+  const loader = functionBody('loadPodcastPrepGuestSession');
+  assert.match(loader, /renderPodcastPrepRouteError\('This Podcast Prep link is missing or invalid\.'\)/);
+  assert.match(loader, /if \(access\.reason === 'unverified'\) renderPodcastPrepVerifyEmail\(\)/);
+  assert.match(loader, /else renderPodcastPrepAccessDenied\(\)/);
+  assert.match(loader, /renderPodcastPrepAccessDenied\(\)/);
+  assert.match(loader, /renderPodcastPrepVerifyEmail\(\)/);
+  assert.match(loader, /console\.error\('Could not open Podcast Prep session:', err\)/);
+  assert.match(loader, /renderPodcastPrepRouteError\("We couldn't open this Podcast Prep session\."\)/);
 });
