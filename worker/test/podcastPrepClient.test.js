@@ -141,6 +141,8 @@ test('Podcast Prep route remains ahead of Guest Writer and preserves session id 
   assert.match(router, /rememberPodcastPrepRoute\(podcastPrepId\)/);
   assert.match(router, /loadPodcastPrepGuestSession\(podcastPrepId\)/);
   assert.ok(router.indexOf('if (podcastPrepId) {') < router.indexOf("currentAccessMode = 'guest_writer'"));
+  assert.ok(router.indexOf('if (podcastPrepId) {') < router.indexOf('goToLanding()'));
+  assert.match(router, /if \(isStaffUser\(user\)\) \{[\s\S]*openPodcastPrepStaffSessionFromRoute\(podcastPrepId\)/);
 
   const remember = functionBody('rememberPodcastPrepRoute');
   assert.match(remember, /sessionStorage\.setItem\('wocultAccessMode', 'podcast_prep_guest'\)/);
@@ -149,6 +151,45 @@ test('Podcast Prep route remains ahead of Guest Writer and preserves session id 
   const boot = html.slice(html.indexOf('var accessKeyFromUrl ='), html.indexOf('</script>', html.indexOf('var accessKeyFromUrl =')));
   assert.match(boot, /if \(podcastPrepFromUrl\) \{/);
   assert.ok(boot.indexOf('if (podcastPrepFromUrl) {') < boot.indexOf("accessKeyFromUrl && accessKeyFromUrl.trim().toUpperCase().indexOf('INT-')"));
+});
+
+test('staff dashboard rendering requires explicit staff authorization', () => {
+  const staff = functionBody('isStaffUser');
+  assert.match(staff, /STAFF_EMAILS\.indexOf\(\(user\.email \|\| ''\)\.toLowerCase\(\)\) !== -1/);
+
+  const landing = functionBody('goToLanding');
+  assert.match(landing, /currentAccessMode !== 'staff' \|\| !isStaffUser\(currentUser\)/);
+  assert.match(landing, /renderNonStaffAccessScreen\(\); return/);
+  assert.ok(landing.indexOf("currentAccessMode !== 'staff' || !isStaffUser(currentUser)") < landing.indexOf("document.getElementById('landing').style.display = 'block'"));
+
+  const route = functionBody('routeSignedInUser');
+  assert.match(route, /if \(isStaffUser\(user\)\) \{[\s\S]*currentAccessMode = 'staff'[\s\S]*goToLanding\(\)/);
+  assert.ok(route.indexOf('if (isStaffUser(user)) {') < route.indexOf("currentAccessMode = 'guest_writer'"));
+});
+
+test('Podcast Prep guest header hides staff Home and notification controls', () => {
+  const nav = functionBody('updateAuthenticatedNavigationForMode');
+  assert.match(nav, /var isStaff = isStaffUser\(currentUser\)/);
+  assert.match(nav, /var isPodcastGuest = currentAccessMode === 'podcast_prep_guest'/);
+  assert.match(nav, /home\.style\.display = isStaff \? 'inline-flex' : 'none'/);
+  assert.match(nav, /bell\.style\.display = currentUser && !isPodcastGuest \? 'inline-flex' : 'none'/);
+  assert.match(nav, /logoutBtn\.style\.display = currentUser \? 'inline-flex' : 'none'/);
+
+  const shell = functionBody('showPodcastPrepGuestShell');
+  assert.match(shell, /updateAuthenticatedNavigationForMode\(\)/);
+});
+
+test('non-staff root access gets limited access screen, not staff dashboard', () => {
+  const screen = functionBody('renderNonStaffAccessScreen');
+  assert.match(screen, /This account does not have staff access to Wocult Editing Studio/);
+  assert.doesNotMatch(screen, /goToLanding\(\)/);
+
+  const guard = functionBody('guardStaffScreen');
+  assert.match(guard, /renderNonStaffAccessScreen\(\)/);
+  assert.doesNotMatch(guard, /loadGuestWriterProfile\(currentUser\.uid\)/);
+
+  const enforce = functionBody('enforceStaffScreenAccess');
+  assert.match(enforce, /renderNonStaffAccessScreen\(\)/);
 });
 
 test('Podcast Prep guest states visibly show authenticated email and never render blank errors', () => {
@@ -248,7 +289,8 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.12', () => {
-  assert.match(html, />15\.12<\/div>/);
+test('application version badge is 15.13', () => {
+  assert.match(html, />15\.13<\/div>/);
+  assert.doesNotMatch(html, />15\.12<\/div>/);
   assert.doesNotMatch(html, />15\.11<\/div>/);
 });

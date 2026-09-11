@@ -30,8 +30,9 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.12 for Podcast Prep create-link fix', () => {
-  assert.match(html, />15\.12<\/div>/);
+test('dashboard version badge is 15.13 for Podcast Prep authorization fix', () => {
+  assert.match(html, />15\.13<\/div>/);
+  assert.doesNotMatch(html, />15\.12<\/div>/);
   assert.doesNotMatch(html, />15\.11<\/div>/);
   assert.doesNotMatch(html, />15\.10<\/div>/);
   assert.doesNotMatch(html, />15\.9<\/div>/);

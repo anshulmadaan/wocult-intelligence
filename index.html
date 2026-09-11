@@ -264,7 +264,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.12</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.13</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -1830,13 +1830,27 @@ function updateAdminNavigationVisibility() {
   var nav = document.getElementById('admin-nav-card');
   if (nav) nav.style.display = isAdminUser(currentUser) ? 'block' : 'none';
 }
+function updateAuthenticatedNavigationForMode() {
+  var isStaff = isStaffUser(currentUser);
+  var isPodcastGuest = currentAccessMode === 'podcast_prep_guest';
+  var home = document.getElementById('btn-back-landing');
+  var draft = document.getElementById('btn-draft-url');
+  var refine = document.getElementById('rbtn');
+  var logoutBtn = document.getElementById('btn-logout');
+  var bell = document.getElementById('notification-bell');
+  if (home) home.style.display = isStaff ? 'inline-flex' : 'none';
+  if (draft) draft.style.display = 'none';
+  if (refine) refine.style.display = 'none';
+  if (logoutBtn) logoutBtn.style.display = currentUser ? 'inline-flex' : 'none';
+  if (bell) bell.style.display = currentUser && !isPodcastGuest ? 'inline-flex' : 'none';
+  updateAdminNavigationVisibility();
+}
 function guardAdminScreen() {
   if (isAdminUser(currentUser)) return true;
   hideAllAppScreens();
   if (currentUser && isStaffUser(currentUser)) goToLanding();
   else if (currentUser) {
-    currentAccessMode = 'guest_writer';
-    loadGuestWriterProfile(currentUser.uid);
+    renderNonStaffAccessScreen();
   } else {
     showAccessScreen();
   }
@@ -1846,8 +1860,7 @@ function guardStaffScreen() {
   if (isStaffUser(currentUser)) return true;
   hideAllAppScreens();
   if (currentUser) {
-    currentAccessMode = 'guest_writer';
-    loadGuestWriterProfile(currentUser.uid);
+    renderNonStaffAccessScreen();
   } else {
     showAccessScreen();
   }
@@ -1867,9 +1880,8 @@ function enforceStaffScreenAccess() {
   });
   if (!staffVisible) return;
   if (currentUser) {
-    currentAccessMode = 'guest_writer';
     hideAllAppScreens();
-    loadGuestWriterProfile(currentUser.uid);
+    renderNonStaffAccessScreen();
   } else {
     showAccessScreen();
   }
@@ -2028,15 +2040,9 @@ function hideAllAppScreens() {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  document.getElementById('btn-draft-url').style.display = 'none';
-  document.getElementById('btn-back-landing').style.display = currentUser ? 'inline-flex' : 'none';
-  document.getElementById('rbtn').style.display = 'none';
-  document.getElementById('btn-logout').style.display = currentUser ? 'inline-flex' : 'none';
+  updateAuthenticatedNavigationForMode();
   var newStoryBtn = document.getElementById('btn-new-guest-story');
   if (newStoryBtn) newStoryBtn.style.display = 'none';
-  var bell = document.getElementById('notification-bell');
-  if (bell) bell.style.display = currentUser ? 'inline-flex' : 'none';
-  updateAdminNavigationVisibility();
   var uploadBlock = document.getElementById('guest-writer-upload-block');
   if (uploadBlock) uploadBlock.style.display = 'none';
   var submitBtn = document.getElementById('guest-writer-submit-story-btn');
@@ -2051,6 +2057,19 @@ function showAccessScreen() {
   loginMode = 'signin';
   updateLoginModeUI();
   setLoginBusy(false);
+}
+function renderNonStaffAccessScreen() {
+  hideAllAppScreens();
+  var access = document.getElementById('access-screen');
+  if (!access) return;
+  access.style.display = 'flex';
+  var email = currentUser && currentUser.email ? currentUser.email : '';
+  var error = document.getElementById('access-error');
+  if (error) {
+    error.textContent = email ? 'Signed in as: '+email+'. This account does not have staff access to Wocult Editing Studio.' : 'This account does not have staff access to Wocult Editing Studio.';
+    error.style.display = 'block';
+  }
+  updateAuthenticatedNavigationForMode();
 }
 function submitAccessKey() {
   handleAccessKey(document.getElementById('access-key-input').value);
@@ -2191,30 +2210,31 @@ function rememberPodcastPrepRoute(sessionId) {
 }
 function routeSignedInUser(user) {
   currentUser = user;
-  updateAdminNavigationVisibility();
   if (!user) { currentAccessMode = ''; showAccessScreen(); return; }
   clearUnsavedChanges();
-  document.getElementById('btn-logout').style.display = 'inline-flex';
-  var bell = document.getElementById('notification-bell');
-  if (bell) bell.style.display = 'inline-flex';
-  loadNotifications();
   var podcastPrepId = getPodcastPrepIdFromUrl() || sessionStorage.getItem('wocultPodcastPrepSessionId') || '';
   if (podcastPrepId) {
     rememberPodcastPrepRoute(podcastPrepId);
     if (isStaffUser(user)) {
       currentAccessMode = 'staff';
       currentAccessKey = '';
+      updateAuthenticatedNavigationForMode();
+      loadNotifications();
       openPodcastPrepStaffSessionFromRoute(podcastPrepId);
       return;
     }
     currentAccessMode = 'podcast_prep_guest';
     currentAccessKey = podcastPrepId;
+    updateAuthenticatedNavigationForMode();
     loadPodcastPrepGuestSession(podcastPrepId);
     return;
   }
+  updateAuthenticatedNavigationForMode();
+  loadNotifications();
   if (isStaffUser(user)) {
     currentAccessMode = 'staff';
     currentAccessKey = '';
+    updateAuthenticatedNavigationForMode();
     if (routeStaffViewFromUrl()) return;
     goToLanding();
     return;
@@ -6885,6 +6905,7 @@ function podcastPrepSignedInEmailHtml() {
 }
 function showPodcastPrepGuestShell() {
   hideAllAppScreens();
+  updateAuthenticatedNavigationForMode();
   var landing = document.getElementById('landing');
   if (landing) landing.style.display = 'block';
   var screen = document.getElementById('podcast-prep-guest-screen');
@@ -7281,7 +7302,7 @@ function goToLanding() {
   if (currentAccessMode === 'podcast_prep_guest') { loadPodcastPrepGuestSession(currentAccessKey); return; }
   if (currentAccessMode === 'guest') { loadGuestInterview(currentAccessKey); return; }
   if (currentAccessMode === 'guest_writer') { showGuestWriterDashboard(); return; }
-  if (currentAccessMode !== 'staff') { showAccessScreen(); return; }
+  if (currentAccessMode !== 'staff' || !isStaffUser(currentUser)) { renderNonStaffAccessScreen(); return; }
   resetNewsBriefSocialState();
   document.getElementById('main').style.display = 'none';
   document.getElementById('workflow').style.display = 'none';
