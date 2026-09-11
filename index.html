@@ -264,7 +264,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.11</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.12</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -1734,6 +1734,7 @@ window._staffGuestWriterStoriesLoading = false;
 window._podcastPrepSessions = [];
 window._podcastPrepLoaded = false;
 window._podcastPrepLoading = false;
+window._podcastPrepCreating = false;
 window._podcastPrepLastVisible = null;
 window._podcastPrepHasMore = false;
 window._podcastPrepCreateQuestions = [{id:'q1', question:''}];
@@ -6451,6 +6452,8 @@ function showPodcastPrepCreate() {
   if (result) result.style.display = 'none';
   var status = document.getElementById('podcast-prep-create-status');
   if (status) status.textContent = '';
+  window._podcastPrepCreating = false;
+  finishPodcastPrepCreateButton(false);
   renderPodcastPrepQuestionEditor();
   clearUnsavedChanges();
 }
@@ -6486,47 +6489,75 @@ function movePodcastPrepQuestion(i, delta) {
   markUnsavedChanges();
   renderPodcastPrepQuestionEditor();
 }
-function createPodcastPrepSession() {
-  var title = document.getElementById('podcast-prep-title').value.trim();
-  var guestName = document.getElementById('podcast-prep-guest-name').value.trim();
-  var guestEmail = document.getElementById('podcast-prep-guest-email').value.trim();
-  var intro = document.getElementById('podcast-prep-intro').value.trim();
+function setPodcastPrepCreateStatus(message, isError) {
   var status = document.getElementById('podcast-prep-create-status');
+  if (!status) return;
+  status.textContent = message || '';
+  status.style.color = isError ? 'var(--red)' : 'var(--g3)';
+}
+function syncPodcastPrepQuestionEditorFromDom() {
+  var fields = Array.from(document.querySelectorAll('#podcast-prep-question-editor textarea[data-podcast-question-index]'));
+  fields.forEach(function(field) {
+    var i = Number(field.getAttribute('data-podcast-question-index'));
+    if (window._podcastPrepCreateQuestions[i]) window._podcastPrepCreateQuestions[i].question = field.value;
+  });
+}
+function finishPodcastPrepCreateButton(success) {
   var btn = document.getElementById('podcast-prep-create-btn');
-  var questions = (window._podcastPrepCreateQuestions || []).map(function(q, i){ return {id:'q'+(i+1), order:i+1, question:String(q.question||'').trim()}; }).filter(function(q){ return q.question; });
-  if (!db) { if(status) status.textContent = 'Firebase is not connected.'; return; }
-  if (!title) { alert('Please enter a podcast / episode title.'); return; }
-  if (!guestName) { alert('Please enter the guest name.'); return; }
-  if (!guestEmail) { alert('Please enter the guest email.'); return; }
-  if (!questions.length) { alert('Add at least one valid question.'); return; }
-  var docRef = db.collection('podcast_sessions').doc();
-  var id = docRef.id;
-  var link = buildPodcastPrepLink(id);
-  var data = {
-    sessionId: id,
-    podcastTitle: title,
-    guestName: guestName,
-    guestEmail: guestEmail,
-    normalizedGuestEmail: podcastPrepNormalizeEmail(guestEmail),
-    guestUid: '',
-    guestIntro: intro,
-    questions: questions,
-    questionCount: questions.length,
-    completedQuestionCount: 0,
-    status: 'sent',
-    guestLink: link,
-    createdBy: currentUser && currentUser.email ? currentUser.email : 'staff',
-    createdByUid: currentUser && currentUser.uid ? currentUser.uid : '',
-    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    openedAt: '',
-    submittedAt: '',
-    feedbackSharedAt: '',
-    readyAt: '',
-    overallFeedback: ''
-  };
-  if (btn) { btn.disabled = true; btn.textContent = 'Creating link...'; }
-  if (status) status.textContent = 'Creating guest link...';
+  if (!btn) return;
+  btn.disabled = !!success ? true : false;
+  btn.textContent = success ? 'Guest link created' : 'Create guest link';
+}
+function createPodcastPrepSession() {
+  if (window._podcastPrepCreating) return false;
+  var btn = document.getElementById('podcast-prep-create-btn');
+  try {
+    var title = document.getElementById('podcast-prep-title').value.trim();
+    var guestName = document.getElementById('podcast-prep-guest-name').value.trim();
+    var guestEmail = document.getElementById('podcast-prep-guest-email').value.trim();
+    var intro = document.getElementById('podcast-prep-intro').value.trim();
+    syncPodcastPrepQuestionEditorFromDom();
+    var questions = (window._podcastPrepCreateQuestions || []).map(function(q, i){ return {id:'q'+(i+1), order:i+1, question:String(q.question||'').trim()}; }).filter(function(q){ return q.question; });
+    if (!db) { setPodcastPrepCreateStatus('Firebase is not connected.', true); return false; }
+    if (!title) { setPodcastPrepCreateStatus('Enter the podcast / episode title.', true); return false; }
+    if (!guestName) { setPodcastPrepCreateStatus('Enter the guest name.', true); return false; }
+    if (!guestEmail) { setPodcastPrepCreateStatus('Enter the guest email.', true); return false; }
+    if (!questions.length) { setPodcastPrepCreateStatus('Add at least one question.', true); return false; }
+    var docRef = db.collection('podcast_sessions').doc();
+    var id = docRef.id;
+    var link = buildPodcastPrepLink(id);
+    var data = {
+      sessionId: id,
+      podcastTitle: title,
+      guestName: guestName,
+      guestEmail: guestEmail,
+      normalizedGuestEmail: podcastPrepNormalizeEmail(guestEmail),
+      guestUid: '',
+      guestIntro: intro,
+      questions: questions,
+      questionCount: questions.length,
+      completedQuestionCount: 0,
+      status: 'sent',
+      guestLink: link,
+      createdBy: currentUser && currentUser.email ? currentUser.email : 'staff',
+      createdByUid: currentUser && currentUser.uid ? currentUser.uid : '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      openedAt: '',
+      submittedAt: '',
+      feedbackSharedAt: '',
+      readyAt: '',
+      overallFeedback: ''
+    };
+    window._podcastPrepCreating = true;
+    if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
+    setPodcastPrepCreateStatus('Creating guest link...', false);
+  } catch (err) {
+    console.error('Podcast Prep create validation failed:', err);
+    setPodcastPrepCreateStatus("We couldn't create this Podcast Prep link. Please try again.", true);
+    finishPodcastPrepCreateButton(false);
+    return false;
+  }
   docRef.set(data).then(function() {
     window._podcastPrepLoaded = false;
     clearUnsavedChanges();
@@ -6537,13 +6568,16 @@ function createPodcastPrepSession() {
         + '<input class="wf-input" readonly value="'+escapeAttr(link)+'" style="margin-bottom:8px" />'
         + '<button class="btn" onclick="copyPodcastPrepLink(\''+escapeAttr(id)+'\')">Copy Link</button><span id="podcast-prep-copy-status" style="font-size:12px;color:var(--g3);margin-left:8px"></span>';
     }
-    if (status) status.textContent = 'Guest link saved. Share it with the invited guest email only.';
+    setPodcastPrepCreateStatus('Guest link saved. Share it with the invited guest email only.', false);
+    finishPodcastPrepCreateButton(true);
   }).catch(function(err) {
-    if (status) status.textContent = 'Could not create Podcast Prep: ' + err.message;
-    if (btn) btn.disabled = false;
+    console.error('Could not create Podcast Prep:', err);
+    setPodcastPrepCreateStatus("We couldn't create this Podcast Prep link. Please try again.", true);
+    finishPodcastPrepCreateButton(false);
   }).finally(function() {
-    if (btn) btn.textContent = 'Create guest link';
+    window._podcastPrepCreating = false;
   });
+  return true;
 }
 function openPodcastPrepSession(id) {
   if (!guardStaffScreen() || !db || !id) return;

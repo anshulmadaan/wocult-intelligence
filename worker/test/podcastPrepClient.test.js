@@ -197,3 +197,58 @@ test('Podcast Prep guest access-check and invalid session failures render useful
   assert.match(loader, /console\.error\('Could not open Podcast Prep session:', err\)/);
   assert.match(loader, /renderPodcastPrepRouteError\("We couldn't open this Podcast Prep session\."\)/);
 });
+
+test('Podcast Prep Create guest link button is wired to the create handler', () => {
+  assert.match(html, /id="podcast-prep-create-btn" onclick="createPodcastPrepSession\(\)"/);
+  const create = functionBody('createPodcastPrepSession');
+  assert.match(create, /db\.collection\('podcast_sessions'\)\.doc\(\)/);
+  assert.match(create, /docRef\.set\(data\)/);
+});
+
+test('Podcast Prep create saves ordered questions, normalized guest email and guest URL', () => {
+  const create = functionBody('createPodcastPrepSession');
+  assert.match(create, /syncPodcastPrepQuestionEditorFromDom\(\)/);
+  assert.match(create, /id:'q'\+\(i\+1\), order:i\+1, question:String\(q\.question\|\|''\)\.trim\(\)/);
+  assert.match(create, /normalizedGuestEmail: podcastPrepNormalizeEmail\(guestEmail\)/);
+  assert.match(create, /guestUid: ''/);
+  assert.match(create, /status: 'sent'/);
+  assert.match(create, /createdAt: firebase\.firestore\.FieldValue\.serverTimestamp\(\)/);
+  assert.match(create, /updatedAt: firebase\.firestore\.FieldValue\.serverTimestamp\(\)/);
+  assert.match(create, /var link = buildPodcastPrepLink\(id\)/);
+  assert.match(create, /guestLink: link/);
+  assert.match(create, /escapeAttr\(link\)/);
+  assert.match(create, /copyPodcastPrepLink/);
+  const linkBuilder = functionBody('buildPodcastPrepLink');
+  assert.match(linkBuilder, /\?podcastPrep=/);
+});
+
+test('Podcast Prep create shows visible validation and backend errors instead of silent no-op', () => {
+  const create = functionBody('createPodcastPrepSession');
+  assert.match(create, /setPodcastPrepCreateStatus\('Enter the podcast \/ episode title\.', true\)/);
+  assert.match(create, /setPodcastPrepCreateStatus\('Enter the guest name\.', true\)/);
+  assert.match(create, /setPodcastPrepCreateStatus\('Enter the guest email\.', true\)/);
+  assert.match(create, /setPodcastPrepCreateStatus\('Add at least one question\.', true\)/);
+  assert.doesNotMatch(create, /alert\(/);
+  assert.match(create, /console\.error\('Could not create Podcast Prep:', err\)/);
+  assert.match(create, /setPodcastPrepCreateStatus\("We couldn't create this Podcast Prep link\. Please try again\.", true\)/);
+  assert.match(create, /finishPodcastPrepCreateButton\(false\)/);
+});
+
+test('Podcast Prep create disables duplicate clicks while creation is in progress', () => {
+  const create = functionBody('createPodcastPrepSession');
+  assert.match(create, /if \(window\._podcastPrepCreating\) return false/);
+  assert.match(create, /window\._podcastPrepCreating = true/);
+  assert.match(create, /btn\.disabled = true/);
+  assert.match(create, /btn\.textContent = 'Creating\.\.\.'/);
+  assert.match(create, /window\._podcastPrepCreating = false/);
+  assert.match(create, /finishPodcastPrepCreateButton\(true\)/);
+
+  const reset = functionBody('showPodcastPrepCreate');
+  assert.match(reset, /window\._podcastPrepCreating = false/);
+  assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
+});
+
+test('application version badge is 15.12', () => {
+  assert.match(html, />15\.12<\/div>/);
+  assert.doesNotMatch(html, />15\.11<\/div>/);
+});
