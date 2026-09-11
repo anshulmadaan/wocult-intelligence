@@ -551,7 +551,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
       <div style="height:1px;background:var(--bdr);width:100%"></div>
       <section>
         <h2 style="font-size:18px;font-weight:700;font-family:Georgia,serif;margin-bottom:16px">Curate interviews</h2>
-        <div class="landing-cards" style="grid-template-columns:repeat(2,1fr)">
+        <div class="landing-cards" style="grid-template-columns:repeat(3,1fr)">
       <div class="lcard" onclick="showPrepareInterview()">
         <div class="lcard-icon">🎙️</div>
         <div class="lcard-title">Prepare and send questions</div>
@@ -563,6 +563,12 @@ We’re looking for honest, experience-led stories — not polished perfection.<
         <div class="lcard-title">Guest interview submissions</div>
         <div class="lcard-desc">Review guest interview responses and final Q&A submissions.</div>
         <div class="lcard-cta">Review interview submissions →</div>
+      </div>
+      <div class="lcard" onclick="showPodcastPrepDashboard()">
+        <div class="lcard-icon">PR</div>
+        <div class="lcard-title">Podcast Prep Room</div>
+        <div class="lcard-desc">Prepare podcast questions, collect private voice responses, review transcripts and share feedback before recording.</div>
+        <div class="lcard-cta">Open Podcast Prep Room</div>
       </div>
         </div>
       </section>
@@ -997,6 +1003,57 @@ There are no right or wrong answers here. Please answer openly and in your own v
         </div>
         <div id="interview-submission-detail" style="min-height:180px;padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:14px;line-height:1.6">Select a submission to review the Q&A.</div>
       </div>
+    </div>
+  </div>
+
+  <div id="landing-podcast-prep" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:1080px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
+        <button onclick="backToCards()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0">← Back to staff dashboard</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="loadPodcastPrepSessions({force:true})">Refresh</button>
+          <button class="btn-lg btn-y" onclick="showPodcastPrepCreate()">New Podcast Prep</button>
+        </div>
+      </div>
+      <h2>Podcast Prep Room</h2>
+      <p class="sub">Private rehearsal sessions for podcast guests before recording.</p>
+      <div id="podcast-prep-status" class="hint" style="margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:16px;align-items:start">
+        <div>
+          <div id="podcast-prep-list" style="display:flex;flex-direction:column;gap:10px"></div>
+          <button id="podcast-prep-load-more" class="btn" onclick="loadMorePodcastPrepSessions()" style="display:none;margin-top:12px;width:100%">Load more</button>
+        </div>
+        <div id="podcast-prep-detail" style="min-height:260px;padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:14px;line-height:1.6">Select a Podcast Prep session to review.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="landing-podcast-prep-create" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:820px">
+      <button onclick="confirmBeforeLeavingScreen(showPodcastPrepDashboard)" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back to Podcast Prep Room</button>
+      <h2>New Podcast Prep</h2>
+      <p class="sub">Create a private question-by-question voice preparation session.</p>
+      <div class="sfield"><label>Podcast / episode title</label><input id="podcast-prep-title" placeholder="Example: Wocult conversation with..." /></div>
+      <div class="sfield"><label>Guest name</label><input id="podcast-prep-guest-name" /></div>
+      <div class="sfield"><label>Guest email</label><input id="podcast-prep-guest-email" type="email" placeholder="guest@example.com" /></div>
+      <div class="sfield"><label>Guest-facing introduction / instructions</label><textarea id="podcast-prep-intro" rows="6">These are preparation responses, not the final podcast. Record your thoughts in your own words. Each response is saved separately, so you can stop and return later.</textarea></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin:18px 0 10px">
+        <h3 style="font-size:16px;margin:0;font-family:Georgia,serif">Questions</h3>
+        <button class="btn" onclick="addPodcastPrepQuestion()">Add question</button>
+      </div>
+      <div id="podcast-prep-question-editor" style="display:flex;flex-direction:column;gap:12px"></div>
+      <div id="podcast-prep-create-status" class="hint" style="margin-top:12px"></div>
+      <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
+        <button class="btn-lg btn-y" id="podcast-prep-create-btn" onclick="createPodcastPrepSession()" style="flex:1">Create guest link</button>
+        <button class="btn-lg" onclick="confirmBeforeLeavingScreen(showPodcastPrepDashboard)" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk);flex:1">Cancel</button>
+      </div>
+      <div id="podcast-prep-link-result" style="display:none;margin-top:16px;padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff"></div>
+    </div>
+  </div>
+
+  <div id="podcast-prep-guest-screen" class="landing" style="display:none;padding-top:32px">
+    <div class="scratch-screen" style="max-width:860px">
+      <div id="podcast-prep-guest-content"></div>
     </div>
   </div>
 
@@ -1616,6 +1673,15 @@ function uploadInterviewRecordingBlob(sessionId, uid, questionIndex, blob) {
   return storage.ref(path).put(blob, { contentType: blob.type || 'audio/webm' });
 }
 
+function getPodcastRecordingStoragePath(sessionId, uid, questionId, versionId, mimeType) {
+  var safeSessionId = String(sessionId || 'unknown-session').replace(/[^A-Za-z0-9_-]/g, '_');
+  var safeUid = String(uid || 'unknown-user').replace(/[^A-Za-z0-9_-]/g, '_');
+  var safeQuestionId = String(questionId || 'question').replace(/[^A-Za-z0-9_-]/g, '_');
+  var safeVersionId = String(versionId || 'version').replace(/[^A-Za-z0-9_-]/g, '_');
+  var ext = /mp4/i.test(mimeType || '') ? 'mp4' : (/ogg/i.test(mimeType || '') ? 'ogg' : 'webm');
+  return 'podcast_recordings/' + safeSessionId + '/' + safeUid + '/' + safeQuestionId + '/' + safeVersionId + '.' + ext;
+}
+
 function fbToast(msg, ok) {
   var t = document.getElementById('fb-toast');
   t.textContent = msg;
@@ -1665,6 +1731,27 @@ window._guestWriterApplicationsLoading = false;
 window._staffGuestWriterStories = [];
 window._staffGuestWriterStoriesLoaded = false;
 window._staffGuestWriterStoriesLoading = false;
+window._podcastPrepSessions = [];
+window._podcastPrepLoaded = false;
+window._podcastPrepLoading = false;
+window._podcastPrepLastVisible = null;
+window._podcastPrepHasMore = false;
+window._podcastPrepCreateQuestions = [{id:'q1', question:''}];
+window._podcastPrepGuest = {
+  sessionId: '',
+  session: null,
+  responses: {},
+  versions: {},
+  activeIndex: 0,
+  recorder: null,
+  chunks: [],
+  localBlob: null,
+  localUrl: '',
+  recordingStartedAt: 0,
+  timer: null,
+  saving: false,
+  submitting: false
+};
 window._unsentSubmissions = [];
 window._unsentSubmissionsLoaded = false;
 window._unsentSubmissionsLoading = false;
@@ -1773,7 +1860,7 @@ function enforceStaffScreenAccess() {
     return;
   }
   if (isStaffUser(currentUser)) return;
-  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-editorial-calendar','landing-editorial-calendar-editor','landing-news-brief-social','landing-automated-news-briefs','landing-unsent-admin','landing-blog-comments-admin','landing-admin-dashboard','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
+  var staffVisible = ['landing-cards','landing-url','landing-prepare-interview','landing-interview-submissions','landing-podcast-prep','landing-podcast-prep-create','landing-guest-writer-applications','landing-guest-writer-stories','landing-editorial-tracker','landing-editorial-calendar','landing-editorial-calendar-editor','landing-news-brief-social','landing-automated-news-briefs','landing-unsent-admin','landing-blog-comments-admin','landing-admin-dashboard','main','stats-bar','saved-section','saved-toggle-bar'].some(function(id) {
     var el = document.getElementById(id);
     return el && el.style.display !== 'none';
   });
@@ -1795,6 +1882,8 @@ function clearUnsavedChanges() {
 function getLeaveWarningMessage() {
   var guestContent = document.getElementById('guest-interview-content');
   if (currentAccessMode === 'guest' && guestContent && guestContent.style.display !== 'none') return GUEST_INTERVIEW_LEAVE_WARNING;
+  var podcastGuest = document.getElementById('podcast-prep-guest-screen');
+  if (currentAccessMode === 'podcast_prep_guest' && podcastGuest && podcastGuest.style.display !== 'none') return 'Your unsaved recording take will be lost if you leave this page. Do you want to continue?';
   return LEAVE_WARNING;
 }
 function confirmBeforeLeavingScreen(onContinue) {
@@ -1818,6 +1907,8 @@ function isDirtyTrackedTarget(target) {
     '#landing-scratch',
     '#landing-existing-draft',
     '#landing-prepare-interview',
+    '#landing-podcast-prep-create',
+    '#landing-podcast-prep',
     '#landing-editorial-calendar-editor',
     '#landing-news-brief-social',
     '#guest-placeholder',
@@ -1932,7 +2023,7 @@ function updateTopUpdatedVisibility(show) {
 }
 
 function hideAllAppScreens() {
-  ['access-screen','guest-placeholder','guest-writer-registration','guest-writer-pending','guest-writer-dashboard','guest-writer-stories','guest-writer-idea','guest-writer-idea-discussion','guest-writer-status-screen','landing','main','workflow','stats-bar','saved-section','saved-toggle-bar'].forEach(function(id) {
+  ['access-screen','guest-placeholder','guest-writer-registration','guest-writer-pending','guest-writer-dashboard','guest-writer-stories','guest-writer-idea','guest-writer-idea-discussion','guest-writer-status-screen','podcast-prep-guest-screen','landing','main','workflow','stats-bar','saved-section','saved-toggle-bar'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -2070,6 +2161,7 @@ function saveAccessSession(mode, key) {
 function clearAccessSession(showLogin) {
   sessionStorage.removeItem('wocultAccessMode');
   sessionStorage.removeItem('wocultAccessKey');
+  sessionStorage.removeItem('wocultPodcastPrepSessionId');
   currentAccessMode = '';
   currentAccessKey = '';
   if (showLogin !== false) showAccessScreen();
@@ -2077,10 +2169,24 @@ function clearAccessSession(showLogin) {
 function restoreAccessSession() {
   var mode = sessionStorage.getItem('wocultAccessMode') || '';
   var key = sessionStorage.getItem('wocultAccessKey') || '';
+  var podcastPrepId = sessionStorage.getItem('wocultPodcastPrepSessionId') || '';
+  if (mode === 'podcast_prep_guest' && podcastPrepId) {
+    currentAccessMode = 'podcast_prep_guest';
+    currentAccessKey = podcastPrepId;
+    return false;
+  }
   if (mode === 'guest' && key.indexOf('INT-') === 0) {
     return handleAccessKey(key);
   }
   return false;
+}
+function getPodcastPrepIdFromUrl() {
+  return (new URLSearchParams(window.location.search).get('podcastPrep') || '').trim();
+}
+function rememberPodcastPrepRoute(sessionId) {
+  if (!sessionId) return;
+  sessionStorage.setItem('wocultAccessMode', 'podcast_prep_guest');
+  sessionStorage.setItem('wocultPodcastPrepSessionId', sessionId);
 }
 function routeSignedInUser(user) {
   currentUser = user;
@@ -2091,6 +2197,20 @@ function routeSignedInUser(user) {
   var bell = document.getElementById('notification-bell');
   if (bell) bell.style.display = 'inline-flex';
   loadNotifications();
+  var podcastPrepId = getPodcastPrepIdFromUrl() || sessionStorage.getItem('wocultPodcastPrepSessionId') || '';
+  if (podcastPrepId) {
+    rememberPodcastPrepRoute(podcastPrepId);
+    if (isStaffUser(user)) {
+      currentAccessMode = 'staff';
+      currentAccessKey = '';
+      openPodcastPrepStaffSessionFromRoute(podcastPrepId);
+      return;
+    }
+    currentAccessMode = 'podcast_prep_guest';
+    currentAccessKey = podcastPrepId;
+    loadPodcastPrepGuestSession(podcastPrepId);
+    return;
+  }
   if (isStaffUser(user)) {
     currentAccessMode = 'staff';
     currentAccessKey = '';
@@ -2102,6 +2222,11 @@ function routeSignedInUser(user) {
   loadGuestWriterProfile(user.uid);
 }
 function navigateHome() {
+  if (currentAccessMode === 'podcast_prep_guest') {
+    if (currentAccessKey) loadPodcastPrepGuestSession(currentAccessKey);
+    else showAccessScreen();
+    return;
+  }
   if (currentAccessMode === 'guest') {
     if (currentAccessKey) loadGuestInterview(currentAccessKey);
     else showAccessScreen();
@@ -3000,6 +3125,16 @@ function openNotificationItem(id) {
   if (!n) return;
   markNotificationRead(id);
   toggleNotificationsPanel(false);
+  if (n.relatedCollection === 'podcast_sessions' && n.relatedId) {
+    if (isStaffUser(currentUser)) openPodcastPrepStaffSessionFromRoute(n.relatedId);
+    else {
+      rememberPodcastPrepRoute(n.relatedId);
+      currentAccessMode = 'podcast_prep_guest';
+      currentAccessKey = n.relatedId;
+      loadPodcastPrepGuestSession(n.relatedId);
+    }
+    return;
+  }
   if (isStaffUser(currentUser) && n.relatedCollection === 'articles' && n.relatedId) {
     if (document.getElementById('landing-editorial-tracker') && document.getElementById('landing-editorial-tracker').style.display !== 'none') {
       openEditorialTrackerItem('guest_story', n.relatedId);
@@ -6223,7 +6358,874 @@ function finalSubmitGuestInterview() {
     if (status) status.textContent = 'Could not submit final responses: '+err.message;
   });
 }
+
+function podcastPrepNormalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+function podcastPrepStatusLabel(status) {
+  var map = {draft:'Draft', sent:'Sent', opened:'Opened', in_progress:'In progress', submitted:'Submitted', feedback_shared:'Feedback shared', ready:'Ready'};
+  return map[status] || statusLabel(status);
+}
+function buildPodcastPrepLink(id) {
+  return window.location.origin + window.location.pathname + '?podcastPrep=' + encodeURIComponent(id);
+}
+function copyPodcastPrepLink(id) {
+  var link = buildPodcastPrepLink(id);
+  var msg = document.getElementById('podcast-prep-copy-status');
+  navigator.clipboard.writeText(link).then(function(){ if (msg) msg.textContent = 'Link copied.'; }).catch(function(){ if (msg) msg.textContent = 'Could not copy. Select and copy the link manually.'; });
+}
+function showPodcastPrepDashboard() {
+  if (!guardStaffScreen()) return;
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-podcast-prep').style.display = 'flex';
+  clearUnsavedChanges();
+  loadPodcastPrepSessions();
+}
+function openPodcastPrepStaffSessionFromRoute(sessionId) {
+  if (!sessionId) return;
+  showPodcastPrepDashboard();
+  setTimeout(function(){ openPodcastPrepSession(sessionId); }, 250);
+}
+function loadPodcastPrepSessions(options) {
+  options = options || {};
+  if (!guardStaffScreen() || !db || window._podcastPrepLoading) return;
+  if (window._podcastPrepLoaded && !options.force && !options.page) { renderPodcastPrepSessions(); return; }
+  window._podcastPrepLoading = true;
+  var status = document.getElementById('podcast-prep-status');
+  var list = document.getElementById('podcast-prep-list');
+  if (status) status.textContent = 'Loading Podcast Prep sessions...';
+  if (!options.page) {
+    window._podcastPrepSessions = [];
+    window._podcastPrepLastVisible = null;
+    if (list) list.innerHTML = '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:13px">Loading...</div>';
+  }
+  var query = db.collection('podcast_sessions').orderBy('updatedAt','desc').limit(20);
+  if (options.page && window._podcastPrepLastVisible) query = query.startAfter(window._podcastPrepLastVisible);
+  query.get().then(function(snap) {
+    window._podcastPrepLastVisible = snap.docs.length ? snap.docs[snap.docs.length - 1] : window._podcastPrepLastVisible;
+    window._podcastPrepHasMore = snap.docs.length === 20;
+    if (!options.page) window._podcastPrepSessions = [];
+    snap.forEach(function(doc){ window._podcastPrepSessions.push(Object.assign({id:doc.id}, doc.data())); });
+    window._podcastPrepLoaded = true;
+    if (status) status.textContent = window._podcastPrepSessions.length ? window._podcastPrepSessions.length + ' Podcast Prep session(s) loaded.' : 'No Podcast Prep sessions yet.';
+    renderPodcastPrepSessions();
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not load Podcast Prep sessions: ' + err.message;
+  }).finally(function(){ window._podcastPrepLoading = false; });
+}
+function loadMorePodcastPrepSessions() {
+  if (window._podcastPrepHasMore) loadPodcastPrepSessions({page:true});
+}
+function renderPodcastPrepSessions() {
+  var list = document.getElementById('podcast-prep-list');
+  var more = document.getElementById('podcast-prep-load-more');
+  if (!list) return;
+  var sessions = window._podcastPrepSessions || [];
+  if (!sessions.length) {
+    list.innerHTML = '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;color:var(--g3);font-size:13px">No Podcast Prep sessions yet.</div>';
+  } else {
+    list.innerHTML = sessions.map(function(s) {
+      var total = s.questionCount || (s.questions || []).length || 0;
+      var done = s.completedQuestionCount || 0;
+      return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
+        + '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px"><div style="font-size:14px;font-weight:700;line-height:1.4">'+escapeHtml(s.podcastTitle || 'Untitled podcast')+'</div><span class="badge bg">'+escapeHtml(podcastPrepStatusLabel(s.status))+'</span></div>'
+        + '<div style="font-size:12px;color:var(--g3);line-height:1.6;margin-bottom:10px">'
+        + 'Guest: '+escapeHtml(s.guestName || '-')+'<br>Email: '+escapeHtml(s.guestEmail || '-')+'<br>Progress: '+done+'/'+total+' responses saved<br>Updated: '+escapeHtml(formatFirestoreDate(s.updatedAt))+'</div>'
+        + '<button class="btn" onclick="openPodcastPrepSession(\''+escapeAttr(s.id)+'\')">Open session</button>'
+        + '</div>';
+    }).join('');
+  }
+  if (more) more.style.display = window._podcastPrepHasMore ? 'block' : 'none';
+}
+function showPodcastPrepCreate() {
+  if (!guardStaffScreen()) return;
+  hideStaffLandingPanels();
+  document.getElementById('landing-cards').style.display = 'none';
+  document.getElementById('landing-podcast-prep-create').style.display = 'flex';
+  window._podcastPrepCreateQuestions = [{id:'q1', question:''}];
+  ['podcast-prep-title','podcast-prep-guest-name','podcast-prep-guest-email'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  var intro = document.getElementById('podcast-prep-intro');
+  if (intro) intro.value = 'These are preparation responses, not the final podcast. Record your thoughts in your own words. Each response is saved separately, so you can stop and return later.';
+  var result = document.getElementById('podcast-prep-link-result');
+  if (result) result.style.display = 'none';
+  var status = document.getElementById('podcast-prep-create-status');
+  if (status) status.textContent = '';
+  renderPodcastPrepQuestionEditor();
+  clearUnsavedChanges();
+}
+function renderPodcastPrepQuestionEditor() {
+  var root = document.getElementById('podcast-prep-question-editor');
+  if (!root) return;
+  root.innerHTML = (window._podcastPrepCreateQuestions || []).map(function(q, i) {
+    return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff">'
+      + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px"><label style="margin:0">Question '+(i+1)+'</label><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" onclick="movePodcastPrepQuestion('+i+',-1)" '+(i===0?'disabled style="opacity:0.5"':'')+'>Up</button><button class="btn" onclick="movePodcastPrepQuestion('+i+',1)" '+(i===(window._podcastPrepCreateQuestions.length-1)?'disabled style="opacity:0.5"':'')+'>Down</button><button class="btn" onclick="deletePodcastPrepQuestion('+i+')">Delete</button></div></div>'
+      + '<textarea rows="3" data-podcast-question-index="'+i+'" oninput="syncPodcastPrepQuestion('+i+',this.value)" placeholder="Add the preparation question...">'+escapeHtml(q.question || '')+'</textarea>'
+      + '</div>';
+  }).join('');
+}
+function syncPodcastPrepQuestion(i, value) {
+  if (window._podcastPrepCreateQuestions[i]) window._podcastPrepCreateQuestions[i].question = value;
+}
+function addPodcastPrepQuestion() {
+  window._podcastPrepCreateQuestions.push({id:'q'+(window._podcastPrepCreateQuestions.length+1), question:''});
+  markUnsavedChanges();
+  renderPodcastPrepQuestionEditor();
+}
+function deletePodcastPrepQuestion(i) {
+  if (window._podcastPrepCreateQuestions.length <= 1) { alert('Add at least one question.'); return; }
+  window._podcastPrepCreateQuestions.splice(i, 1);
+  markUnsavedChanges();
+  renderPodcastPrepQuestionEditor();
+}
+function movePodcastPrepQuestion(i, delta) {
+  var arr = window._podcastPrepCreateQuestions;
+  var j = i + delta;
+  if (!arr || j < 0 || j >= arr.length) return;
+  var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  markUnsavedChanges();
+  renderPodcastPrepQuestionEditor();
+}
+function createPodcastPrepSession() {
+  var title = document.getElementById('podcast-prep-title').value.trim();
+  var guestName = document.getElementById('podcast-prep-guest-name').value.trim();
+  var guestEmail = document.getElementById('podcast-prep-guest-email').value.trim();
+  var intro = document.getElementById('podcast-prep-intro').value.trim();
+  var status = document.getElementById('podcast-prep-create-status');
+  var btn = document.getElementById('podcast-prep-create-btn');
+  var questions = (window._podcastPrepCreateQuestions || []).map(function(q, i){ return {id:'q'+(i+1), order:i+1, question:String(q.question||'').trim()}; }).filter(function(q){ return q.question; });
+  if (!db) { if(status) status.textContent = 'Firebase is not connected.'; return; }
+  if (!title) { alert('Please enter a podcast / episode title.'); return; }
+  if (!guestName) { alert('Please enter the guest name.'); return; }
+  if (!guestEmail) { alert('Please enter the guest email.'); return; }
+  if (!questions.length) { alert('Add at least one valid question.'); return; }
+  var docRef = db.collection('podcast_sessions').doc();
+  var id = docRef.id;
+  var link = buildPodcastPrepLink(id);
+  var data = {
+    sessionId: id,
+    podcastTitle: title,
+    guestName: guestName,
+    guestEmail: guestEmail,
+    normalizedGuestEmail: podcastPrepNormalizeEmail(guestEmail),
+    guestUid: '',
+    guestIntro: intro,
+    questions: questions,
+    questionCount: questions.length,
+    completedQuestionCount: 0,
+    status: 'sent',
+    guestLink: link,
+    createdBy: currentUser && currentUser.email ? currentUser.email : 'staff',
+    createdByUid: currentUser && currentUser.uid ? currentUser.uid : '',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    openedAt: '',
+    submittedAt: '',
+    feedbackSharedAt: '',
+    readyAt: '',
+    overallFeedback: ''
+  };
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating link...'; }
+  if (status) status.textContent = 'Creating guest link...';
+  docRef.set(data).then(function() {
+    window._podcastPrepLoaded = false;
+    clearUnsavedChanges();
+    var result = document.getElementById('podcast-prep-link-result');
+    if (result) {
+      result.style.display = 'block';
+      result.innerHTML = '<div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--grn)">Guest link created</div>'
+        + '<input class="wf-input" readonly value="'+escapeAttr(link)+'" style="margin-bottom:8px" />'
+        + '<button class="btn" onclick="copyPodcastPrepLink(\''+escapeAttr(id)+'\')">Copy Link</button><span id="podcast-prep-copy-status" style="font-size:12px;color:var(--g3);margin-left:8px"></span>';
+    }
+    if (status) status.textContent = 'Guest link saved. Share it with the invited guest email only.';
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not create Podcast Prep: ' + err.message;
+    if (btn) btn.disabled = false;
+  }).finally(function() {
+    if (btn) btn.textContent = 'Create guest link';
+  });
+}
+function openPodcastPrepSession(id) {
+  if (!guardStaffScreen() || !db || !id) return;
+  var detail = document.getElementById('podcast-prep-detail');
+  if (detail) detail.innerHTML = 'Loading Podcast Prep session...';
+  db.collection('podcast_sessions').doc(id).get().then(function(doc) {
+    if (!doc.exists) throw new Error('Podcast Prep session was not found.');
+    var session = Object.assign({id:doc.id}, doc.data());
+    return loadPodcastPrepResponses(id).then(function(bundle) {
+      renderPodcastPrepStaffDetail(session, bundle.responses, bundle.versions);
+    });
+  }).catch(function(err) {
+    if (detail) detail.innerHTML = '<div style="color:var(--red)">Could not load session: '+escapeHtml(err.message)+'</div>';
+  });
+}
+function loadPodcastPrepResponses(sessionId) {
+  var responses = {};
+  var versions = {};
+  return db.collection('podcast_sessions').doc(sessionId).collection('responses').get().then(function(respSnap) {
+    var versionLoads = [];
+    respSnap.forEach(function(doc) {
+      responses[doc.id] = Object.assign({id:doc.id}, doc.data());
+      versionLoads.push(doc.ref.collection('versions').orderBy('versionNumber','asc').get().then(function(vsnap) {
+        versions[doc.id] = [];
+        vsnap.forEach(function(vdoc){ versions[doc.id].push(Object.assign({id:vdoc.id}, vdoc.data())); });
+      }));
+    });
+    return Promise.all(versionLoads).then(function(){ return {responses:responses, versions:versions}; });
+  });
+}
+function getAudioUrl(path) {
+  if (!storage || !path) return Promise.reject(new Error('Audio is not available.'));
+  return storage.ref(path).getDownloadURL();
+}
+function podcastPrepTranscriptStatusLabel(status) {
+  if (status === 'completed') return 'Transcript ready';
+  if (status === 'failed') return 'Transcript unavailable';
+  if (status === 'processing') return 'Transcript being prepared';
+  if (status === 'pending') return 'Transcript requested';
+  return 'Transcript not generated';
+}
+function podcastPrepTranscriptionEligible(version) {
+  var status = version && version.transcriptionStatus;
+  return status === 'not_requested' || status === 'failed' || !status;
+}
+function podcastPrepEligibleTranscriptionVersions(versionsByQuestion) {
+  var items = [];
+  Object.keys(versionsByQuestion || {}).forEach(function(questionId) {
+    (versionsByQuestion[questionId] || []).forEach(function(version) {
+      if (podcastPrepTranscriptionEligible(version)) items.push({questionId:questionId, version:version});
+    });
+  });
+  return items;
+}
+function podcastAudioHtml(version, elId) {
+  if (!version || !version.storagePath) return '<div class="hint">No audio saved.</div>';
+  setTimeout(function(){ getAudioUrl(version.storagePath).then(function(url){ var audio=document.getElementById(elId); if(audio) audio.src=url; }).catch(function(){ var audio=document.getElementById(elId); if(audio) audio.outerHTML='<div class="hint" style="color:var(--red)">Could not load audio.</div>'; }); }, 0);
+  return '<audio id="'+escapeAttr(elId)+'" controls style="width:100%;margin-top:8px"></audio>';
+}
+function podcastPrepAudioExtension(version) {
+  var path = String(version && version.storagePath || '');
+  var match = path.match(/\.([A-Za-z0-9]+)(?:\?|$)/);
+  if (match) return match[1].toLowerCase();
+  var mime = String(version && version.audioMimeType || '');
+  if (/mp4/i.test(mime)) return 'mp4';
+  if (/ogg/i.test(mime)) return 'ogg';
+  return 'webm';
+}
+function podcastPrepAudioFilename(session, question, version) {
+  var qNum = String(question && (question.order || 1) || 1).padStart(2, '0');
+  var vNum = version && (version.versionNumber || 1) || 1;
+  return 'wocult-podcast-prep-' + safeFileName(session.podcastTitle || 'episode') + '-' + safeFileName(session.guestName || 'guest') + '-q' + qNum + '-v' + vNum + '.' + podcastPrepAudioExtension(version);
+}
+function renderPodcastPrepStaffDetail(session, responses, versionsByQuestion) {
+  var detail = document.getElementById('podcast-prep-detail');
+  if (!detail) return;
+  var questions = session.questions || [];
+  var eligibleTranscriptions = podcastPrepEligibleTranscriptionVersions(versionsByQuestion);
+  var totalDuration = eligibleTranscriptions.reduce(function(sum, item){ return sum + Number(item.version.duration || 0); }, 0);
+  detail.style.color = 'var(--blk)';
+  detail.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px">'
+    + '<div><div style="font-size:18px;font-weight:700;line-height:1.35">'+escapeHtml(session.podcastTitle || 'Untitled podcast')+'</div>'
+    + '<div style="font-size:13px;color:var(--g3);line-height:1.6;margin-top:6px">Guest: '+escapeHtml(session.guestName||'-')+'<br>Email: '+escapeHtml(session.guestEmail||'-')+'<br>Status: '+escapeHtml(podcastPrepStatusLabel(session.status))+'<br>Progress: '+(session.completedQuestionCount||0)+'/'+(session.questionCount||questions.length||0)+'</div></div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" onclick="downloadPodcastPrepDocx(\''+escapeAttr(session.id)+'\')">Download Podcast Prep Transcript</button><button class="btn-lg btn-y" onclick="confirmTranscribeAllPodcastPrepResponses(\''+escapeAttr(session.id)+'\')"' + (eligibleTranscriptions.length ? '' : ' disabled style="opacity:0.5;cursor:not-allowed"') + '>Transcribe responses</button><button class="btn-lg btn-y" onclick="sharePodcastPrepFeedback(\''+escapeAttr(session.id)+'\')">Share feedback with guest</button><button class="btn" onclick="markPodcastPrepReady(\''+escapeAttr(session.id)+'\')">Mark ready for podcast</button></div>'
+    + '</div>'
+    + '<div id="podcast-transcription-status" class="hint" style="margin:-4px 0 14px 0">'+(eligibleTranscriptions.length ? escapeHtml(eligibleTranscriptions.length+' response(s) available for transcription'+(totalDuration ? ' · '+Math.ceil(totalDuration/60)+' minutes of recorded audio' : '')+'.') : 'All requested transcripts are complete or already being prepared.')+'</div>'
+    + '<div class="sfield" style="margin-bottom:14px"><label>Overall feedback</label><textarea id="podcast-overall-feedback" rows="5">'+escapeHtml(session.overallFeedback||'')+'</textarea><button class="btn" onclick="savePodcastPrepOverallFeedback(\''+escapeAttr(session.id)+'\')" style="margin-top:8px">Save overall feedback</button><span id="podcast-overall-feedback-status" class="hint" style="margin-left:8px"></span></div>'
+    + questions.map(function(q, i) {
+      var response = responses[q.id] || {};
+      var versions = versionsByQuestion[q.id] || [];
+      var versionHtml = versions.length ? versions.map(function(v, vi) {
+        var label = vi === 0 ? 'Original response' : 'Revised response / Version '+v.versionNumber;
+        var audioId = 'podcast-audio-'+session.id+'-'+q.id+'-'+v.id;
+        var tx = v.transcriptionStatus === 'completed' && v.transcript ? escapeHtml(v.transcript || '') : escapeHtml(podcastPrepTranscriptStatusLabel(v.transcriptionStatus));
+        var transcribeLabel = v.transcriptionStatus === 'failed' ? 'Retry transcription' : 'Transcribe this response';
+        var transcribeBtn = podcastPrepTranscriptionEligible(v) ? '<button class="btn" onclick="transcribeSinglePodcastPrepResponse(\''+escapeAttr(session.id)+'\',\''+escapeAttr(q.id)+'\',\''+escapeAttr(v.id)+'\')">'+transcribeLabel+'</button>' : '';
+        var transcriptFieldId = 'podcast-transcript-'+session.id+'-'+q.id+'-'+v.id;
+        var transcriptStatusId = 'podcast-transcript-status-'+session.id+'-'+q.id+'-'+v.id;
+        return '<div style="border:1px solid var(--bdr);border-radius:8px;padding:12px;background:var(--gray);margin-top:10px">'
+          + '<div style="font-size:13px;font-weight:700">'+escapeHtml(label)+'</div>'
+          + '<div class="hint">Duration: '+escapeHtml(v.duration ? Math.round(v.duration)+'s' : '-')+' · Transcript: '+escapeHtml(v.transcriptionStatus || 'not_requested')+'</div>'
+          + podcastAudioHtml(v, audioId)
+          + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" onclick="downloadPodcastPrepAudio(\''+escapeAttr(session.id)+'\',\''+escapeAttr(q.id)+'\',\''+escapeAttr(v.id)+'\')">Download audio</button>'+transcribeBtn+'</div>'
+          + '<div style="font-size:13px;line-height:1.7;margin-top:10px;white-space:pre-wrap">'+tx+'</div>'
+          + '<div class="sfield" style="margin-top:10px"><label>'+(v.transcript ? 'Edit transcript' : 'Add transcript manually')+'</label><textarea id="'+escapeAttr(transcriptFieldId)+'" rows="5">'+escapeHtml(v.transcript || '')+'</textarea><button class="btn" onclick="savePodcastPrepManualTranscript(\''+escapeAttr(session.id)+'\',\''+escapeAttr(q.id)+'\',\''+escapeAttr(v.id)+'\')" style="margin-top:8px">Save transcript</button><span id="'+escapeAttr(transcriptStatusId)+'" class="hint" style="margin-left:8px"></span></div>'
+          + '</div>';
+      }).join('') : '<div class="hint" style="margin-top:8px">No saved response yet.</div>';
+      return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-top:12px">'
+        + '<div style="font-size:12px;font-weight:700;color:var(--yd);margin-bottom:6px">Question '+(i+1)+'</div>'
+        + '<div style="font-size:14px;line-height:1.6;margin-bottom:10px">'+escapeHtml(q.question||'')+'</div>'
+        + versionHtml
+        + '<div class="sfield" style="margin-top:12px"><label>Wocult feedback</label><textarea class="podcast-question-feedback" data-question-id="'+escapeAttr(q.id)+'" rows="4">'+escapeHtml(response.feedback||'')+'</textarea><button class="btn" onclick="savePodcastPrepQuestionFeedback(\''+escapeAttr(session.id)+'\',\''+escapeAttr(q.id)+'\')" style="margin-top:8px">Save feedback</button><span class="hint podcast-feedback-status" data-question-id="'+escapeAttr(q.id)+'" style="margin-left:8px"></span></div>'
+        + '</div>';
+    }).join('');
+  detail._podcastPrepSession = session;
+  detail._podcastPrepResponses = responses;
+  detail._podcastPrepVersions = versionsByQuestion;
+  clearUnsavedChanges();
+}
+function savePodcastPrepQuestionFeedback(sessionId, questionId) {
+  var field = document.querySelector('.podcast-question-feedback[data-question-id="'+questionId+'"]');
+  var status = document.querySelector('.podcast-feedback-status[data-question-id="'+questionId+'"]');
+  if (!field || !db) return Promise.resolve();
+  if (status) status.textContent = 'Saving...';
+  return db.collection('podcast_sessions').doc(sessionId).collection('responses').doc(questionId).set({
+    feedback: field.value.trim(),
+    feedbackUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, {merge:true}).then(function() {
+    if (status) status.textContent = 'Feedback saved.';
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not save: '+err.message;
+  });
+}
+function savePodcastPrepOverallFeedback(sessionId) {
+  var field = document.getElementById('podcast-overall-feedback');
+  var status = document.getElementById('podcast-overall-feedback-status');
+  if (!field || !db) return Promise.resolve();
+  if (status) status.textContent = 'Saving...';
+  return db.collection('podcast_sessions').doc(sessionId).update({
+    overallFeedback: field.value.trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){ if(status) status.textContent='Overall feedback saved.'; }).catch(function(err){ if(status) status.textContent='Could not save: '+err.message; });
+}
+function saveAllPodcastPrepFeedback(sessionId) {
+  var saves = Array.from(document.querySelectorAll('.podcast-question-feedback')).map(function(field) {
+    return db.collection('podcast_sessions').doc(sessionId).collection('responses').doc(field.getAttribute('data-question-id')).set({
+      feedback: field.value.trim(),
+      feedbackUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true});
+  });
+  var overall = document.getElementById('podcast-overall-feedback');
+  saves.push(db.collection('podcast_sessions').doc(sessionId).update({
+    overallFeedback: overall ? overall.value.trim() : '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+  return Promise.all(saves);
+}
+function sharePodcastPrepFeedback(sessionId) {
+  if (!db || !sessionId) return;
+  saveAllPodcastPrepFeedback(sessionId).then(function() {
+    return db.collection('podcast_sessions').doc(sessionId).get();
+  }).then(function(doc) {
+    var s = Object.assign({id:doc.id}, doc.data());
+    return db.collection('podcast_sessions').doc(sessionId).update({
+      status: 'feedback_shared',
+      feedbackSharedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function() {
+      if (s.guestUid) return createNotification({
+        recipientUid: s.guestUid,
+        recipientEmail: s.guestEmail || '',
+        type: 'podcast_prep_feedback',
+        title: 'Podcast Prep feedback ready',
+        message: "Wocult has reviewed your Podcast Prep responses.",
+        relatedCollection: 'podcast_sessions',
+        relatedId: sessionId
+      });
+    });
+  }).then(function() {
+    clearUnsavedChanges();
+    fbToast('Feedback shared with guest.');
+    openPodcastPrepSession(sessionId);
+  }).catch(function(err){ fbToast('Could not share feedback: '+err.message, false); });
+}
+function markPodcastPrepReady(sessionId) {
+  if (!db || !sessionId) return;
+  db.collection('podcast_sessions').doc(sessionId).update({
+    status:'ready',
+    readyAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){ fbToast('Podcast Prep marked ready.'); openPodcastPrepSession(sessionId); }).catch(function(err){ fbToast('Could not mark ready: '+err.message, false); });
+}
+function retryPodcastPrepTranscription(sessionId, questionId, versionId) {
+  return transcribeSinglePodcastPrepResponse(sessionId, questionId, versionId);
+}
+function transcribeSinglePodcastPrepResponse(sessionId, questionId, versionId) {
+  var status = document.getElementById('podcast-transcription-status');
+  if (status) status.textContent = 'Requesting transcript...';
+  return triggerPodcastPrepTranscription(sessionId, questionId, versionId).then(function(){
+    fbToast('Transcript requested.');
+    openPodcastPrepSession(sessionId);
+  }).catch(function(err){
+    fbToast('Could not request transcript: '+err.message, false);
+    if (status) status.textContent = 'Could not request transcript: '+err.message;
+  });
+}
+function confirmTranscribeAllPodcastPrepResponses(sessionId) {
+  var detail = document.getElementById('podcast-prep-detail');
+  var items = podcastPrepEligibleTranscriptionVersions(detail && detail._podcastPrepVersions);
+  if (!items.length) { fbToast('No responses need transcription.'); return Promise.resolve(false); }
+  var totalDuration = items.reduce(function(sum, item){ return sum + Number(item.version.duration || 0); }, 0);
+  var message = 'Generate transcripts?\n\nThis will transcribe '+items.length+' recorded response'+(items.length === 1 ? '' : 's')+' using OpenAI.';
+  if (totalDuration) message += '\n\n'+Math.ceil(totalDuration / 60)+' minutes of recorded audio';
+  if (!window.confirm(message)) return Promise.resolve(false);
+  return transcribeAllPodcastPrepResponses(sessionId, items);
+}
+function transcribeAllPodcastPrepResponses(sessionId, items) {
+  var status = document.getElementById('podcast-transcription-status');
+  var completed = 0;
+  var failed = 0;
+  var chain = Promise.resolve();
+  (items || []).forEach(function(item, index) {
+    chain = chain.then(function() {
+      if (status) status.textContent = 'Transcribing '+(index + 1)+' of '+items.length+' responses...';
+      return triggerPodcastPrepTranscription(sessionId, item.questionId, item.version.id).then(function(result) {
+        if (result && result.status === 'completed') completed += 1;
+        else failed += 1;
+      }).catch(function(err) {
+        console.warn('Podcast Prep transcription failed:', err);
+        failed += 1;
+      });
+    });
+  });
+  return chain.then(function() {
+    if (status) status.textContent = failed ? completed+' transcripts ready. '+failed+' could not be transcribed.' : completed+' transcripts ready.';
+    fbToast(failed ? 'Some transcripts could not be prepared.' : 'Transcripts ready.', failed ? false : true);
+    openPodcastPrepSession(sessionId);
+  });
+}
+function triggerPodcastPrepTranscription(sessionId, questionId, versionId) {
+  return workerFetchWithFirebaseAuth('/podcast-prep/transcribe', {
+    method:'POST',
+    body: JSON.stringify({sessionId:sessionId, questionId:questionId, versionId:versionId})
+  }).then(parseWorkerResponse);
+}
+function downloadPodcastPrepAudio(sessionId, questionId, versionId) {
+  var detail = document.getElementById('podcast-prep-detail');
+  var session = detail && detail._podcastPrepSession || {};
+  var versions = detail && detail._podcastPrepVersions && detail._podcastPrepVersions[questionId];
+  var question = ((session.questions || []).filter(function(q){ return q.id === questionId; })[0]) || {};
+  var version = (versions || []).filter(function(v){ return v.id === versionId; })[0];
+  if (!version || !version.storagePath) { fbToast('No recording is available to download.', false); return Promise.resolve(false); }
+  return workerFetchWithFirebaseAuthRaw('/podcast-prep/audio-download', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({sessionId:sessionId, questionId:questionId, versionId:versionId})
+  }).then(function(response) {
+    if (!response.ok) return parseWorkerResponse(response).then(function(){ throw new Error('Audio download failed.'); });
+    var headerName = response.headers.get('Content-Disposition') || '';
+    var match = headerName.match(/filename="([^"]+)"/i);
+    var filename = match ? match[1] : podcastPrepAudioFilename(session, question, version);
+    return response.blob().then(function(blob){ return {blob:blob, filename:filename}; });
+  }).then(function(result) {
+    downloadBlob(result.blob, result.filename);
+    fbToast('Audio download started.');
+    return true;
+  }).catch(function(err) {
+    console.warn('Could not download Podcast Prep audio:', err);
+    fbToast('Could not download audio: '+err.message, false);
+    return false;
+  });
+}
+function savePodcastPrepManualTranscript(sessionId, questionId, versionId) {
+  var field = document.getElementById('podcast-transcript-'+sessionId+'-'+questionId+'-'+versionId);
+  var status = document.getElementById('podcast-transcript-status-'+sessionId+'-'+questionId+'-'+versionId);
+  if (!field || !db) return Promise.resolve(false);
+  if (status) status.textContent = 'Saving transcript...';
+  return db.collection('podcast_sessions').doc(sessionId).collection('responses').doc(questionId).collection('versions').doc(versionId).update({
+    transcript: field.value.trim(),
+    transcriptionStatus: 'completed',
+    transcriptionSource: 'manual',
+    transcriptionError: '',
+    transcriptUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    transcriptUpdatedBy: currentUser && currentUser.uid || ''
+  }).then(function() {
+    if (status) status.textContent = 'Transcript saved.';
+    fbToast('Transcript saved.');
+    return openPodcastPrepSession(sessionId);
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not save transcript: '+err.message;
+    fbToast('Could not save transcript: '+err.message, false);
+    return false;
+  });
+}
+function checkPodcastPrepAccess(sessionId) {
+  return workerFetchWithFirebaseAuth('/podcast-prep/access-check', {
+    method:'POST',
+    body: JSON.stringify({sessionId:sessionId})
+  }).then(parseWorkerResponse);
+}
+function loadPodcastPrepGuestSession(sessionId) {
+  if (!db || !sessionId) { showAccessScreen(); return; }
+  rememberPodcastPrepRoute(sessionId);
+  hideAllAppScreens();
+  document.getElementById('podcast-prep-guest-screen').style.display = 'flex';
+  var root = document.getElementById('podcast-prep-guest-content');
+  if (root) root.innerHTML = '<h2>Opening Podcast Prep...</h2><p class="sub">Please wait while we open your preparation room.</p>';
+  checkPodcastPrepAccess(sessionId).then(function(access) {
+    if (!access.ok) {
+      if (access.reason === 'unverified') renderPodcastPrepVerifyEmail();
+      else renderPodcastPrepAccessDenied(access.invitedEmail || 'the invited email address');
+      return null;
+    }
+    return db.collection('podcast_sessions').doc(sessionId).get();
+  }).then(function(doc) {
+    if (!doc) return null;
+    if (!doc.exists) throw new Error('This Podcast Prep link was not found.');
+    var session = Object.assign({id:doc.id}, doc.data());
+    var invited = podcastPrepNormalizeEmail(session.guestEmail || session.normalizedGuestEmail);
+    var actual = podcastPrepNormalizeEmail(currentUser && currentUser.email);
+    if (actual !== invited) {
+      renderPodcastPrepAccessDenied(invited);
+      return null;
+    }
+    if (!currentUser.emailVerified) {
+      renderPodcastPrepVerifyEmail();
+      return null;
+    }
+    currentAccessMode = 'podcast_prep_guest';
+    currentAccessKey = sessionId;
+    return bindPodcastPrepGuest(session).then(function(updatedSession) {
+      return loadPodcastPrepResponses(sessionId).then(function(bundle) {
+        window._podcastPrepGuest.sessionId = sessionId;
+        window._podcastPrepGuest.session = updatedSession;
+        window._podcastPrepGuest.responses = bundle.responses;
+        window._podcastPrepGuest.versions = bundle.versions;
+        window._podcastPrepGuest.activeIndex = firstPodcastPrepUnansweredIndex(updatedSession, bundle.responses);
+        renderPodcastPrepGuestWelcome();
+      });
+    });
+  }).catch(function(err) {
+    if (root) root.innerHTML = '<h2>Could not open Podcast Prep</h2><p class="sub">'+escapeHtml(err.message)+'</p>';
+  });
+}
+function renderPodcastPrepAccessDenied(invitedEmail) {
+  var root = document.getElementById('podcast-prep-guest-content');
+  if (root) root.innerHTML = '<h2>Access denied</h2><p class="sub">This Podcast Prep invitation was sent to '+escapeHtml(invitedEmail)+'. Please sign in with that verified email address or contact Wocult.</p>';
+}
+function renderPodcastPrepVerifyEmail() {
+  var root = document.getElementById('podcast-prep-guest-content');
+  if (root) root.innerHTML = '<h2>Verify your email</h2><p class="sub">For private Podcast Prep responses, please verify your email before opening this room.</p><button class="btn-lg btn-y" onclick="resendPodcastPrepVerification()">Resend verification email</button><div id="podcast-verify-status" class="hint" style="margin-top:10px"></div>';
+}
+function resendPodcastPrepVerification() {
+  var status = document.getElementById('podcast-verify-status');
+  if (!currentUser || !currentUser.sendEmailVerification) return;
+  currentUser.sendEmailVerification().then(function(){ if(status) status.textContent='Verification email sent. After verifying, refresh this page.'; }).catch(function(err){ if(status) status.textContent='Could not send verification email: '+err.message; });
+}
+function bindPodcastPrepGuest(session) {
+  var patch = {updatedAt: firebase.firestore.FieldValue.serverTimestamp()};
+  if (!session.guestUid) patch.guestUid = currentUser.uid;
+  if (session.status === 'sent') {
+    patch.status = 'opened';
+    patch.openedAt = firebase.firestore.FieldValue.serverTimestamp();
+  }
+  if (Object.keys(patch).length <= 1) return Promise.resolve(session);
+  return db.collection('podcast_sessions').doc(session.id).update(patch).then(function() {
+    return Object.assign({}, session, {
+      guestUid: session.guestUid || currentUser.uid,
+      status: session.status === 'sent' ? 'opened' : session.status
+    });
+  });
+}
+function firstPodcastPrepUnansweredIndex(session, responses) {
+  var questions = session.questions || [];
+  for (var i=0; i<questions.length; i++) {
+    if (!(responses[questions[i].id] && responses[questions[i].id].hasSavedResponse)) return i;
+  }
+  return Math.max(0, questions.length - 1);
+}
+function podcastPrepSavedCount() {
+  var session = window._podcastPrepGuest.session || {};
+  return (session.questions || []).filter(function(q){ return window._podcastPrepGuest.responses[q.id] && window._podcastPrepGuest.responses[q.id].hasSavedResponse; }).length;
+}
+function renderPodcastPrepGuestWelcome() {
+  var root = document.getElementById('podcast-prep-guest-content');
+  var session = window._podcastPrepGuest.session || {};
+  var total = (session.questions || []).length;
+  var saved = podcastPrepSavedCount();
+  if (!root) return;
+  root.innerHTML = '<h2>'+escapeHtml(session.podcastTitle || 'Podcast Prep')+'</h2>'
+    + '<p class="sub">For '+escapeHtml(session.guestName || 'you')+'</p>'
+    + '<div style="padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin:18px 0;line-height:1.7;white-space:pre-line">'+escapeHtml(session.guestIntro || '')+'</div>'
+    + '<p class="sub">These are preparation responses, not the final podcast. Record your thoughts in your own words. Each response is saved separately, so you can stop and return later.</p>'
+    + '<div style="font-size:14px;font-weight:700;margin:18px 0;color:var(--blk)">'+saved+' of '+total+' responses saved</div>'
+    + '<button class="btn-lg btn-y" onclick="renderPodcastPrepQuestion()"> '+(saved ? 'Continue Preparation' : 'Start Preparation')+'</button>';
+  clearUnsavedChanges();
+}
+function renderPodcastPrepQuestion() {
+  var root = document.getElementById('podcast-prep-guest-content');
+  var state = window._podcastPrepGuest;
+  var session = state.session || {};
+  var questions = session.questions || [];
+  if (!questions.length) { root.innerHTML = '<h2>No questions found.</h2>'; return; }
+  var idx = Math.max(0, Math.min(state.activeIndex || 0, questions.length - 1));
+  var q = questions[idx];
+  var versions = state.versions[q.id] || [];
+  var response = state.responses[q.id] || {};
+  var latest = versions.length ? versions[versions.length - 1] : null;
+  var canSubmit = podcastPrepSavedCount() === questions.length;
+  var feedbackHtml = session.status === 'feedback_shared' || session.status === 'ready'
+    ? '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-top:16px"><div style="font-size:13px;font-weight:700;margin-bottom:8px">Wocult feedback</div><div style="font-size:13px;line-height:1.7;white-space:pre-wrap">'+escapeHtml(response.feedback || 'No question-specific feedback yet.')+'</div>'+(response.feedback ? '<button class="btn" onclick="startPodcastPrepRecording()" style="margin-top:10px">Record a revised response</button>' : '')+'</div>' : '';
+  var audioId = 'guest-podcast-latest-audio';
+  root.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px"><div><h2 style="margin-bottom:6px">'+escapeHtml(session.podcastTitle||'Podcast Prep')+'</h2><div class="hint">Question '+(idx+1)+' of '+questions.length+' · '+podcastPrepSavedCount()+' of '+questions.length+' responses saved</div></div><button class="btn" onclick="renderPodcastPrepGuestWelcome()">Overview</button></div>'
+    + '<div style="padding:18px;border:1px solid var(--bdr);border-radius:8px;background:#fff;margin-bottom:16px;font-size:17px;line-height:1.6;color:var(--blk)">'+escapeHtml(q.question||'')+'</div>'
+    + (latest ? '<div style="padding:14px;border:1px solid var(--bdr);border-radius:8px;background:var(--gray);margin-bottom:16px"><div style="font-size:13px;font-weight:700">Saved response '+escapeHtml(latest.versionNumber > 1 ? 'Version '+latest.versionNumber : '')+'</div>'+podcastAudioHtml(latest, audioId)+'<div class="hint" style="margin-top:8px">'+escapeHtml(podcastPrepTranscriptHumanStatus(latest))+'</div><div style="font-size:13px;line-height:1.7;margin-top:8px;white-space:pre-wrap">'+escapeHtml(latest.transcript || '')+'</div></div>' : '')
+    + '<div id="podcast-recording-panel" style="padding:16px;border:1px solid var(--bdr);border-radius:8px;background:#fff"><button class="btn-lg btn-y" id="podcast-record-btn" onclick="startPodcastPrepRecording()">Record response</button><div id="podcast-recording-status" class="hint" style="margin-top:10px"></div><div id="podcast-local-playback" style="margin-top:12px"></div></div>'
+    + feedbackHtml
+    + '<div id="podcast-save-status" class="hint" style="margin-top:12px"></div>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px"><button class="btn" onclick="movePodcastPrepGuestQuestion(-1)" '+(idx===0?'disabled style="opacity:0.5"':'')+'>Previous</button><button class="btn" onclick="movePodcastPrepGuestQuestion(1)" '+(idx>=questions.length-1 || !response.hasSavedResponse?'disabled style="opacity:0.5"':'')+'>Next</button><button class="btn-lg btn-y" onclick="showPodcastPrepSubmitReview()" '+(canSubmit?'':'disabled style="opacity:0.5;cursor:not-allowed"')+'>Submit Podcast Prep</button></div>';
+  clearUnsavedChanges();
+}
+function podcastPrepTranscriptHumanStatus(v) {
+  if (!v) return '';
+  if (v.transcriptionStatus === 'completed') return 'Transcript ready';
+  if (v.transcriptionStatus === 'failed') return "We couldn't prepare the transcript yet. Your recording is safe.";
+  if (v.transcriptionStatus === 'processing' || v.transcriptionStatus === 'pending') return 'Preparing transcript...';
+  return 'Transcript not generated yet';
+}
+function selectPodcastPrepMimeType() {
+  var types = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus'];
+  if (!window.MediaRecorder) return '';
+  for (var i=0; i<types.length; i++) {
+    if (MediaRecorder.isTypeSupported(types[i])) return types[i];
+  }
+  return '';
+}
+function startPodcastPrepRecording() {
+  var status = document.getElementById('podcast-recording-status');
+  var playback = document.getElementById('podcast-local-playback');
+  var btn = document.getElementById('podcast-record-btn');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+    if (status) status.textContent = 'This browser cannot record audio here. Please try a current Chrome, Edge, Safari or Firefox browser.';
+    return;
+  }
+  clearPodcastPrepLocalTake();
+  navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream) {
+    var mimeType = selectPodcastPrepMimeType();
+    var options = mimeType ? {mimeType:mimeType} : {};
+    var recorder = new MediaRecorder(stream, options);
+    window._podcastPrepGuest.recorder = recorder;
+    window._podcastPrepGuest.chunks = [];
+    window._podcastPrepGuest.recordingStartedAt = Date.now();
+    recorder.ondataavailable = function(e){ if (e.data && e.data.size) window._podcastPrepGuest.chunks.push(e.data); };
+    recorder.onstop = function() {
+      stream.getTracks().forEach(function(track){ track.stop(); });
+      var blob = new Blob(window._podcastPrepGuest.chunks, {type: recorder.mimeType || mimeType || 'audio/webm'});
+      window._podcastPrepGuest.localBlob = blob;
+      window._podcastPrepGuest.localDuration = (Date.now() - window._podcastPrepGuest.recordingStartedAt) / 1000;
+      window._podcastPrepGuest.localUrl = URL.createObjectURL(blob);
+      if (playback) playback.innerHTML = '<audio controls src="'+escapeAttr(window._podcastPrepGuest.localUrl)+'" style="width:100%"></audio><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" onclick="startPodcastPrepRecording()">Record again</button><button class="btn-lg btn-y" id="podcast-save-btn" onclick="savePodcastPrepResponse()">Save & continue</button></div>';
+      if (status) status.textContent = 'Listen back, then save when you are ready.';
+      markUnsavedChanges();
+    };
+    recorder.start();
+    if (btn) { btn.textContent = 'Stop recording'; btn.onclick = stopPodcastPrepRecording; }
+    if (status) status.textContent = 'Recording... 0:00';
+    window._podcastPrepGuest.timer = setInterval(function() {
+      var sec = Math.floor((Date.now() - window._podcastPrepGuest.recordingStartedAt)/1000);
+      if (status) status.textContent = 'Recording... '+Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0');
+    }, 500);
+  }).catch(function(err) {
+    if (status) status.textContent = err && err.name === 'NotAllowedError' ? 'Microphone permission is required. Allow microphone access in your browser, then try again.' : 'Could not start the microphone: '+(err.message || err.name || 'Unknown error');
+  });
+}
+function stopPodcastPrepRecording() {
+  var state = window._podcastPrepGuest;
+  if (state.timer) { clearInterval(state.timer); state.timer = null; }
+  if (state.recorder && state.recorder.state !== 'inactive') state.recorder.stop();
+}
+function clearPodcastPrepLocalTake() {
+  var state = window._podcastPrepGuest;
+  if (state.timer) clearInterval(state.timer);
+  state.timer = null;
+  if (state.localUrl) URL.revokeObjectURL(state.localUrl);
+  state.localBlob = null;
+  state.localUrl = '';
+  state.chunks = [];
+  clearUnsavedChanges();
+}
+function savePodcastPrepResponse() {
+  var state = window._podcastPrepGuest;
+  if (state.saving || !state.localBlob || !db || !storage) return;
+  var session = state.session;
+  var q = (session.questions || [])[state.activeIndex];
+  if (!q) return;
+  var status = document.getElementById('podcast-save-status');
+  var btn = document.getElementById('podcast-save-btn');
+  state.saving = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving your response...'; }
+  if (status) status.textContent = 'Saving your response...';
+  var existingVersions = state.versions[q.id] || [];
+  var versionNumber = existingVersions.length + 1;
+  var versionRef = db.collection('podcast_sessions').doc(session.id).collection('responses').doc(q.id).collection('versions').doc();
+  var storagePath = getPodcastRecordingStoragePath(session.id, currentUser.uid, q.id, versionRef.id, state.localBlob.type);
+  var uploadCompleted = false;
+  var versionRegistered = false;
+  storage.ref(storagePath).put(state.localBlob, {contentType: state.localBlob.type || 'audio/webm'}).then(function() {
+    uploadCompleted = true;
+    var versionData = {
+      versionNumber: versionNumber,
+      storagePath: storagePath,
+      audioMimeType: state.localBlob.type || 'audio/webm',
+      duration: state.localDuration || 0,
+      transcript: '',
+      transcriptionStatus: 'not_requested',
+      transcriptionError: '',
+      transcriptionSource: '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdByUid: currentUser.uid
+    };
+    var responseRef = db.collection('podcast_sessions').doc(session.id).collection('responses').doc(q.id);
+    var responseData = {
+      questionId: q.id,
+      questionOrder: q.order || (state.activeIndex + 1),
+      questionText: q.question || '',
+      hasSavedResponse: true,
+      latestVersionId: versionRef.id,
+      latestVersionNumber: versionNumber,
+      responseUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    var completedCount = Math.max(podcastPrepSavedCount() + (state.responses[q.id] && state.responses[q.id].hasSavedResponse ? 0 : 1), session.completedQuestionCount || 0);
+    var sessionPatch = {
+      completedQuestionCount: completedCount,
+      status: session.status === 'feedback_shared' ? 'feedback_shared' : 'in_progress',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    return versionRef.set(versionData).then(function(){ versionRegistered = true; return responseRef.set(responseData, {merge:true}); }).then(function(){ return db.collection('podcast_sessions').doc(session.id).update(sessionPatch); }).then(function() {
+      state.responses[q.id] = Object.assign({}, state.responses[q.id] || {}, responseData, {hasSavedResponse:true, latestVersionId:versionRef.id, latestVersionNumber:versionNumber});
+      state.versions[q.id] = (state.versions[q.id] || []).concat([Object.assign({id:versionRef.id}, versionData)]);
+      state.session = Object.assign({}, session, {completedQuestionCount:completedCount, status:sessionPatch.status});
+      clearPodcastPrepLocalTake();
+      if (status) status.textContent = 'Response saved. '+completedCount+' of '+(session.questions||[]).length+' responses saved.';
+    });
+  }).then(function() {
+    if ((state.session.questions || [])[state.activeIndex + 1]) state.activeIndex += 1;
+    renderPodcastPrepQuestion();
+  }).catch(function(err) {
+    if (uploadCompleted && !versionRegistered && storagePath) {
+      storage.ref(storagePath).delete().catch(function(cleanupErr) {
+        console.warn('Podcast Prep cleanup failed for unregistered audio:', cleanupErr);
+      });
+    }
+    if (status) status.textContent = uploadCompleted ? 'Audio uploaded, but the save could not be completed. Please retry without closing this page: '+err.message : 'Could not upload your response: '+err.message;
+  }).finally(function() {
+    state.saving = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Save & continue'; }
+  });
+}
+function movePodcastPrepGuestQuestion(delta) {
+  var state = window._podcastPrepGuest;
+  var questions = (state.session && state.session.questions) || [];
+  var next = (state.activeIndex || 0) + delta;
+  if (next < 0 || next >= questions.length) return;
+  if (delta > 0 && !(state.responses[questions[state.activeIndex].id] && state.responses[questions[state.activeIndex].id].hasSavedResponse)) return;
+  state.activeIndex = next;
+  renderPodcastPrepQuestion();
+}
+function showPodcastPrepSubmitReview() {
+  var root = document.getElementById('podcast-prep-guest-content');
+  var state = window._podcastPrepGuest;
+  var session = state.session || {};
+  var questions = session.questions || [];
+  if (podcastPrepSavedCount() !== questions.length) return;
+  root.innerHTML = '<h2>Submit Podcast Prep</h2><p class="sub">Every question has a saved response. Submission does not need to wait for transcripts.</p>'
+    + '<div style="display:flex;flex-direction:column;gap:10px;margin:18px 0">'+questions.map(function(q,i){ return '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:#fff"><b>Question '+(i+1)+'</b><br>'+escapeHtml(q.question||'')+'<div class="hint">Response saved</div></div>'; }).join('')+'</div>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="renderPodcastPrepQuestion()">Back</button><button class="btn-lg btn-y" onclick="submitPodcastPrepFinal()">Submit Podcast Prep</button></div><div id="podcast-submit-status" class="hint" style="margin-top:10px"></div>';
+}
+function submitPodcastPrepFinal() {
+  var state = window._podcastPrepGuest;
+  var session = state.session || {};
+  var status = document.getElementById('podcast-submit-status');
+  if (state.submitting) return;
+  if (session.status === 'submitted') {
+    if (status) status.textContent = 'Your Podcast Prep has already been submitted to Wocult.';
+    return;
+  }
+  state.submitting = true;
+  if (status) status.textContent = 'Submitting Podcast Prep...';
+  var sessionRef = db.collection('podcast_sessions').doc(session.id);
+  var notificationRef = db.collection('notifications').doc('podcast_prep_submitted_' + session.id);
+  var completedCount = podcastPrepSavedCount();
+  db.runTransaction(function(tx) {
+    return tx.get(sessionRef).then(function(doc) {
+      if (!doc.exists) throw new Error('Podcast Prep session was not found.');
+      var latest = doc.data() || {};
+      if (latest.status === 'submitted') return {alreadySubmitted:true, completedQuestionCount: latest.completedQuestionCount || completedCount};
+      var questions = latest.questions || session.questions || [];
+      if (!questions.length) throw new Error('No Podcast Prep questions were found.');
+      return Promise.all(questions.map(function(q) {
+        return tx.get(sessionRef.collection('responses').doc(q.id));
+      })).then(function(responseDocs) {
+        var missing = responseDocs.some(function(responseDoc){ return !responseDoc.exists || !(responseDoc.data() || {}).hasSavedResponse; });
+        if (missing) throw new Error('Please save a response for every question before submitting.');
+        completedCount = responseDocs.length;
+        tx.update(sessionRef, {
+          status: 'submitted',
+          submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          completedQuestionCount: completedCount,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        tx.set(notificationRef, {
+          recipientUid: '',
+          recipientEmail: '',
+          recipientRole: 'staff',
+          type: 'podcast_prep_submitted',
+          title: 'Podcast Prep submitted',
+          message: (session.guestName || 'A guest') + ' submitted Podcast Prep for ' + (session.podcastTitle || 'a podcast'),
+          relatedCollection: 'podcast_sessions',
+          relatedId: session.id,
+          relatedStatus: '',
+          isRead: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdBy: currentUser && currentUser.email ? currentUser.email : '',
+          createdByRole: currentAccessMode
+        });
+        return {alreadySubmitted:false, completedQuestionCount: completedCount};
+      });
+    });
+  }).then(function(result) {
+    state.session.status = 'submitted';
+    state.session.completedQuestionCount = result && typeof result.completedQuestionCount === 'number' ? result.completedQuestionCount : completedCount;
+    clearUnsavedChanges();
+    if (status) status.textContent = result && result.alreadySubmitted ? 'Your Podcast Prep has already been submitted to Wocult.' : 'Thank you. Your Podcast Prep has been submitted to Wocult.';
+  }).catch(function(err) {
+    if (status) status.textContent = 'Could not submit: '+err.message;
+  }).finally(function() {
+    state.submitting = false;
+  });
+}
+function downloadPodcastPrepDocx(sessionId) {
+  var detail = document.getElementById('podcast-prep-detail');
+  var session = detail && detail._podcastPrepSession;
+  var responses = detail && detail._podcastPrepResponses;
+  var versionsByQuestion = detail && detail._podcastPrepVersions;
+  if (!session || !window.docx) { alert('Could not create the Word document right now.'); return; }
+  var d = window.docx;
+  var children = [
+    new d.Paragraph({text:'WOCULT / Podcast Preparation', heading:d.HeadingLevel.TITLE}),
+    new d.Paragraph({text:'Podcast / episode title: '+(session.podcastTitle||'')}),
+    new d.Paragraph({text:'Guest name: '+(session.guestName||'')}),
+    new d.Paragraph({text:'Guest email: '+(session.guestEmail||'')}),
+    new d.Paragraph({text:'Date: '+new Date().toLocaleDateString('en-IN')}),
+    new d.Paragraph({text:'Session status: '+podcastPrepStatusLabel(session.status)}),
+    new d.Paragraph({text:''})
+  ];
+  (session.questions || []).forEach(function(q, i) {
+    children.push(new d.Paragraph({text:'Question '+(i+1), heading:d.HeadingLevel.HEADING_2}));
+    children.push(new d.Paragraph({text:q.question || ''}));
+    var versions = (versionsByQuestion && versionsByQuestion[q.id]) || [];
+    if (!versions.length) children.push(new d.Paragraph({text:'No saved response.'}));
+    versions.forEach(function(v, vi) {
+      children.push(new d.Paragraph({text:(vi === 0 ? 'Version 1 / Original response transcript' : 'Version '+v.versionNumber+' / Revised response transcript'), heading:d.HeadingLevel.HEADING_3}));
+      if (v.transcriptionStatus === 'completed' && v.transcript) children.push(new d.Paragraph({text:v.transcript || ''}));
+      else if ((v.transcriptionStatus || 'not_requested') === 'not_requested') children.push(new d.Paragraph({text:'Transcript not generated.'}));
+      else if (v.transcriptionStatus === 'processing' || v.transcriptionStatus === 'pending') children.push(new d.Paragraph({text:'Transcript being prepared.'}));
+      else if (v.transcriptionStatus === 'failed') children.push(new d.Paragraph({text:'Transcript unavailable.'+(v.transcriptionError ? ' '+v.transcriptionError : '')}));
+      else children.push(new d.Paragraph({text:'Transcript status: '+(v.transcriptionStatus || 'not_requested')}));
+    });
+    children.push(new d.Paragraph({text:'Wocult feedback', heading:d.HeadingLevel.HEADING_3}));
+    children.push(new d.Paragraph({text:(responses && responses[q.id] && responses[q.id].feedback) || ''}));
+    children.push(new d.Paragraph({text:''}));
+  });
+  children.push(new d.Paragraph({text:'Overall Wocult feedback', heading:d.HeadingLevel.HEADING_2}));
+  children.push(new d.Paragraph({text:session.overallFeedback || (document.getElementById('podcast-overall-feedback') ? document.getElementById('podcast-overall-feedback').value : '') || ''}));
+  children.push(new d.Paragraph({text:'Document generated: '+new Date().toLocaleString('en-IN')}));
+  var doc = new d.Document({sections:[{properties:{}, children:children}]});
+  d.Packer.toBlob(doc).then(function(blob) {
+    downloadBlob(blob, 'wocult-podcast-prep-'+safeFileName(session.guestName || 'guest')+'-'+safeFileName(session.podcastTitle || 'episode')+'.docx');
+  });
+}
 function goToLanding() {
+  if (currentAccessMode === 'podcast_prep_guest') { loadPodcastPrepGuestSession(currentAccessKey); return; }
   if (currentAccessMode === 'guest') { loadGuestInterview(currentAccessKey); return; }
   if (currentAccessMode === 'guest_writer') { showGuestWriterDashboard(); return; }
   if (currentAccessMode !== 'staff') { showAccessScreen(); return; }
@@ -6269,6 +7271,8 @@ function hideStaffLandingPanels() {
     'landing-existing-draft',
     'landing-prepare-interview',
     'landing-interview-submissions',
+    'landing-podcast-prep',
+    'landing-podcast-prep-create',
     'landing-guest-writer-applications',
     'landing-guest-writer-stories',
     'landing-editorial-tracker',
@@ -13899,8 +14903,19 @@ renderSaved();
 renderSourceFilters();
 loadAll();
 var accessKeyFromUrl = new URLSearchParams(window.location.search).get('key');
+var podcastPrepFromUrl = getPodcastPrepIdFromUrl();
 var staffViewFromUrl = getStaffViewParams();
-if (accessKeyFromUrl && accessKeyFromUrl.trim().toUpperCase().indexOf('INT-') === 0) {
+if (podcastPrepFromUrl) {
+  rememberPodcastPrepRoute(podcastPrepFromUrl);
+  if (auth) {
+    auth.onAuthStateChanged(function(user) {
+      if (user) routeSignedInUser(user);
+      else showAccessScreen();
+    });
+  } else {
+    showAccessScreen();
+  }
+} else if (accessKeyFromUrl && accessKeyFromUrl.trim().toUpperCase().indexOf('INT-') === 0) {
   handleAccessKey(accessKeyFromUrl);
 } else if (staffViewFromUrl || !restoreAccessSession()) {
   if (auth) {

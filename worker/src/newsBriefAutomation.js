@@ -1214,7 +1214,7 @@ async function createJwt(claims, privateKeyPem) {
   return `${body}.${base64UrlBytes(new Uint8Array(sig))}`;
 }
 
-async function verifyFirebaseIdToken(token, env, deps = {}) {
+export async function verifyFirebaseIdToken(token, env, deps = {}) {
   const fetchImpl = deps.fetch || fetch;
   const res = await fetchImpl(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${env.FIREBASE_WEB_API_KEY || ''}`, {
     method: 'POST',
@@ -1223,7 +1223,13 @@ async function verifyFirebaseIdToken(token, env, deps = {}) {
   });
   const data = await res.json();
   if (!res.ok || !data.users?.[0]) throw new Error('Invalid Firebase ID token');
-  return { email: data.users[0].email, uid: data.users[0].localId };
+  return {
+    email: data.users[0].email,
+    uid: data.users[0].localId,
+    user_id: data.users[0].localId,
+    sub: data.users[0].localId,
+    email_verified: data.users[0].emailVerified === true,
+  };
 }
 
 async function recordAttempt(env, candidateId, type, data, deps = {}) {

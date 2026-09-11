@@ -10,8 +10,11 @@ function compact(value) {
   return String(value).replace(/\s+/g, ' ');
 }
 
-test('firebase.json references only firestore.rules and no .firebaserc is introduced', () => {
-  assert.deepEqual(firebaseConfig, { firestore: { rules: 'firestore.rules' } });
+test('firebase.json references Firestore and Storage rules without introducing .firebaserc', () => {
+  assert.deepEqual(firebaseConfig, {
+    firestore: { rules: 'firestore.rules' },
+    storage: { rules: 'storage.rules' },
+  });
   assert.equal(existsSync(new URL('../../.firebaserc', import.meta.url)), false);
 });
 
@@ -54,11 +57,13 @@ test('Canva field validation restricts keys, types and counts', () => {
   assert.match(compact(rules), /field\.keys\(\)\.hasOnly\(\["id", "type", "label"\]\)/);
   assert.match(rules, /field\.id is string/);
   assert.match(rules, /field\.label is string/);
-  assert.match(compact(rules), /type in \["headline", "subtitle", "bullet"\]/);
+  assert.match(compact(rules), /field\.type in \["headline", "subtitle", "bullet"\]/);
   assert.match(compact(rules), /size == 1 && isValidCanvaFields1\(fields\)/);
   assert.match(compact(rules), /size == 7 && isValidCanvaFields7\(fields\)/);
-  assert.match(compact(rules), /\+ \(t6 == "headline" \? 1 : 0\) == 1/);
-  assert.match(compact(rules), /\+ \(t6 == "subtitle" \? 1 : 0\) == 1/);
+  assert.match(compact(rules), /fields\[0\]\.type == "headline"/);
+  assert.match(compact(rules), /fields\[1\]\.type != "headline"/);
+  assert.match(compact(rules), /fields\[1\]\.type == "subtitle"/);
+  assert.match(compact(rules), /fields\[6\]\.type == "bullet"/);
 });
 
 test('Canva URL validation supports safe remote URLs and local preview fallbacks', () => {
@@ -71,12 +76,28 @@ test('Canva URL validation supports safe remote URLs and local preview fallbacks
   assert.match(rules, /isSafePreviewImageUrl\(template\.previewImageUrl\)/);
 });
 
-test('catch-all rule excludes only the exact Canva document and preserves other broad compatibility access', () => {
+test('catch-all rule excludes editorial_config while preserving non-Canva compatibility access', () => {
+  assert.match(rules, /match \/editorial_config\/\{documentId\} \{/);
+  assert.match(rules, /allow read, write: if documentId != "canva_templates";/);
   assert.match(rules, /match \/\{collection\}\/\{document=\*\*\} \{/);
   assert.match(rules, /collection != "news_brief_automation"/);
   assert.match(rules, /collection != "news_brief_automation_runs"/);
-  assert.match(rules, /request\.path !=\s*\/databases\/\$\(database\)\/documents\/editorial_config\/canva_templates;/);
-  assert.doesNotMatch(rules, /collection != "editorial_config"/);
+  assert.match(rules, /collection != "podcast_sessions"/);
+  assert.match(rules, /collection != "editorial_config"/);
+});
+
+test('Podcast Prep collection has explicit authenticated guest and staff rules', () => {
+  assert.match(rules, /match \/podcast_sessions\/\{sessionId\} \{/);
+  assert.match(rules, /allow list: if isWocultStaff\(\);/);
+  assert.match(rules, /allow get: if canAccessPodcastSession\(sessionId\);/);
+  assert.match(rules, /request\.auth\.token\.email_verified == true/);
+  assert.match(rules, /normalizedGuestEmail == authedEmailLower\(\)/);
+  assert.match(rules, /match \/responses\/\{questionId\} \{/);
+  assert.match(rules, /match \/versions\/\{versionId\} \{/);
+  assert.match(rules, /storagePath\.matches\('\^podcast_recordings\//);
+  assert.match(rules, /request\.resource\.data\.transcriptionStatus == "not_requested"/);
+  assert.match(rules, /"transcriptionSource"/);
+  assert.match(rules, /allow update: if isWocultStaff\(\);/);
 });
 
 test('source-controlled Worker vars declare WEBFLOW_SITE_ID without adding Webflow secrets', () => {

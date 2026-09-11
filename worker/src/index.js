@@ -3,6 +3,7 @@ import {
   requireFirebaseAdminEmailRoute,
   requireProtectedRoute,
   scheduledNewsBriefAutomation,
+  verifyFirebaseIdToken,
 } from './newsBriefAutomation.js';
 
 export default {
@@ -266,6 +267,27 @@ export default {
       if (!data.access_token) throw new Error('Firebase OAuth token exchange failed: missing access_token');
       return data.access_token;
     };
+    const getGoogleAccessTokenLocal = async (scope, description = 'Google API') => {
+      if (env.FIREBASE_ACCESS_TOKEN && scope === 'https://www.googleapis.com/auth/datastore') return env.FIREBASE_ACCESS_TOKEN;
+      if (!env.FIREBASE_CLIENT_EMAIL || !env.FIREBASE_PRIVATE_KEY) throw new Error(`Firebase service-account secrets are required for ${description}`);
+      const iat = Math.floor(Date.now() / 1000);
+      const assertion = await createNewsImageJwt({
+        iss: env.FIREBASE_CLIENT_EMAIL,
+        scope,
+        aud: 'https://oauth2.googleapis.com/token',
+        iat,
+        exp: iat + 3600,
+      }, env.FIREBASE_PRIVATE_KEY);
+      const res = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }).toString(),
+      });
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+      if (!res.ok || !data.access_token) throw new Error(`${description} OAuth token exchange failed`);
+      return data.access_token;
+    };
     const firestoreFetchLocal = async (target, init = {}) => {
       const token = await getFirestoreAccessTokenLocal();
       const res = await fetch(target, {
@@ -295,6 +317,146 @@ export default {
         body: JSON.stringify({ fields: toFirestoreFieldsLocal(fields) }),
       });
       return fromFirestoreDocLocal(await res.json());
+    };
+    const firestoreDocUrl = (...parts) => `${firestoreRoot()}/${parts.map((part) => encodeURIComponent(part)).join('/')}`;
+    const getFirestoreDocLocal = async (...parts) => {
+      const res = await firestoreFetchLocal(firestoreDocUrl(...parts));
+      if (res.status === 404) return null;
+      return fromFirestoreDocLocal(await res.json());
+    };
+    const patchFirestoreDocLocal = async (parts, fields) => {
+      const target = new URL(firestoreDocUrl(...parts));
+      Object.keys(fields).forEach((key) => target.searchParams.append('updateMask.fieldPaths', key));
+      const res = await firestoreFetchLocal(target.toString(), {
+        method: 'PATCH',
+        body: JSON.stringify({ fields: toFirestoreFieldsLocal(fields) }),
+      });
+      return fromFirestoreDocLocal(await res.json());
+    };
+    const requireFirebaseUser = async (request) => {
+      const auth = request.headers.get('Authorization') || '';
+      const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1] || '';
+      if (!bearer || !env.FIREBASE_PROJECT_ID) return null;
+      return verifyFirebaseIdToken(bearer, env).catch(() => null);
+    };
+    const workerStaffEmails = new Set(['poorvi.arya23@gmail.com', 'divya.madaan@gmail.com', 'anmadaan@gmail.com']);
+    const canAccessPodcastSession = (claims, session) => {
+      const email = String(claims?.email || '').toLowerCase();
+      if (workerStaffEmails.has(email)) return true;
+      if (!claims?.email_verified) return false;
+      if (!session || String(session.normalizedGuestEmail || '').toLowerCase() !== email) return false;
+      return !session.guestUid || session.guestUid === claims.user_id || session.guestUid === claims.sub;
+    };
+    const isWorkerStaff = (claims) => workerStaffEmails.has(String(claims?.email || '').toLowerCase());
+    const downloadStorageObject = async (path) => {
+      const bucket = env.FIREBASE_STORAGE_BUCKET || 'wocult-tasks.firebasestorage.app';
+      const token = await getGoogleAccessTokenLocal('https://www.googleapis.com/auth/devstorage.read_only', 'Podcast Prep audio download');
+      const res = await fetch(`https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(path)}?alt=media`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Storage download failed ${res.status}: ${text.slice(0, 120)}`);
+      }
+      return res;
+    };
+    const safeDownloadName = (value, fallback = 'audio') => {
+      const text = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+      return text || fallback;
+    };
+    const podcastAudioExtension = (version) => {
+      const path = String(version?.storagePath || '');
+      const match = path.match(/\.([A-Za-z0-9]+)$/);
+      if (match) return match[1].toLowerCase();
+      const mime = String(version?.audioMimeType || '');
+      if (/mp4/i.test(mime)) return 'mp4';
+      if (/ogg/i.test(mime)) return 'ogg';
+      return 'webm';
+    };
+    const podcastAudioFilename = (session, questionId, version) => {
+      const questions = Array.isArray(session?.questions) ? session.questions : [];
+      const question = questions.find((q) => q && q.id === questionId) || {};
+      const qNum = String(question.order || question.questionOrder || 1).padStart(2, '0');
+      const vNum = version?.versionNumber || 1;
+      return `wocult-podcast-prep-${safeDownloadName(session?.podcastTitle, 'episode')}-${safeDownloadName(session?.guestName, 'guest')}-q${qNum}-v${vNum}.${podcastAudioExtension(version)}`;
+    };
+    const downloadPodcastAudioVersion = async ({ session, sessionId, questionId, versionId }) => {
+      const version = await getFirestoreDocLocal('podcast_sessions', sessionId, 'responses', questionId, 'versions', versionId);
+      if (!version) {
+        const err = new Error('Response version was not found.');
+        err.status = 404;
+        throw err;
+      }
+      const storagePath = String(version.storagePath || '');
+      if (!storagePath || !storagePath.startsWith(`podcast_recordings/${sessionId}/`) || !storagePath.includes(`/${questionId}/`)) {
+        const err = new Error('Recording path is invalid.');
+        err.status = 400;
+        throw err;
+      }
+      const storageRes = await downloadStorageObject(storagePath);
+      const type = version.audioMimeType || storageRes.headers.get('Content-Type') || 'application/octet-stream';
+      const filename = podcastAudioFilename(session, questionId, version).replace(/"/g, '');
+      return new Response(storageRes.body, {
+        status: 200,
+        headers: {
+          ...cors,
+          'Access-Control-Expose-Headers': 'Content-Disposition,Content-Type',
+          'Cache-Control': 'no-store',
+          'Content-Type': type,
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+      });
+    };
+    const transcribePodcastVersion = async ({ sessionId, questionId, versionId }) => {
+      const versionParts = ['podcast_sessions', sessionId, 'responses', questionId, 'versions', versionId];
+      const version = await getFirestoreDocLocal(...versionParts);
+      if (!version) {
+        const err = new Error('Response version was not found.');
+        err.status = 404;
+        throw err;
+      }
+      await patchFirestoreDocLocal(versionParts, {
+        transcriptionStatus: 'processing',
+        transcriptionError: '',
+      });
+      if (!env.OPENAI_API_KEY) {
+        await patchFirestoreDocLocal(versionParts, {
+          transcriptionStatus: 'failed',
+          transcriptionError: 'Transcription provider is not configured. Add OPENAI_API_KEY to enable Podcast Prep transcription.',
+        });
+        return { ok: false, status: 'failed', error: 'transcription_not_configured' };
+      }
+      try {
+        const audioRes = await downloadStorageObject(version.storagePath);
+        const blob = await audioRes.blob();
+        const ext = /mp4/i.test(version.audioMimeType || '') ? 'mp4' : (/ogg/i.test(version.audioMimeType || '') ? 'ogg' : 'webm');
+        const form = new FormData();
+        form.append('model', env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe');
+        form.append('file', new File([blob], `podcast-prep-${versionId}.${ext}`, { type: version.audioMimeType || blob.type || 'audio/webm' }));
+        const transcriptRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
+          body: form,
+        });
+        const text = await transcriptRes.text();
+        let data = {};
+        try { data = JSON.parse(text); } catch (e) {}
+        if (!transcriptRes.ok) throw new Error(data.error?.message || `Transcription failed ${transcriptRes.status}`);
+        const transcript = String(data.text || '').trim();
+        await patchFirestoreDocLocal(versionParts, {
+          transcript,
+          transcriptionStatus: 'completed',
+          transcriptionSource: 'openai',
+          transcriptionError: '',
+        });
+        return { ok: true, status: 'completed' };
+      } catch (e) {
+        await patchFirestoreDocLocal(versionParts, {
+          transcriptionStatus: 'failed',
+          transcriptionError: e.message || 'Transcription failed.',
+        }).catch(() => null);
+        throw e;
+      }
     };
     const md5Hex = async (buffer) => {
       const bytes = new Uint8Array(buffer);
@@ -1483,6 +1645,81 @@ export default {
         debug,
         sampleDropped,
       });
+    }
+
+    if (url.pathname === '/podcast-prep/transcribe') {
+      if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+      if (request.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed' }, 405);
+      try {
+        const claims = await requireFirebaseUser(request);
+        if (!claims) return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+        const body = await request.json().catch(() => ({}));
+        const sessionId = String(body.sessionId || '').trim();
+        const questionId = String(body.questionId || '').trim();
+        const versionId = String(body.versionId || '').trim();
+        if (!sessionId || !questionId || !versionId) return jsonResponse({ ok: false, error: 'Missing sessionId, questionId or versionId' }, 400);
+        const session = await getFirestoreDocLocal('podcast_sessions', sessionId);
+        if (!session) return jsonResponse({ ok: false, error: 'Session not found' }, 404);
+        if (!isWorkerStaff(claims)) return jsonResponse({ ok: false, error: 'Forbidden' }, 403);
+        if (!canAccessPodcastSession(claims, session)) return jsonResponse({ ok: false, error: 'Forbidden' }, 403);
+        const result = await transcribePodcastVersion({ sessionId, questionId, versionId });
+        return jsonResponse(result);
+      } catch (e) {
+        const status = e.status || 500;
+        return jsonResponse({ ok: false, error: e.message || 'Transcription failed' }, status);
+      }
+    }
+
+    if (url.pathname === '/podcast-prep/audio-download') {
+      if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+      if (request.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed' }, 405);
+      try {
+        const claims = await requireFirebaseUser(request);
+        if (!claims) return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+        if (!isWorkerStaff(claims)) return jsonResponse({ ok: false, error: 'Forbidden' }, 403);
+        const body = await request.json().catch(() => ({}));
+        const sessionId = String(body.sessionId || '').trim();
+        const questionId = String(body.questionId || '').trim();
+        const versionId = String(body.versionId || '').trim();
+        if (!sessionId || !questionId || !versionId) return jsonResponse({ ok: false, error: 'Missing sessionId, questionId or versionId' }, 400);
+        const session = await getFirestoreDocLocal('podcast_sessions', sessionId);
+        if (!session) return jsonResponse({ ok: false, error: 'Session not found' }, 404);
+        if (!canAccessPodcastSession(claims, session)) return jsonResponse({ ok: false, error: 'Forbidden' }, 403);
+        return await downloadPodcastAudioVersion({ session, sessionId, questionId, versionId });
+      } catch (e) {
+        const status = e.status || 500;
+        return jsonResponse({ ok: false, error: e.message || 'Audio download failed' }, status);
+      }
+    }
+
+    if (url.pathname === '/podcast-prep/access-check') {
+      if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+      if (request.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed' }, 405);
+      try {
+        const claims = await requireFirebaseUser(request);
+        if (!claims) return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+        const body = await request.json().catch(() => ({}));
+        const sessionId = String(body.sessionId || '').trim();
+        if (!sessionId) return jsonResponse({ ok: false, error: 'Missing sessionId' }, 400);
+        const session = await getFirestoreDocLocal('podcast_sessions', sessionId);
+        if (!session) return jsonResponse({ ok: false, error: 'Session not found' }, 404);
+        const invitedEmail = String(session.guestEmail || session.normalizedGuestEmail || '').toLowerCase();
+        const actualEmail = String(claims.email || '').toLowerCase();
+        if (workerStaffEmails.has(actualEmail)) return jsonResponse({ ok: true, role: 'staff' });
+        if (actualEmail !== invitedEmail) {
+          return jsonResponse({ ok: false, reason: 'wrong_email', invitedEmail });
+        }
+        if (!claims.email_verified) {
+          return jsonResponse({ ok: false, reason: 'unverified', invitedEmail });
+        }
+        if (session.guestUid && session.guestUid !== claims.uid && session.guestUid !== claims.user_id && session.guestUid !== claims.sub) {
+          return jsonResponse({ ok: false, reason: 'wrong_account', invitedEmail });
+        }
+        return jsonResponse({ ok: true, role: 'guest' });
+      } catch (e) {
+        const status = e.status || 500;
+        return jsonResponse({ ok: false, error: e.message || 'Access check failed' }, status);
+      }
     }
 
     if (url.pathname === '/proxy') {

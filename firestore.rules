@@ -17,6 +17,126 @@ service cloud.firestore {
         && request.auth.token.email == "anmadaan@gmail.com";
     }
 
+    function isVerifiedAuth() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string;
+    }
+
+    function authedEmailLower() {
+      return request.auth.token.email.lower();
+    }
+
+    function podcastSessionPath(sessionId) {
+      return /databases/$(database)/documents/podcast_sessions/$(sessionId);
+    }
+
+    function isPodcastGuestSession(session) {
+      return isVerifiedAuth()
+        && session.data.normalizedGuestEmail == authedEmailLower()
+        && (
+          !("guestUid" in session.data)
+          || session.data.guestUid == ""
+          || session.data.guestUid == request.auth.uid
+        );
+    }
+
+    function canAccessPodcastSession(sessionId) {
+      return isWocultStaff()
+        || (
+          exists(podcastSessionPath(sessionId))
+          && isPodcastGuestSession(get(podcastSessionPath(sessionId)))
+        );
+    }
+
+    function guestPodcastSessionUpdateOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "guestUid",
+          "status",
+          "openedAt",
+          "completedQuestionCount",
+          "submittedAt",
+          "updatedAt"
+        ])
+        && request.resource.data.normalizedGuestEmail == resource.data.normalizedGuestEmail
+        && request.resource.data.guestEmail == resource.data.guestEmail
+        && request.resource.data.questions == resource.data.questions
+        && request.resource.data.questionCount == resource.data.questionCount
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.guestUid == request.auth.uid
+        && (
+          (
+            resource.data.status == "feedback_shared"
+            && request.resource.data.status == "feedback_shared"
+          )
+          ||
+          (
+            resource.data.status != "feedback_shared"
+            && request.resource.data.status in ["opened", "in_progress", "submitted"]
+          )
+        );
+    }
+
+    function isValidGuestPodcastResponseCreate(questionId) {
+      return request.resource.data.keys().hasOnly([
+          "questionId",
+          "questionOrder",
+          "questionText",
+          "hasSavedResponse",
+          "latestVersionId",
+          "latestVersionNumber",
+          "responseUpdatedAt"
+        ])
+        && request.resource.data.questionId == questionId
+        && request.resource.data.hasSavedResponse == true
+        && request.resource.data.latestVersionId is string
+        && request.resource.data.latestVersionNumber is int;
+    }
+
+    function isValidGuestPodcastResponseUpdate(questionId) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "questionId",
+          "questionOrder",
+          "questionText",
+          "hasSavedResponse",
+          "latestVersionId",
+          "latestVersionNumber",
+          "responseUpdatedAt"
+        ])
+        && request.resource.data.questionId == questionId
+        && request.resource.data.questionOrder == resource.data.questionOrder
+        && request.resource.data.questionText == resource.data.questionText
+        && request.resource.data.hasSavedResponse == true
+        && request.resource.data.latestVersionId is string
+        && request.resource.data.latestVersionNumber is int;
+    }
+
+    function isValidGuestPodcastVersionCreate(sessionId, questionId) {
+      return request.resource.data.keys().hasOnly([
+          "versionNumber",
+          "storagePath",
+          "audioMimeType",
+          "duration",
+          "transcript",
+          "transcriptionStatus",
+          "transcriptionError",
+          "transcriptionSource",
+          "createdAt",
+          "createdByUid"
+        ])
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.versionNumber is int
+        && request.resource.data.storagePath is string
+        && request.resource.data.storagePath.matches('^podcast_recordings/' + sessionId + '/' + request.auth.uid + '/' + questionId + '/.+')
+        && request.resource.data.transcriptionStatus == "not_requested"
+        && request.resource.data.transcript == ""
+        && request.resource.data.transcriptionError == ""
+        && (
+          !("transcriptionSource" in request.resource.data)
+          || request.resource.data.transcriptionSource == ""
+        );
+    }
+
     function isSafeCanvaUrl(value) {
       return value is string
         && value.matches('^https?://.+');
@@ -39,6 +159,7 @@ service cloud.firestore {
     function isValidCanvaFieldShape(field) {
       return field.keys().hasOnly(["id", "type", "label"])
         && field.id is string
+        && field.type in ["headline", "subtitle", "bullet"]
         && field.label is string;
     }
 
@@ -47,109 +168,67 @@ service cloud.firestore {
         && isValidCanvaFieldList(fields);
     }
 
-    function isValidCanvaFieldType(type) {
-      return type in ["headline", "subtitle", "bullet"];
-    }
-
     function isValidCanvaFields1(fields) {
-      let t0 = fields[0].type;
       return isValidCanvaFieldShape(fields[0])
-        && t0 == "headline";
+        && fields[0].type == "headline";
     }
 
     function isValidCanvaFields2(fields) {
-      let t0 = fields[0].type;
-      let t1 = fields[1].type;
       return isValidCanvaFieldShape(fields[0])
         && isValidCanvaFieldShape(fields[1])
-        && isValidCanvaFieldType(t0)
-        && isValidCanvaFieldType(t1)
-        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) == 1
-        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) <= 1;
+        && fields[0].type == "headline"
+        && fields[1].type != "headline";
     }
 
     function isValidCanvaFields3(fields) {
-      let t0 = fields[0].type;
-      let t1 = fields[1].type;
-      let t2 = fields[2].type;
       return isValidCanvaFieldShape(fields[0])
         && isValidCanvaFieldShape(fields[1])
         && isValidCanvaFieldShape(fields[2])
-        && isValidCanvaFieldType(t0)
-        && isValidCanvaFieldType(t1)
-        && isValidCanvaFieldType(t2)
-        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) + (t2 == "headline" ? 1 : 0) == 1
-        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) + (t2 == "subtitle" ? 1 : 0) <= 1;
+        && fields[0].type == "headline"
+        && fields[1].type != "headline"
+        && fields[2].type == "bullet";
     }
 
     function isValidCanvaFields4(fields) {
-      let t0 = fields[0].type;
-      let t1 = fields[1].type;
-      let t2 = fields[2].type;
-      let t3 = fields[3].type;
       return isValidCanvaFieldShape(fields[0])
         && isValidCanvaFieldShape(fields[1])
         && isValidCanvaFieldShape(fields[2])
         && isValidCanvaFieldShape(fields[3])
-        && isValidCanvaFieldType(t0)
-        && isValidCanvaFieldType(t1)
-        && isValidCanvaFieldType(t2)
-        && isValidCanvaFieldType(t3)
-        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) + (t2 == "headline" ? 1 : 0) + (t3 == "headline" ? 1 : 0) == 1
-        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) + (t2 == "subtitle" ? 1 : 0) + (t3 == "subtitle" ? 1 : 0) <= 1;
+        && fields[0].type == "headline"
+        && fields[1].type != "headline"
+        && fields[2].type == "bullet"
+        && fields[3].type == "bullet";
     }
 
     function isValidCanvaFields5(fields) {
-      let t0 = fields[0].type;
-      let t1 = fields[1].type;
-      let t2 = fields[2].type;
-      let t3 = fields[3].type;
-      let t4 = fields[4].type;
       return isValidCanvaFieldShape(fields[0])
         && isValidCanvaFieldShape(fields[1])
         && isValidCanvaFieldShape(fields[2])
         && isValidCanvaFieldShape(fields[3])
         && isValidCanvaFieldShape(fields[4])
-        && isValidCanvaFieldType(t0)
-        && isValidCanvaFieldType(t1)
-        && isValidCanvaFieldType(t2)
-        && isValidCanvaFieldType(t3)
-        && isValidCanvaFieldType(t4)
-        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) + (t2 == "headline" ? 1 : 0) + (t3 == "headline" ? 1 : 0) + (t4 == "headline" ? 1 : 0) == 1
-        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) + (t2 == "subtitle" ? 1 : 0) + (t3 == "subtitle" ? 1 : 0) + (t4 == "subtitle" ? 1 : 0) <= 1;
+        && fields[0].type == "headline"
+        && fields[1].type != "headline"
+        && fields[2].type == "bullet"
+        && fields[3].type == "bullet"
+        && fields[4].type == "bullet";
     }
 
     function isValidCanvaFields6(fields) {
-      let t0 = fields[0].type;
-      let t1 = fields[1].type;
-      let t2 = fields[2].type;
-      let t3 = fields[3].type;
-      let t4 = fields[4].type;
-      let t5 = fields[5].type;
       return isValidCanvaFieldShape(fields[0])
         && isValidCanvaFieldShape(fields[1])
         && isValidCanvaFieldShape(fields[2])
         && isValidCanvaFieldShape(fields[3])
         && isValidCanvaFieldShape(fields[4])
         && isValidCanvaFieldShape(fields[5])
-        && isValidCanvaFieldType(t0)
-        && isValidCanvaFieldType(t1)
-        && isValidCanvaFieldType(t2)
-        && isValidCanvaFieldType(t3)
-        && isValidCanvaFieldType(t4)
-        && isValidCanvaFieldType(t5)
-        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) + (t2 == "headline" ? 1 : 0) + (t3 == "headline" ? 1 : 0) + (t4 == "headline" ? 1 : 0) + (t5 == "headline" ? 1 : 0) == 1
-        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) + (t2 == "subtitle" ? 1 : 0) + (t3 == "subtitle" ? 1 : 0) + (t4 == "subtitle" ? 1 : 0) + (t5 == "subtitle" ? 1 : 0) <= 1;
+        && fields[0].type == "headline"
+        && fields[1].type != "headline"
+        && fields[2].type == "bullet"
+        && fields[3].type == "bullet"
+        && fields[4].type == "bullet"
+        && fields[5].type == "bullet";
     }
 
     function isValidCanvaFields7(fields) {
-      let t0 = fields[0].type;
-      let t1 = fields[1].type;
-      let t2 = fields[2].type;
-      let t3 = fields[3].type;
-      let t4 = fields[4].type;
-      let t5 = fields[5].type;
-      let t6 = fields[6].type;
       return isValidCanvaFieldShape(fields[0])
         && isValidCanvaFieldShape(fields[1])
         && isValidCanvaFieldShape(fields[2])
@@ -157,15 +236,13 @@ service cloud.firestore {
         && isValidCanvaFieldShape(fields[4])
         && isValidCanvaFieldShape(fields[5])
         && isValidCanvaFieldShape(fields[6])
-        && isValidCanvaFieldType(t0)
-        && isValidCanvaFieldType(t1)
-        && isValidCanvaFieldType(t2)
-        && isValidCanvaFieldType(t3)
-        && isValidCanvaFieldType(t4)
-        && isValidCanvaFieldType(t5)
-        && isValidCanvaFieldType(t6)
-        && (t0 == "headline" ? 1 : 0) + (t1 == "headline" ? 1 : 0) + (t2 == "headline" ? 1 : 0) + (t3 == "headline" ? 1 : 0) + (t4 == "headline" ? 1 : 0) + (t5 == "headline" ? 1 : 0) + (t6 == "headline" ? 1 : 0) == 1
-        && (t0 == "subtitle" ? 1 : 0) + (t1 == "subtitle" ? 1 : 0) + (t2 == "subtitle" ? 1 : 0) + (t3 == "subtitle" ? 1 : 0) + (t4 == "subtitle" ? 1 : 0) + (t5 == "subtitle" ? 1 : 0) + (t6 == "subtitle" ? 1 : 0) == 1;
+        && fields[0].type == "headline"
+        && fields[1].type == "subtitle"
+        && fields[2].type == "bullet"
+        && fields[3].type == "bullet"
+        && fields[4].type == "bullet"
+        && fields[5].type == "bullet"
+        && fields[6].type == "bullet";
     }
 
     function isValidCanvaFieldList(fields) {
@@ -240,12 +317,42 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /podcast_sessions/{sessionId} {
+      allow list: if isWocultStaff();
+      allow get: if canAccessPodcastSession(sessionId);
+      allow create: if isWocultStaff();
+      allow update: if isWocultStaff()
+        || (isPodcastGuestSession(resource) && guestPodcastSessionUpdateOnly());
+      allow delete: if false;
+
+      match /responses/{questionId} {
+        allow read: if canAccessPodcastSession(sessionId);
+        allow create: if isWocultStaff()
+          || (canAccessPodcastSession(sessionId) && isValidGuestPodcastResponseCreate(questionId));
+        allow update: if isWocultStaff()
+          || (canAccessPodcastSession(sessionId) && isValidGuestPodcastResponseUpdate(questionId));
+        allow delete: if false;
+
+        match /versions/{versionId} {
+          allow read: if canAccessPodcastSession(sessionId);
+          allow create: if isWocultStaff()
+            || (canAccessPodcastSession(sessionId) && isValidGuestPodcastVersionCreate(sessionId, questionId));
+          allow update: if isWocultStaff();
+          allow delete: if false;
+        }
+      }
+    }
+
+    match /editorial_config/{documentId} {
+      allow read, write: if documentId != "canva_templates";
+    }
+
     match /{collection}/{document=**} {
       allow read, write: if
         collection != "news_brief_automation"
         && collection != "news_brief_automation_runs"
-        && request.path !=
-          /databases/$(database)/documents/editorial_config/canva_templates;
+        && collection != "podcast_sessions"
+        && collection != "editorial_config";
     }
   }
 }

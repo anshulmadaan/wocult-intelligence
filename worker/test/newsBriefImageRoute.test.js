@@ -153,6 +153,288 @@ test('admin Canva preview upload rejects unauthenticated users', async () => {
   assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
 });
 
+test('Podcast Prep transcription rejects unauthenticated requests with CORS', async () => {
+  const res = await worker.fetch(new Request('https://worker.test/podcast-prep/transcribe', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: 'podcast-1', questionId: 'q1', versionId: 'v1' }),
+    headers: { 'Content-Type': 'application/json' },
+  }), env);
+  const body = await res.json();
+  assert.equal(res.status, 401);
+  assert.equal(body.error, 'Unauthorized');
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
+});
+
+test('Podcast Prep transcription validates staff user and records not-configured failure without fake transcript', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url).startsWith('https://identitytoolkit.googleapis.com/v1/accounts:lookup')) {
+      return new Response(JSON.stringify({
+        users: [{ email: 'anmadaan@gmail.com', emailVerified: true, localId: 'staff-uid' }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(url).endsWith('/documents/podcast_sessions/podcast-1')) {
+      return new Response(JSON.stringify({
+        name: 'projects/wocult-tasks/databases/(default)/documents/podcast_sessions/podcast-1',
+        fields: {
+          normalizedGuestEmail: { stringValue: 'guest@example.com' },
+          guestUid: { stringValue: 'guest-uid' },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(url).endsWith('/documents/podcast_sessions/podcast-1/responses/q1/versions/v1')) {
+      return new Response(JSON.stringify({
+        name: 'projects/wocult-tasks/databases/(default)/documents/podcast_sessions/podcast-1/responses/q1/versions/v1',
+        fields: {
+          storagePath: { stringValue: 'podcast_recordings/podcast-1/guest-uid/q1/v1.webm' },
+          audioMimeType: { stringValue: 'audio/webm' },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(url).includes('/documents/podcast_sessions/podcast-1/responses/q1/versions/v1?updateMask.fieldPaths=')) {
+      return new Response(JSON.stringify({ fields: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error('Unexpected fetch: ' + url);
+  });
+
+  const res = await worker.fetch(firebaseAuthed('/podcast-prep/transcribe', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: 'podcast-1', questionId: 'q1', versionId: 'v1' }),
+    headers: { 'Content-Type': 'application/json' },
+  }), { ...env, OPENAI_API_KEY: '' });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, 'transcription_not_configured');
+  assert.equal(calls.some((call) => call.url === 'https://api.openai.com/v1/audio/transcriptions'), false);
+  assert.equal(calls.filter((call) => call.url.includes('updateMask.fieldPaths=transcriptionStatus')).length >= 2, true);
+});
+
+test('Podcast Prep transcription blocks authenticated guest users', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (String(url).startsWith('https://identitytoolkit.googleapis.com/v1/accounts:lookup')) {
+      return new Response(JSON.stringify({
+        users: [{ email: 'other@example.com', emailVerified: true, localId: 'other-uid' }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(url).endsWith('/documents/podcast_sessions/podcast-1')) {
+      return new Response(JSON.stringify({
+        fields: {
+          normalizedGuestEmail: { stringValue: 'guest@example.com' },
+          guestUid: { stringValue: 'guest-uid' },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error('Forbidden request must not continue: ' + url);
+  });
+  const res = await worker.fetch(firebaseAuthed('/podcast-prep/transcribe', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: 'podcast-1', questionId: 'q1', versionId: 'v1' }),
+    headers: { 'Content-Type': 'application/json' },
+  }), env);
+  assert.equal(res.status, 403);
+});
+
+test('Podcast Prep transcription downloads trusted storage path and records OpenAI source for staff', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    const urlText = String(url);
+    calls.push({ url: urlText, options });
+    if (urlText.startsWith('https://identitytoolkit.googleapis.com/v1/accounts:lookup')) {
+      return new Response(JSON.stringify({
+        users: [{ email: 'anmadaan@gmail.com', emailVerified: true, localId: 'staff-uid' }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.endsWith('/documents/podcast_sessions/podcast-1')) {
+      return new Response(JSON.stringify({
+        fields: {
+          normalizedGuestEmail: { stringValue: 'guest@example.com' },
+          guestUid: { stringValue: 'guest-uid' },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.endsWith('/documents/podcast_sessions/podcast-1/responses/q1/versions/v1')) {
+      return new Response(JSON.stringify({
+        fields: {
+          storagePath: { stringValue: 'podcast_recordings/podcast-1/guest-uid/q1/v1.webm' },
+          audioMimeType: { stringValue: 'audio/webm' },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.includes('/documents/podcast_sessions/podcast-1/responses/q1/versions/v1?updateMask.fieldPaths=')) {
+      return new Response(JSON.stringify({ fields: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText === 'https://oauth2.googleapis.com/token') {
+      return new Response(JSON.stringify({ access_token: 'storage-read-token' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.includes('firebasestorage.googleapis.com') && urlText.includes('podcast_recordings%2Fpodcast-1%2Fguest-uid%2Fq1%2Fv1.webm')) {
+      assert.equal(options.headers.Authorization, 'Bearer storage-read-token');
+      return new Response(new Blob(['audio bytes'], { type: 'audio/webm' }), { status: 200 });
+    }
+    if (urlText === 'https://api.openai.com/v1/audio/transcriptions') {
+      assert.equal(options.headers.Authorization, 'Bearer openai-key');
+      return new Response(JSON.stringify({ text: 'Manual prep transcript from OpenAI.' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error('Unexpected fetch: ' + urlText);
+  });
+
+  const res = await worker.fetch(firebaseAuthed('/podcast-prep/transcribe', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: 'podcast-1', questionId: 'q1', versionId: 'v1', storagePath: 'podcast_recordings/attacker/path.webm' }),
+    headers: { 'Content-Type': 'application/json' },
+  }), await serviceAccountEnv({ OPENAI_API_KEY: 'openai-key' }));
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.status, 'completed');
+  assert.equal(calls.some((call) => call.url.includes('podcast_recordings%2Fattacker%2Fpath.webm')), false);
+  assert.equal(calls.some((call) => call.url === 'https://api.openai.com/v1/audio/transcriptions'), true);
+  assert.equal(calls.some((call) => call.url.includes('updateMask.fieldPaths=transcriptionSource')), true);
+});
+
+test('Podcast Prep staff audio download returns trusted recording bytes without public URL or side effects', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    const urlText = String(url);
+    calls.push({ url: urlText, options });
+    if (urlText.startsWith('https://identitytoolkit.googleapis.com/v1/accounts:lookup')) {
+      return new Response(JSON.stringify({
+        users: [{ email: 'anmadaan@gmail.com', emailVerified: true, localId: 'staff-uid' }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.endsWith('/documents/podcast_sessions/podcast-1')) {
+      return new Response(JSON.stringify({
+        fields: {
+          podcastTitle: { stringValue: 'Future of Work' },
+          guestName: { stringValue: 'Guest Person' },
+          normalizedGuestEmail: { stringValue: 'guest@example.com' },
+          guestUid: { stringValue: 'guest-uid' },
+          questions: { arrayValue: { values: [{ mapValue: { fields: { id: { stringValue: 'q1' }, order: { integerValue: '1' }, question: { stringValue: 'Question?' } } } }] } },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.endsWith('/documents/podcast_sessions/podcast-1/responses/q1/versions/v2')) {
+      return new Response(JSON.stringify({
+        fields: {
+          versionNumber: { integerValue: '2' },
+          storagePath: { stringValue: 'podcast_recordings/podcast-1/guest-uid/q1/v2.ogg' },
+          audioMimeType: { stringValue: 'audio/ogg' },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.includes('updateMask') || urlText.includes('/documents/notifications') || urlText === 'https://api.openai.com/v1/audio/transcriptions') {
+      throw new Error('Download must not write Firestore, create notifications or transcribe: ' + urlText);
+    }
+    if (urlText === 'https://oauth2.googleapis.com/token') {
+      return new Response(JSON.stringify({ access_token: 'storage-read-token' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.includes('firebasestorage.googleapis.com') && urlText.includes('podcast_recordings%2Fpodcast-1%2Fguest-uid%2Fq1%2Fv2.ogg')) {
+      assert.equal(options.headers.Authorization, 'Bearer storage-read-token');
+      return new Response('audio bytes', { status: 200, headers: { 'Content-Type': 'audio/ogg' } });
+    }
+    throw new Error('Unexpected fetch: ' + urlText);
+  });
+
+  const res = await worker.fetch(firebaseAuthed('/podcast-prep/audio-download', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: 'podcast-1', questionId: 'q1', versionId: 'v2', storagePath: 'podcast_recordings/attacker/path.webm' }),
+    headers: { 'Content-Type': 'application/json' },
+  }), await serviceAccountEnv());
+
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('Content-Type'), 'audio/ogg');
+  assert.match(res.headers.get('Content-Disposition') || '', /wocult-podcast-prep-future-of-work-guest-person-q01-v2\.ogg/);
+  assert.equal(await res.text(), 'audio bytes');
+  assert.equal(calls.some((call) => call.url.includes('podcast_recordings%2Fattacker%2Fpath.webm')), false);
+  assert.equal(calls.some((call) => call.url === 'https://api.openai.com/v1/audio/transcriptions'), false);
+  assert.equal(calls.some((call) => call.url.includes('/documents/notifications')), false);
+  assert.equal(calls.some((call) => call.url.includes('updateMask')), false);
+});
+
+test('Podcast Prep audio download blocks non-staff and wrong guest users', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    const urlText = String(url);
+    if (urlText.startsWith('https://identitytoolkit.googleapis.com/v1/accounts:lookup')) {
+      const token = JSON.parse(options.body).idToken;
+      return new Response(JSON.stringify({
+        users: [{
+          email: token === 'wrong-token' ? 'wrong@example.com' : 'guest@example.com',
+          emailVerified: true,
+          localId: token === 'wrong-token' ? 'wrong-uid' : 'guest-uid',
+        }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error('Non-staff download must stop before Firestore or Storage access: ' + urlText);
+  });
+
+  const guest = await worker.fetch(firebaseAuthed('/podcast-prep/audio-download', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: 'podcast-1', questionId: 'q1', versionId: 'v1' }),
+    headers: { 'Content-Type': 'application/json' },
+  }), env);
+  assert.equal(guest.status, 403);
+
+  const wrong = await worker.fetch(firebaseAuthed('/podcast-prep/audio-download', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: 'podcast-1', questionId: 'q1', versionId: 'v1' }),
+    headers: { 'Content-Type': 'application/json' },
+  }, 'wrong-token'), env);
+  assert.equal(wrong.status, 403);
+});
+
+test('Podcast Prep access-check returns wrong-email and unverified states without session data', async (t) => {
+  const sessionDoc = {
+    fields: {
+      guestEmail: { stringValue: 'guest@example.com' },
+      normalizedGuestEmail: { stringValue: 'guest@example.com' },
+      guestUid: { stringValue: '' },
+      podcastTitle: { stringValue: 'Private episode title' },
+    },
+  };
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    if (String(url).startsWith('https://identitytoolkit.googleapis.com/v1/accounts:lookup')) {
+      const token = JSON.parse(options.body).idToken;
+      if (token === 'wrong-token') {
+        return new Response(JSON.stringify({
+          users: [{ email: 'wrong@example.com', emailVerified: true, localId: 'wrong-uid' }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        users: [{ email: 'guest@example.com', emailVerified: false, localId: 'guest-uid' }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(url).endsWith('/documents/podcast_sessions/podcast-1')) {
+      return new Response(JSON.stringify(sessionDoc), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error('Unexpected fetch: ' + url);
+  });
+
+  const wrong = await worker.fetch(firebaseAuthed('/podcast-prep/access-check', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: 'podcast-1' }),
+    headers: { 'Content-Type': 'application/json' },
+  }, 'wrong-token'), env);
+  const wrongBody = await wrong.json();
+  assert.equal(wrong.status, 200);
+  assert.equal(wrongBody.ok, false);
+  assert.equal(wrongBody.reason, 'wrong_email');
+  assert.equal(wrongBody.invitedEmail, 'guest@example.com');
+  assert.equal('podcastTitle' in wrongBody, false);
+
+  const unverified = await worker.fetch(firebaseAuthed('/podcast-prep/access-check', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: 'podcast-1' }),
+    headers: { 'Content-Type': 'application/json' },
+  }, 'unverified-token'), env);
+  const unverifiedBody = await unverified.json();
+  assert.equal(unverified.status, 200);
+  assert.equal(unverifiedBody.ok, false);
+  assert.equal(unverifiedBody.reason, 'unverified');
+  assert.equal(unverifiedBody.invitedEmail, 'guest@example.com');
+  assert.equal('podcastTitle' in unverifiedBody, false);
+});
+
 test('admin Canva preview upload rejects authenticated non-admin users', async (t) => {
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {

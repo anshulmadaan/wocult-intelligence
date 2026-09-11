@@ -7,19 +7,27 @@ import {
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import {
+  collection,
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
+import {
+  getBytes,
+  ref as storageRef,
+  uploadBytes,
+} from 'firebase/storage';
 
-const PROJECT_ID = 'demo-wocult-rules';
+const PROJECT_ID = 'demo-no-project';
 const RULES = readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8');
+const STORAGE_RULES = readFileSync(new URL('../../storage.rules', import.meta.url), 'utf8');
 let testEnv;
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) {
-  console.log('# Firestore emulator not running; use npm run test:firestore-rules through firebase-tools emulators:exec.');
+  console.log('# Firestore emulator not running; use firebase emulators:exec --only firestore,storage "npm run test:firestore-rules".');
   process.exit(0);
 }
 
@@ -101,6 +109,21 @@ function authed(email) {
   return testEnv.authenticatedContext(email.replace(/[^a-z0-9]/gi, '_'), { email }).firestore();
 }
 
+function authedVerified(email, uid = '') {
+  return testEnv.authenticatedContext(uid || email.replace(/[^a-z0-9]/gi, '_'), {
+    email,
+    email_verified: true,
+  });
+}
+
+function authedVerifiedDb(email, uid = '') {
+  return authedVerified(email, uid).firestore();
+}
+
+function authedVerifiedStorage(email, uid = '') {
+  return authedVerified(email, uid).storage();
+}
+
 function anon() {
   return testEnv.unauthenticatedContext().firestore();
 }
@@ -125,6 +148,39 @@ function automationRunRef(db) {
   return doc(db, 'news_brief_automation_runs/run-1');
 }
 
+function podcastRef(db, id = 'podcast-1') {
+  return doc(db, `podcast_sessions/${id}`);
+}
+
+function podcastResponseRef(db, id = 'podcast-1', questionId = 'q1') {
+  return doc(db, `podcast_sessions/${id}/responses/${questionId}`);
+}
+
+function podcastVersionRef(db, id = 'podcast-1', questionId = 'q1', versionId = 'v1') {
+  return doc(db, `podcast_sessions/${id}/responses/${questionId}/versions/${versionId}`);
+}
+
+function podcastSession(overrides = {}) {
+  return {
+    sessionId: 'podcast-1',
+    podcastTitle: 'Wocult episode',
+    guestName: 'Guest',
+    guestEmail: 'guest@example.com',
+    normalizedGuestEmail: 'guest@example.com',
+    guestUid: '',
+    guestIntro: 'Intro',
+    questions: [{ id: 'q1', order: 1, question: 'Question?' }],
+    questionCount: 1,
+    completedQuestionCount: 0,
+    status: 'sent',
+    createdBy: 'anmadaan@gmail.com',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    overallFeedback: '',
+    ...overrides,
+  };
+}
+
 async function seed(path, data) {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), path), data);
@@ -136,10 +192,11 @@ async function assertAdminWriteDenied(payload) {
 }
 
 before(async () => {
-  assert.equal(PROJECT_ID, 'demo-wocult-rules');
+  assert.equal(PROJECT_ID, 'demo-no-project');
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
     firestore: { rules: RULES },
+    storage: { rules: STORAGE_RULES },
   });
 });
 
@@ -343,4 +400,220 @@ test('news_brief_automation and runs keep existing staff restrictions and write 
   await assertSucceeds(getDoc(automationRunRef(authed('anmadaan@gmail.com'))));
   await assertFails(getDoc(automationRunRef(authed('ordinary@example.com'))));
   await assertFails(setDoc(automationRunRef(authed('anmadaan@gmail.com')), { state: 'changed' }));
+});
+
+test('Podcast Prep sessions are staff-managed and isolated to the verified invited guest', async () => {
+  const staff = authedVerifiedDb('anmadaan@gmail.com', 'staff-uid');
+  const guest = authedVerifiedDb('guest@example.com', 'guest-uid');
+  const otherGuest = authedVerifiedDb('other@example.com', 'other-uid');
+  const unverifiedGuest = testEnv.authenticatedContext('guest-uid-unverified', {
+    email: 'guest@example.com',
+    email_verified: false,
+  }).firestore();
+  const session = podcastSession();
+
+  await assertSucceeds(setDoc(podcastRef(staff), session));
+  await assertSucceeds(getDoc(podcastRef(staff)));
+  await assertSucceeds(getDoc(podcastRef(guest)));
+  await assertFails(getDoc(podcastRef(otherGuest)));
+  await assertFails(getDoc(podcastRef(unverifiedGuest)));
+
+  await assertSucceeds(updateDoc(podcastRef(guest), {
+    guestUid: 'guest-uid',
+    status: 'opened',
+    openedAt: new Date(),
+    updatedAt: new Date(),
+  }));
+  await assertFails(updateDoc(podcastRef(otherGuest), {
+    guestUid: 'other-uid',
+    status: 'opened',
+    openedAt: new Date(),
+    updatedAt: new Date(),
+  }));
+
+  await assertSucceeds(setDoc(podcastResponseRef(guest), {
+    questionId: 'q1',
+    questionOrder: 1,
+    questionText: 'Question?',
+    hasSavedResponse: true,
+    latestVersionId: 'v1',
+    latestVersionNumber: 1,
+    responseUpdatedAt: new Date(),
+  }, { merge: true }));
+  await assertSucceeds(setDoc(podcastVersionRef(guest), {
+    versionNumber: 1,
+    storagePath: 'podcast_recordings/podcast-1/guest-uid/q1/v1.webm',
+    audioMimeType: 'audio/webm',
+    duration: 12,
+    transcript: '',
+    transcriptionStatus: 'not_requested',
+    transcriptionError: '',
+    transcriptionSource: '',
+    createdAt: new Date(),
+    createdByUid: 'guest-uid',
+  }));
+  await assertFails(getDoc(podcastResponseRef(otherGuest)));
+  await assertFails(setDoc(podcastVersionRef(otherGuest, 'podcast-1', 'q1', 'v2'), {
+    versionNumber: 2,
+    storagePath: 'podcast_recordings/podcast-1/other-uid/q1/v2.webm',
+    audioMimeType: 'audio/webm',
+    duration: 12,
+    transcript: '',
+    transcriptionStatus: 'not_requested',
+    transcriptionError: '',
+    transcriptionSource: '',
+    createdAt: new Date(),
+    createdByUid: 'other-uid',
+  }));
+});
+
+test('Podcast Prep guest cannot list, mutate staff fields, delete, or overwrite versions', async () => {
+  const staff = authedVerifiedDb('anmadaan@gmail.com', 'staff-uid');
+  const guest = authedVerifiedDb('guest@example.com', 'guest-uid');
+  await seed('podcast_sessions/podcast-1', podcastSession({ guestUid: 'guest-uid', status: 'in_progress' }));
+  await seed('podcast_sessions/podcast-1/responses/q1', {
+    questionId: 'q1',
+    questionOrder: 1,
+    questionText: 'Question?',
+    hasSavedResponse: true,
+    latestVersionId: 'v1',
+    latestVersionNumber: 1,
+    responseUpdatedAt: new Date(),
+    feedback: 'Staff-only feedback',
+    feedbackUpdatedAt: new Date(),
+  });
+  await seed('podcast_sessions/podcast-1/responses/q1/versions/v1', {
+    versionNumber: 1,
+    storagePath: 'podcast_recordings/podcast-1/guest-uid/q1/v1.webm',
+    audioMimeType: 'audio/webm',
+    duration: 12,
+    transcript: '',
+    transcriptionStatus: 'not_requested',
+    transcriptionError: '',
+    transcriptionSource: '',
+    createdAt: new Date(),
+    createdByUid: 'guest-uid',
+  });
+
+  await assertFails(getDocs(collection(guest, 'podcast_sessions')));
+  await assertFails(updateDoc(podcastRef(guest), { guestEmail: 'attacker@example.com', updatedAt: new Date() }));
+  await assertFails(updateDoc(podcastRef(guest), { normalizedGuestEmail: 'attacker@example.com', updatedAt: new Date() }));
+  await assertFails(updateDoc(podcastRef(guest), { guestUid: 'attacker-uid', updatedAt: new Date() }));
+  await assertFails(updateDoc(podcastRef(guest), { status: 'feedback_shared', updatedAt: new Date() }));
+  await assertFails(updateDoc(podcastRef(guest), { status: 'ready', readyAt: new Date(), updatedAt: new Date() }));
+  await assertFails(deleteDoc(podcastRef(guest)));
+
+  await assertFails(updateDoc(podcastResponseRef(guest), { feedback: 'Guest changed feedback' }));
+  await assertFails(updateDoc(podcastResponseRef(guest), {
+    questionText: 'Guest changed the saved question snapshot',
+    responseUpdatedAt: new Date(),
+  }));
+  await assertFails(setDoc(podcastResponseRef(guest), {
+    questionId: 'q1',
+    questionOrder: 1,
+    questionText: 'Question?',
+    hasSavedResponse: true,
+    latestVersionId: 'v2',
+    latestVersionNumber: 2,
+    responseUpdatedAt: new Date(),
+    feedback: 'Guest inserted feedback',
+  }, { merge: true }));
+  await assertFails(updateDoc(podcastVersionRef(guest), { transcript: 'Guest fake transcript', transcriptionStatus: 'completed' }));
+  await assertFails(deleteDoc(podcastVersionRef(guest)));
+
+  await assertSucceeds(updateDoc(podcastResponseRef(staff), {
+    feedback: 'Updated by staff',
+    feedbackUpdatedAt: new Date(),
+  }));
+  await assertSucceeds(updateDoc(podcastVersionRef(staff), {
+    transcript: 'Transcript by staff/backend',
+    transcriptionStatus: 'completed',
+    transcriptionSource: 'manual',
+    transcriptUpdatedAt: new Date(),
+    transcriptUpdatedBy: 'staff-uid',
+  }));
+});
+
+test('Podcast Prep guest can preserve feedback_shared status during revisions but cannot set it', async () => {
+  const guest = authedVerifiedDb('guest@example.com', 'guest-uid');
+  await seed('podcast_sessions/podcast-1', podcastSession({ guestUid: 'guest-uid', status: 'feedback_shared' }));
+  await assertSucceeds(updateDoc(podcastRef(guest), {
+    completedQuestionCount: 1,
+    status: 'feedback_shared',
+    updatedAt: new Date(),
+  }));
+
+  await seed('podcast_sessions/podcast-2', podcastSession({
+    sessionId: 'podcast-2',
+    guestUid: 'guest-uid',
+    status: 'in_progress',
+  }));
+  await assertFails(updateDoc(podcastRef(guest, 'podcast-2'), {
+    status: 'feedback_shared',
+    updatedAt: new Date(),
+  }));
+});
+
+test('Podcast Prep Storage recordings are isolated by verified guest email, UID path and staff access', async (t) => {
+  if (!process.env.STORAGE_EMULATOR_HOST) {
+    t.skip('Storage emulator not running; run firebase emulators:exec --only firestore,storage.');
+    return;
+  }
+  await seed('podcast_sessions/podcast-1', podcastSession({ guestUid: 'guest-uid' }));
+  await seed('podcast_sessions/podcast-2', podcastSession({
+    sessionId: 'podcast-2',
+    guestEmail: 'other@example.com',
+    normalizedGuestEmail: 'other@example.com',
+    guestUid: 'other-uid',
+  }));
+
+  const guestStorage = authedVerifiedStorage('guest@example.com', 'guest-uid');
+  const otherStorage = authedVerifiedStorage('other@example.com', 'other-uid');
+  const wrongEmailStorage = authedVerifiedStorage('wrong@example.com', 'wrong-uid');
+  const staffStorage = authedVerifiedStorage('anmadaan@gmail.com', 'staff-uid');
+  const anonStorage = testEnv.unauthenticatedContext().storage();
+  const audio = new Blob(['audio'], { type: 'audio/webm' });
+  const guestPath = 'podcast_recordings/podcast-1/guest-uid/q1/v1.webm';
+  const otherPath = 'podcast_recordings/podcast-2/other-uid/q1/v1.webm';
+
+  await assertSucceeds(uploadBytes(storageRef(guestStorage, guestPath), audio));
+  await assertFails(uploadBytes(storageRef(guestStorage, 'podcast_recordings/podcast-1/other-uid/q1/v2.webm'), audio));
+  await assertFails(uploadBytes(storageRef(wrongEmailStorage, guestPath), audio));
+  await assertFails(uploadBytes(storageRef(anonStorage, guestPath), audio));
+
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await uploadBytes(storageRef(context.storage(), otherPath), audio);
+  });
+
+  await assertSucceeds(getBytes(storageRef(guestStorage, guestPath)));
+  await assertFails(getBytes(storageRef(guestStorage, otherPath)));
+  await assertFails(getBytes(storageRef(otherStorage, guestPath)));
+  await assertFails(getBytes(storageRef(wrongEmailStorage, guestPath)));
+  await assertFails(getBytes(storageRef(anonStorage, guestPath)));
+  await assertSucceeds(getBytes(storageRef(staffStorage, guestPath)));
+  await assertSucceeds(getBytes(storageRef(staffStorage, otherPath)));
+});
+
+test('existing Storage namespaces keep interview and editorial calendar behavior', async (t) => {
+  if (!process.env.STORAGE_EMULATOR_HOST) {
+    t.skip('Storage emulator not running; run firebase emulators:exec --only firestore,storage.');
+    return;
+  }
+  const guestStorage = authedVerifiedStorage('guest@example.com', 'guest-uid');
+  const ordinaryStorage = authedVerifiedStorage('ordinary@example.com', 'ordinary-uid');
+  const staffStorage = authedVerifiedStorage('anmadaan@gmail.com', 'staff-uid');
+  const anonStorage = testEnv.unauthenticatedContext().storage();
+  const image = new Blob(['image'], { type: 'image/png' });
+  const audio = new Blob(['audio'], { type: 'audio/webm' });
+  const interviewPath = 'interview_recordings/session-1/guest-uid/q1.webm';
+  const calendarPath = 'editorial_calendar_images/item-1/image.png';
+
+  await assertSucceeds(uploadBytes(storageRef(guestStorage, interviewPath), audio));
+  await assertSucceeds(getBytes(storageRef(ordinaryStorage, interviewPath)));
+  await assertFails(uploadBytes(storageRef(anonStorage, 'interview_recordings/session-2/anon/q1.webm'), audio));
+  await assertFails(getBytes(storageRef(anonStorage, interviewPath)));
+
+  await assertSucceeds(uploadBytes(storageRef(staffStorage, calendarPath), image));
+  await assertSucceeds(getBytes(storageRef(anonStorage, calendarPath)));
+  await assertFails(uploadBytes(storageRef(ordinaryStorage, 'editorial_calendar_images/item-2/image.png'), image));
 });
