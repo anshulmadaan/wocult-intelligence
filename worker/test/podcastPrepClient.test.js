@@ -121,17 +121,46 @@ test('Podcast Prep DOCX export includes manual transcripts and not_requested sta
   assert.doesNotMatch(body, /triggerPodcastPrepTranscription/);
 });
 
-test('Podcast Prep guest shell reopens hidden landing parent before rendering guest UI', () => {
+test('Podcast Prep guest shell reopens hidden landing parent without staff dashboard cards', () => {
+  assert.match(html, /<div id="landing" style="display:none">/);
+  assert.match(html, /<div id="landing-cards" class="landing" style="display:none">/);
+
+  const hideAll = functionBody('hideAllAppScreens');
+  assert.match(hideAll, /hideStaffLandingPanels\(\)/);
+
+  const panels = functionBody('hideStaffLandingPanels');
+  assert.match(panels, /'landing-cards'/);
+
   const shell = functionBody('showPodcastPrepGuestShell');
   assert.match(shell, /hideAllAppScreens\(\)/);
+  assert.match(shell, /hideStaffLandingPanels\(\)/);
   assert.match(shell, /document\.getElementById\('landing'\)/);
   assert.match(shell, /landing\.style\.display = 'block'/);
   assert.match(shell, /document\.getElementById\('podcast-prep-guest-screen'\)/);
   assert.match(shell, /screen\.style\.display = 'flex'/);
+  assert.ok(shell.indexOf('hideStaffLandingPanels()') < shell.indexOf("landing.style.display = 'block'"));
 
   const loader = functionBody('loadPodcastPrepGuestSession');
   assert.match(loader, /var root = showPodcastPrepGuestShell\(\)/);
   assert.doesNotMatch(loader, /hideAllAppScreens\(\);\s*document\.getElementById\('podcast-prep-guest-screen'\)\.style\.display = 'flex'/);
+});
+
+test('Podcast Prep route logs safe diagnostics and keeps staff dashboard hidden through resolution', () => {
+  const logger = functionBody('logPodcastPrepRouteState');
+  assert.match(logger, /console\.info\('\[PodcastPrep\]', message, details \|\| \{\}\)/);
+  assert.doesNotMatch(logger, /idToken|Authorization|Bearer|downloadUrl|getDownloadURL/);
+
+  const route = functionBody('routeSignedInUser');
+  assert.match(route, /logPodcastPrepRouteState\('route detected', \{hasSessionId: true\}\)/);
+  assert.match(route, /logPodcastPrepRouteState\('auth resolved'/);
+  assert.match(route, /logPodcastPrepRouteState\('rendering', \{target: 'staff_review', staff: true\}\)/);
+
+  const loader = functionBody('loadPodcastPrepGuestSession');
+  assert.match(loader, /logPodcastPrepRouteState\('opening guest route'/);
+  assert.match(loader, /logPodcastPrepRouteState\('access check result'/);
+  assert.match(loader, /logPodcastPrepRouteState\('rendering', \{target: 'guest'\}\)/);
+  assert.match(loader, /logPodcastPrepRouteState\('rendering', \{target: 'error'\}\)/);
+  assert.doesNotMatch(loader, /goToLanding\(\)/);
 });
 
 test('Podcast Prep route remains ahead of Guest Writer and preserves session id through sign-in', () => {
@@ -231,8 +260,8 @@ test('Podcast Prep guest states visibly show authenticated email and never rende
 test('Podcast Prep guest access-check and invalid session failures render useful states', () => {
   const loader = functionBody('loadPodcastPrepGuestSession');
   assert.match(loader, /renderPodcastPrepRouteError\('This Podcast Prep link is missing or invalid\.'\)/);
-  assert.match(loader, /if \(access\.reason === 'unverified'\) renderPodcastPrepVerifyEmail\(\)/);
-  assert.match(loader, /else renderPodcastPrepAccessDenied\(\)/);
+  assert.match(loader, /if \(access\.reason === 'unverified'\) \{[\s\S]*renderPodcastPrepVerifyEmail\(\)/);
+  assert.match(loader, /else \{[\s\S]*renderPodcastPrepAccessDenied\(\)/);
   assert.match(loader, /renderPodcastPrepAccessDenied\(\)/);
   assert.match(loader, /renderPodcastPrepVerifyEmail\(\)/);
   assert.match(loader, /console\.error\('Could not open Podcast Prep session:', err\)/);
@@ -289,8 +318,9 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.13', () => {
-  assert.match(html, />15\.13<\/div>/);
+test('application version badge is 15.14', () => {
+  assert.match(html, />15\.14<\/div>/);
+  assert.doesNotMatch(html, />15\.13<\/div>/);
   assert.doesNotMatch(html, />15\.12<\/div>/);
   assert.doesNotMatch(html, />15\.11<\/div>/);
 });

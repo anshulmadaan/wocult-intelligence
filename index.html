@@ -264,7 +264,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.13</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.14</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
@@ -500,7 +500,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 <div id="landing" style="display:none">
 
   <!-- Card selection screen -->
-  <div id="landing-cards" class="landing">
+  <div id="landing-cards" class="landing" style="display:none">
     <div class="landing-hero">
       <h1>What would you like to do today?</h1>
       <p>Wocult Studio helps you find stories that matter and shape them into something worth reading.</p>
@@ -2040,6 +2040,7 @@ function hideAllAppScreens() {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
+  hideStaffLandingPanels();
   updateAuthenticatedNavigationForMode();
   var newStoryBtn = document.getElementById('btn-new-guest-story');
   if (newStoryBtn) newStoryBtn.style.display = 'none';
@@ -2208,18 +2209,26 @@ function rememberPodcastPrepRoute(sessionId) {
   sessionStorage.setItem('wocultAccessMode', 'podcast_prep_guest');
   sessionStorage.setItem('wocultPodcastPrepSessionId', sessionId);
 }
+function logPodcastPrepRouteState(message, details) {
+  try {
+    console.info('[PodcastPrep]', message, details || {});
+  } catch (err) {}
+}
 function routeSignedInUser(user) {
   currentUser = user;
   if (!user) { currentAccessMode = ''; showAccessScreen(); return; }
   clearUnsavedChanges();
   var podcastPrepId = getPodcastPrepIdFromUrl() || sessionStorage.getItem('wocultPodcastPrepSessionId') || '';
   if (podcastPrepId) {
+    logPodcastPrepRouteState('route detected', {hasSessionId: true});
+    logPodcastPrepRouteState('auth resolved', {email: user.email || '', staff: isStaffUser(user), accessMode: currentAccessMode || ''});
     rememberPodcastPrepRoute(podcastPrepId);
     if (isStaffUser(user)) {
       currentAccessMode = 'staff';
       currentAccessKey = '';
       updateAuthenticatedNavigationForMode();
       loadNotifications();
+      logPodcastPrepRouteState('rendering', {target: 'staff_review', staff: true});
       openPodcastPrepStaffSessionFromRoute(podcastPrepId);
       return;
     }
@@ -6905,6 +6914,7 @@ function podcastPrepSignedInEmailHtml() {
 }
 function showPodcastPrepGuestShell() {
   hideAllAppScreens();
+  hideStaffLandingPanels();
   updateAuthenticatedNavigationForMode();
   var landing = document.getElementById('landing');
   if (landing) landing.style.display = 'block';
@@ -6915,12 +6925,20 @@ function showPodcastPrepGuestShell() {
 function loadPodcastPrepGuestSession(sessionId) {
   if (!db || !sessionId) { renderPodcastPrepRouteError('This Podcast Prep link is missing or invalid.'); return; }
   rememberPodcastPrepRoute(sessionId);
+  logPodcastPrepRouteState('opening guest route', {hasSessionId: true, email: currentUser && currentUser.email ? currentUser.email : '', staff: isStaffUser(currentUser), accessMode: currentAccessMode || ''});
   var root = showPodcastPrepGuestShell();
   if (root) root.innerHTML = '<h2>Opening Podcast Prep...</h2>'+podcastPrepSignedInEmailHtml()+'<p class="sub">Please wait while we open your preparation room.</p>';
   checkPodcastPrepAccess(sessionId).then(function(access) {
+    logPodcastPrepRouteState('access check result', {ok: !!(access && access.ok), reason: access && access.reason ? access.reason : '', role: access && access.role ? access.role : '', staff: isStaffUser(currentUser)});
     if (!access.ok) {
-      if (access.reason === 'unverified') renderPodcastPrepVerifyEmail();
-      else renderPodcastPrepAccessDenied();
+      if (access.reason === 'unverified') {
+        logPodcastPrepRouteState('rendering', {target: 'unverified'});
+        renderPodcastPrepVerifyEmail();
+      }
+      else {
+        logPodcastPrepRouteState('rendering', {target: 'wrong_account'});
+        renderPodcastPrepAccessDenied();
+      }
       return null;
     }
     return db.collection('podcast_sessions').doc(sessionId).get();
@@ -6931,10 +6949,12 @@ function loadPodcastPrepGuestSession(sessionId) {
     var invited = podcastPrepNormalizeEmail(session.guestEmail || session.normalizedGuestEmail);
     var actual = podcastPrepNormalizeEmail(currentUser && currentUser.email);
     if (actual !== invited) {
+      logPodcastPrepRouteState('rendering', {target: 'wrong_account'});
       renderPodcastPrepAccessDenied();
       return null;
     }
     if (!currentUser.emailVerified) {
+      logPodcastPrepRouteState('rendering', {target: 'unverified'});
       renderPodcastPrepVerifyEmail();
       return null;
     }
@@ -6947,11 +6967,13 @@ function loadPodcastPrepGuestSession(sessionId) {
         window._podcastPrepGuest.responses = bundle.responses;
         window._podcastPrepGuest.versions = bundle.versions;
         window._podcastPrepGuest.activeIndex = firstPodcastPrepUnansweredIndex(updatedSession, bundle.responses);
+        logPodcastPrepRouteState('rendering', {target: 'guest'});
         renderPodcastPrepGuestWelcome();
       });
     });
   }).catch(function(err) {
     console.error('Could not open Podcast Prep session:', err);
+    logPodcastPrepRouteState('rendering', {target: 'error'});
     renderPodcastPrepRouteError("We couldn't open this Podcast Prep session.");
   });
 }
@@ -7335,6 +7357,7 @@ function showMain() {
 function hideStaffLandingPanels() {
   updateTopUpdatedVisibility(false);
   [
+    'landing-cards',
     'landing-url',
     'landing-manual-news-brief',
     'landing-manual-news-review',
