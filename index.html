@@ -1752,6 +1752,10 @@ window._podcastPrepGuest = {
   localUrl: '',
   recordingStartedAt: 0,
   timer: null,
+  audioContext: null,
+  analyser: null,
+  analyserSource: null,
+  waveformFrame: null,
   saving: false,
   submitting: false
 };
@@ -6683,9 +6687,28 @@ function podcastPrepEligibleTranscriptionVersions(versionsByQuestion) {
   });
   return items;
 }
-function podcastAudioHtml(version, elId) {
+function podcastAudioHtml(version, elId, sessionId, questionId) {
   if (!version || !version.storagePath) return '<div class="hint">No audio saved.</div>';
-  setTimeout(function(){ getAudioUrl(version.storagePath).then(function(url){ var audio=document.getElementById(elId); if(audio) audio.src=url; }).catch(function(){ var audio=document.getElementById(elId); if(audio) audio.outerHTML='<div class="hint" style="color:var(--red)">Could not load audio.</div>'; }); }, 0);
+  setTimeout(function(){
+    var audio = document.getElementById(elId);
+    if (!audio) return;
+    var loader = sessionId && questionId && version.id
+      ? workerFetchWithFirebaseAuthRaw('/podcast-prep/audio-download', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({sessionId:sessionId, questionId:questionId, versionId:version.id})
+        }).then(function(response) {
+          if (!response.ok) return parseWorkerResponse(response).then(function(){ throw new Error('Audio could not be loaded.'); });
+          return response.blob().then(function(blob){ return URL.createObjectURL(blob); });
+        })
+      : getAudioUrl(version.storagePath);
+    loader.then(function(url){
+      audio.src = url;
+      if (sessionId && questionId) audio.setAttribute('data-object-url', url);
+    }).catch(function(){
+      audio.outerHTML = '<div class="hint" style="color:var(--red)">Could not load audio.</div>';
+    });
+  }, 0);
   return '<audio id="'+escapeAttr(elId)+'" controls style="width:100%;margin-top:8px"></audio>';
 }
 function podcastPrepAudioExtension(version) {
@@ -6732,7 +6755,7 @@ function renderPodcastPrepStaffDetail(session, responses, versionsByQuestion) {
         return '<div style="border:1px solid var(--bdr);border-radius:8px;padding:12px;background:var(--gray);margin-top:10px">'
           + '<div style="font-size:13px;font-weight:700">'+escapeHtml(label)+'</div>'
           + '<div class="hint">Duration: '+escapeHtml(v.duration ? Math.round(v.duration)+'s' : '-')+' · Transcript: '+escapeHtml(v.transcriptionStatus || 'not_requested')+'</div>'
-          + podcastAudioHtml(v, audioId)
+          + podcastAudioHtml(v, audioId, session.id, q.id)
           + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" onclick="downloadPodcastPrepAudio(\''+escapeAttr(session.id)+'\',\''+escapeAttr(q.id)+'\',\''+escapeAttr(v.id)+'\')">Download audio</button>'+transcribeBtn+'</div>'
           + '<div style="font-size:13px;line-height:1.7;margin-top:10px;white-space:pre-wrap">'+tx+'</div>'
           + '<div class="sfield" style="margin-top:10px"><label>'+(v.transcript ? 'Edit transcript' : 'Add transcript manually')+'</label><textarea id="'+escapeAttr(transcriptFieldId)+'" rows="5">'+escapeHtml(v.transcript || '')+'</textarea><button class="btn" onclick="savePodcastPrepManualTranscript(\''+escapeAttr(session.id)+'\',\''+escapeAttr(q.id)+'\',\''+escapeAttr(v.id)+'\')" style="margin-top:8px">Save transcript</button><span id="'+escapeAttr(transcriptStatusId)+'" class="hint" style="margin-left:8px"></span></div>'
@@ -7176,6 +7199,79 @@ function selectPodcastPrepMimeType() {
   }
   return '';
 }
+function stopPodcastPrepWaveform() {
+  var state = window._podcastPrepGuest;
+  if (state.waveformFrame) cancelAnimationFrame(state.waveformFrame);
+  state.waveformFrame = null;
+  try { if (state.analyserSource) state.analyserSource.disconnect(); } catch(e) {}
+  try { if (state.analyser) state.analyser.disconnect(); } catch(e) {}
+  if (state.audioContext && state.audioContext.close) {
+    state.audioContext.close().catch(function(err){ console.warn('Podcast Prep waveform audio context close failed:', err && err.message || err); });
+  }
+  state.audioContext = null;
+  state.analyser = null;
+  state.analyserSource = null;
+}
+function startPodcastPrepWaveform(stream) {
+  var canvas = document.getElementById('podcast-waveform');
+  if (!canvas || !stream) return;
+  stopPodcastPrepWaveform();
+  try {
+    var AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    var state = window._podcastPrepGuest;
+    var ctx = new AudioCtx();
+    var analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.72;
+    var source = ctx.createMediaStreamSource(stream);
+    source.connect(analyser);
+    state.audioContext = ctx;
+    state.analyser = analyser;
+    state.analyserSource = source;
+    var data = new Uint8Array(analyser.frequencyBinCount);
+    var draw = function() {
+      var target = document.getElementById('podcast-waveform');
+      if (!target || state.analyser !== analyser) return;
+      var dpr = window.devicePixelRatio || 1;
+      var width = target.clientWidth || 320;
+      var height = target.clientHeight || 56;
+      if (target.width !== Math.floor(width * dpr) || target.height !== Math.floor(height * dpr)) {
+        target.width = Math.floor(width * dpr);
+        target.height = Math.floor(height * dpr);
+      }
+      var g = target.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      analyser.getByteTimeDomainData(data);
+      g.clearRect(0, 0, width, height);
+      g.fillStyle = '#fff8df';
+      g.fillRect(0, 0, width, height);
+      g.strokeStyle = '#111';
+      g.lineWidth = 2;
+      g.beginPath();
+      for (var i=0; i<data.length; i++) {
+        var x = (i / (data.length - 1)) * width;
+        var centered = (data[i] - 128) / 128;
+        var y = (height / 2) + centered * (height * 0.42);
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.stroke();
+      var sum = 0;
+      for (var j=0; j<data.length; j++) {
+        var v = (data[j] - 128) / 128;
+        sum += v * v;
+      }
+      var level = Math.min(1, Math.sqrt(sum / data.length) * 4);
+      g.fillStyle = '#f5c542';
+      g.fillRect(0, height - 5, width * level, 5);
+      state.waveformFrame = requestAnimationFrame(draw);
+    };
+    draw();
+  } catch(err) {
+    console.warn('Podcast Prep waveform unavailable:', err && err.message || err);
+    stopPodcastPrepWaveform();
+  }
+}
 function startPodcastPrepRecording() {
   var status = document.getElementById('podcast-recording-status');
   var playback = document.getElementById('podcast-local-playback');
@@ -7186,14 +7282,21 @@ function startPodcastPrepRecording() {
   }
   clearPodcastPrepLocalTake();
   navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream) {
+    var panel = document.getElementById('podcast-recording-panel');
+    if (panel) panel.innerHTML = '<button class="btn-lg btn-y" id="podcast-record-btn" onclick="stopPodcastPrepRecording()">Stop recording</button><div id="podcast-recording-status" class="hint" style="margin-top:10px">Recording... 0:00</div><canvas id="podcast-waveform" width="640" height="112" style="width:100%;height:56px;margin-top:10px;border:1px solid var(--bdr);border-radius:8px;background:#fff8df;display:block"></canvas><div id="podcast-local-playback" style="margin-top:12px"></div>';
+    status = document.getElementById('podcast-recording-status');
+    playback = document.getElementById('podcast-local-playback');
+    btn = document.getElementById('podcast-record-btn');
     var mimeType = selectPodcastPrepMimeType();
     var options = mimeType ? {mimeType:mimeType} : {};
     var recorder = new MediaRecorder(stream, options);
     window._podcastPrepGuest.recorder = recorder;
     window._podcastPrepGuest.chunks = [];
     window._podcastPrepGuest.recordingStartedAt = Date.now();
+    startPodcastPrepWaveform(stream);
     recorder.ondataavailable = function(e){ if (e.data && e.data.size) window._podcastPrepGuest.chunks.push(e.data); };
     recorder.onstop = function() {
+      stopPodcastPrepWaveform();
       stream.getTracks().forEach(function(track){ track.stop(); });
       var blob = new Blob(window._podcastPrepGuest.chunks, {type: recorder.mimeType || mimeType || 'audio/webm'});
       window._podcastPrepGuest.localBlob = blob;
@@ -7217,12 +7320,14 @@ function startPodcastPrepRecording() {
 function stopPodcastPrepRecording() {
   var state = window._podcastPrepGuest;
   if (state.timer) { clearInterval(state.timer); state.timer = null; }
+  stopPodcastPrepWaveform();
   if (state.recorder && state.recorder.state !== 'inactive') state.recorder.stop();
 }
 function clearPodcastPrepLocalTake() {
   var state = window._podcastPrepGuest;
   if (state.timer) clearInterval(state.timer);
   state.timer = null;
+  stopPodcastPrepWaveform();
   if (state.localUrl) URL.revokeObjectURL(state.localUrl);
   state.localBlob = null;
   state.localUrl = '';
@@ -7297,7 +7402,8 @@ function savePodcastPrepResponse() {
       state.versions[q.id] = (state.versions[q.id] || []).concat([Object.assign({id:versionRef.id}, versionData)]);
       state.session = Object.assign({}, session, {completedQuestionCount:completedCount, status:sessionPatch.status});
       clearPodcastPrepLocalTake();
-      if (status) status.textContent = 'Response saved. '+completedCount+' of '+(session.questions||[]).length+' responses saved.';
+      if (status) status.textContent = '✓ Recording saved';
+      return new Promise(function(resolve){ setTimeout(resolve, 900); });
     });
   }).then(function() {
     if ((state.session.questions || [])[state.activeIndex + 1]) state.activeIndex += 1;

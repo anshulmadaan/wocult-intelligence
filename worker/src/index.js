@@ -351,12 +351,21 @@ export default {
     const downloadStorageObject = async (path) => {
       const bucket = env.FIREBASE_STORAGE_BUCKET || 'wocult-tasks.firebasestorage.app';
       const token = await getGoogleAccessTokenLocal('https://www.googleapis.com/auth/devstorage.read_only', 'Podcast Prep audio download');
-      const res = await fetch(`https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(path)}?alt=media`, {
+      const res = await fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(path)}?alt=media`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(`Storage download failed ${res.status}: ${text.slice(0, 120)}`);
+        const err = new Error(res.status === 404 ? 'Recording not found.' : "We couldn't access the recording.");
+        err.status = res.status === 404 ? 404 : 502;
+        err.storageStatus = res.status;
+        console.warn('Podcast Prep Storage download failed', {
+          status: res.status,
+          bucket,
+          pathPrefix: String(path || '').split('/').slice(0, 2).join('/'),
+          detail: text.slice(0, 160),
+        });
+        throw err;
       }
       return res;
     };
@@ -415,16 +424,24 @@ export default {
         err.status = 404;
         throw err;
       }
+      if (version.transcriptionStatus === 'completed') {
+        return { ok: true, status: 'completed', skipped: true };
+      }
       await patchFirestoreDocLocal(versionParts, {
         transcriptionStatus: 'processing',
         transcriptionError: '',
+        transcriptUpdatedAt: new Date().toISOString(),
       });
       if (!env.OPENAI_API_KEY) {
         await patchFirestoreDocLocal(versionParts, {
           transcriptionStatus: 'failed',
-          transcriptionError: 'Transcription provider is not configured. Add OPENAI_API_KEY to enable Podcast Prep transcription.',
+          transcriptionError: 'OpenAI transcription is not configured.',
+          transcriptUpdatedAt: new Date().toISOString(),
         });
-        return { ok: false, status: 'failed', error: 'transcription_not_configured' };
+        const err = new Error('OpenAI transcription is not configured.');
+        err.status = 503;
+        err.code = 'transcription_not_configured';
+        throw err;
       }
       try {
         const audioRes = await downloadStorageObject(version.storagePath);
@@ -448,12 +465,14 @@ export default {
           transcriptionStatus: 'completed',
           transcriptionSource: 'openai',
           transcriptionError: '',
+          transcriptUpdatedAt: new Date().toISOString(),
         });
         return { ok: true, status: 'completed' };
       } catch (e) {
         await patchFirestoreDocLocal(versionParts, {
           transcriptionStatus: 'failed',
-          transcriptionError: e.message || 'Transcription failed.',
+          transcriptionError: e.message || 'Transcription could not be completed. Please try again.',
+          transcriptUpdatedAt: new Date().toISOString(),
         }).catch(() => null);
         throw e;
       }
@@ -1666,7 +1685,10 @@ export default {
         return jsonResponse(result);
       } catch (e) {
         const status = e.status || 500;
-        return jsonResponse({ ok: false, error: e.message || 'Transcription failed' }, status);
+        const error = e.code === 'transcription_not_configured'
+          ? 'OpenAI transcription is not configured.'
+          : (e.storageStatus ? "We couldn't access the recording for transcription." : 'Transcription could not be completed. Please try again.');
+        return jsonResponse({ ok: false, error }, status);
       }
     }
 
@@ -1688,7 +1710,7 @@ export default {
         return await downloadPodcastAudioVersion({ session, sessionId, questionId, versionId });
       } catch (e) {
         const status = e.status || 500;
-        return jsonResponse({ ok: false, error: e.message || 'Audio download failed' }, status);
+        return jsonResponse({ ok: false, error: status === 404 ? 'Recording not found' : 'Audio download failed' }, status);
       }
     }
 

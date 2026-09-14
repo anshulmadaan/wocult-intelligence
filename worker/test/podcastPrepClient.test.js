@@ -75,8 +75,24 @@ test('Podcast Prep guest save still advances after persisted audio without autom
   assert.match(body, /versionRef\.set\(versionData\)/);
   assert.match(body, /responseRef\.set\(responseData, \{merge:true\}\)/);
   assert.match(body, /db\.collection\('podcast_sessions'\)\.doc\(session\.id\)\.update\(sessionPatch\)/);
+  assert.match(body, /status\.textContent = '✓ Recording saved'/);
+  assert.match(body, /setTimeout\(resolve, 900\)/);
+  assert.ok(body.indexOf("status.textContent = '✓ Recording saved'") < body.indexOf('state.activeIndex += 1'));
   assert.match(body, /if \(\(state\.session\.questions \|\| \[\]\)\[state\.activeIndex \+ 1\]\) state\.activeIndex \+= 1/);
   assert.match(body, /renderPodcastPrepQuestion\(\)/);
+});
+
+test('Podcast Prep guest save confirmation appears only after persistence succeeds', () => {
+  const body = functionBody('savePodcastPrepResponse');
+  const savedIndex = body.indexOf("status.textContent = '✓ Recording saved'");
+  assert.notEqual(savedIndex, -1);
+  assert.ok(body.indexOf('storage.ref(storagePath).put') < savedIndex);
+  assert.ok(body.indexOf('versionRef.set(versionData)') < savedIndex);
+  assert.ok(body.indexOf("responseRef.set(responseData, {merge:true})") < savedIndex);
+  assert.ok(body.indexOf("db.collection('podcast_sessions').doc(session.id).update(sessionPatch)") < savedIndex);
+  const catchStart = body.indexOf("}).catch(function(err) {");
+  const catchBody = body.slice(catchStart);
+  assert.doesNotMatch(catchBody, /✓ Recording saved/);
 });
 
 test('Podcast Prep guest save shows friendly retryable upload errors', () => {
@@ -104,6 +120,31 @@ test('Podcast Prep upload diagnostics are safe and do not expose tokens or recor
   assert.doesNotMatch(body, /getIdToken|idToken|Authorization|Bearer|access_token|refresh_token|localUrl|transcript|audio controls/);
 });
 
+test('Podcast Prep recording uses a real Web Audio waveform and cleans it up safely', () => {
+  const start = functionBody('startPodcastPrepWaveform');
+  assert.match(start, /window\.AudioContext \|\| window\.webkitAudioContext/);
+  assert.match(start, /ctx\.createAnalyser\(\)/);
+  assert.match(start, /ctx\.createMediaStreamSource\(stream\)/);
+  assert.match(start, /analyser\.getByteTimeDomainData\(data\)/);
+  assert.match(start, /requestAnimationFrame\(draw\)/);
+  assert.match(start, /console\.warn\('Podcast Prep waveform unavailable:'/);
+
+  const stop = functionBody('stopPodcastPrepWaveform');
+  assert.match(stop, /cancelAnimationFrame\(state\.waveformFrame\)/);
+  assert.match(stop, /state\.analyserSource\.disconnect\(\)/);
+  assert.match(stop, /state\.analyser\.disconnect\(\)/);
+  assert.match(stop, /state\.audioContext\.close\(\)/);
+
+  const record = functionBody('startPodcastPrepRecording');
+  assert.match(record, /startPodcastPrepWaveform\(stream\)/);
+  assert.match(record, /id="podcast-waveform"/);
+  assert.match(record, /Recording\.\.\. 0:00/);
+
+  const clear = functionBody('clearPodcastPrepLocalTake');
+  assert.match(clear, /stopPodcastPrepWaveform\(\)/);
+  assert.doesNotMatch(clear, /waveformData|analyserData/);
+});
+
 test('Podcast Prep final submit does not start transcription', () => {
   const body = functionBody('submitPodcastPrepFinal');
   assert.doesNotMatch(body, /triggerPodcastPrepTranscription/);
@@ -119,6 +160,17 @@ test('Podcast Prep staff review exposes explicit transcription, audio download a
   assert.match(render, /Add transcript manually/);
   assert.match(render, /Save transcript/);
   assert.match(render, /podcastPrepEligibleTranscriptionVersions/);
+});
+
+test('Podcast Prep staff playback uses secure Worker audio route without getDownloadURL', () => {
+  const audio = functionBody('podcastAudioHtml');
+  assert.match(audio, /workerFetchWithFirebaseAuthRaw\('\/podcast-prep\/audio-download'/);
+  assert.match(audio, /response\.blob\(\)/);
+  assert.match(audio, /URL\.createObjectURL\(blob\)/);
+  assert.match(audio, /getAudioUrl\(version\.storagePath\)/);
+
+  const staff = functionBody('renderPodcastPrepStaffDetail');
+  assert.match(staff, /podcastAudioHtml\(v, audioId, session\.id, q\.id\)/);
 });
 
 test('Podcast Prep staff dashboard and detail expose copyable guest links without creating sessions', () => {
@@ -189,6 +241,9 @@ test('Podcast Prep bulk transcription processes eligible responses sequentially 
   assert.match(bulk, /var chain = Promise\.resolve\(\)/);
   assert.match(bulk, /chain = chain\.then/);
   assert.match(bulk, /Transcribing '\+\(index \+ 1\)\+' of '\+items\.length\+' responses/);
+  const confirm = functionBody('confirmTranscribeAllPodcastPrepResponses');
+  assert.match(confirm, /Generate transcripts\?/);
+  assert.match(confirm, /using OpenAI/);
 });
 
 test('Podcast Prep audio download uses authorized Storage access and does not mutate Firestore or transcribe', () => {
