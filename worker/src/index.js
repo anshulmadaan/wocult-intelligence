@@ -382,6 +382,20 @@ export default {
       if (/ogg/i.test(mime)) return 'ogg';
       return 'webm';
     };
+    const normalizePodcastAudioMimeType = (version, fallbackMime = '') => {
+      const mime = String(version?.audioMimeType || fallbackMime || '').toLowerCase().split(';')[0].trim();
+      if (mime === 'audio/webm' || mime === 'video/webm') return 'audio/webm';
+      if (mime === 'audio/ogg' || mime === 'application/ogg') return 'audio/ogg';
+      if (mime === 'audio/mp4' || mime === 'video/mp4') return 'audio/mp4';
+      if (mime === 'audio/mpeg' || mime === 'audio/mp3') return 'audio/mpeg';
+      if (mime === 'audio/wav' || mime === 'audio/x-wav') return 'audio/wav';
+      const ext = podcastAudioExtension(version);
+      if (ext === 'ogg' || ext === 'oga') return 'audio/ogg';
+      if (ext === 'mp4' || ext === 'm4a') return 'audio/mp4';
+      if (ext === 'mp3' || ext === 'mpeg' || ext === 'mpga') return 'audio/mpeg';
+      if (ext === 'wav') return 'audio/wav';
+      return 'audio/webm';
+    };
     const podcastAudioFilename = (session, questionId, version) => {
       const questions = Array.isArray(session?.questions) ? session.questions : [];
       const question = questions.find((q) => q && q.id === questionId) || {};
@@ -435,21 +449,31 @@ export default {
       if (!env.OPENAI_API_KEY) {
         await patchFirestoreDocLocal(versionParts, {
           transcriptionStatus: 'failed',
-          transcriptionError: 'OpenAI transcription is not configured.',
+          transcriptionError: 'OpenAI transcription is not configured correctly.',
           transcriptUpdatedAt: new Date().toISOString(),
         });
-        const err = new Error('OpenAI transcription is not configured.');
+        const err = new Error('OpenAI transcription is not configured correctly.');
         err.status = 503;
         err.code = 'transcription_not_configured';
         throw err;
       }
       try {
         const audioRes = await downloadStorageObject(version.storagePath);
-        const blob = await audioRes.blob();
-        const ext = /mp4/i.test(version.audioMimeType || '') ? 'mp4' : (/ogg/i.test(version.audioMimeType || '') ? 'ogg' : 'webm');
+        const audioBytes = await audioRes.arrayBuffer();
+        if (!audioBytes.byteLength) {
+          const err = new Error('Recording was empty.');
+          err.status = 502;
+          err.code = 'transcription_audio_empty';
+          throw err;
+        }
+        const responseMime = audioRes.headers.get('Content-Type') || '';
+        const contentType = normalizePodcastAudioMimeType(version, responseMime);
+        const ext = podcastAudioExtension(version);
+        const filename = `podcast-prep-${safeDownloadName(versionId, 'response')}.${ext}`;
         const form = new FormData();
         form.append('model', env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe');
-        form.append('file', new File([blob], `podcast-prep-${versionId}.${ext}`, { type: version.audioMimeType || blob.type || 'audio/webm' }));
+        form.append('response_format', 'json');
+        form.append('file', new Blob([audioBytes], { type: contentType }), filename);
         const transcriptRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
           method: 'POST',
           headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
@@ -458,7 +482,20 @@ export default {
         const text = await transcriptRes.text();
         let data = {};
         try { data = JSON.parse(text); } catch (e) {}
-        if (!transcriptRes.ok) throw new Error(data.error?.message || `Transcription failed ${transcriptRes.status}`);
+        if (!transcriptRes.ok) {
+          const err = new Error(data.error?.message || `Transcription failed ${transcriptRes.status}`);
+          err.status = transcriptRes.status === 401 || transcriptRes.status === 403 ? 503 : 502;
+          err.code = transcriptRes.status === 401 || transcriptRes.status === 403 ? 'transcription_openai_config' : 'transcription_openai_failed';
+          err.openaiStatus = transcriptRes.status;
+          err.openaiType = data.error?.type || '';
+          console.warn('Podcast Prep OpenAI transcription failed', {
+            status: transcriptRes.status,
+            type: err.openaiType,
+            code: data.error?.code || '',
+            message: String(data.error?.message || '').slice(0, 180),
+          });
+          throw err;
+        }
         const transcript = String(data.text || '').trim();
         await patchFirestoreDocLocal(versionParts, {
           transcript,
@@ -469,9 +506,20 @@ export default {
         });
         return { ok: true, status: 'completed' };
       } catch (e) {
+        const safeError = e.code === 'transcription_not_configured' || e.code === 'transcription_openai_config'
+          ? 'OpenAI transcription is not configured correctly.'
+          : (e.storageStatus ? "We couldn't access the recording for transcription." : 'Transcription could not be completed. Please try again.');
+        console.warn('Podcast Prep transcription failed', {
+          stage: e.storageStatus ? 'storage' : (e.openaiStatus ? 'openai' : (e.code || 'worker')),
+          status: e.status || 500,
+          storageStatus: e.storageStatus || null,
+          openaiStatus: e.openaiStatus || null,
+          code: e.code || '',
+          message: String(e.message || '').slice(0, 180),
+        });
         await patchFirestoreDocLocal(versionParts, {
           transcriptionStatus: 'failed',
-          transcriptionError: e.message || 'Transcription could not be completed. Please try again.',
+          transcriptionError: safeError,
           transcriptUpdatedAt: new Date().toISOString(),
         }).catch(() => null);
         throw e;
@@ -1685,8 +1733,8 @@ export default {
         return jsonResponse(result);
       } catch (e) {
         const status = e.status || 500;
-        const error = e.code === 'transcription_not_configured'
-          ? 'OpenAI transcription is not configured.'
+        const error = e.code === 'transcription_not_configured' || e.code === 'transcription_openai_config'
+          ? 'OpenAI transcription is not configured correctly.'
           : (e.storageStatus ? "We couldn't access the recording for transcription." : 'Transcription could not be completed. Please try again.');
         return jsonResponse({ ok: false, error }, status);
       }

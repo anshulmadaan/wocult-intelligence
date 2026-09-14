@@ -206,7 +206,7 @@ test('Podcast Prep transcription validates staff user and records not-configured
   const body = await res.json();
   assert.equal(res.status, 503);
   assert.equal(body.ok, false);
-  assert.equal(body.error, 'OpenAI transcription is not configured.');
+  assert.equal(body.error, 'OpenAI transcription is not configured correctly.');
   assert.equal(calls.some((call) => call.url === 'https://api.openai.com/v1/audio/transcriptions'), false);
   assert.equal(calls.filter((call) => call.url.includes('updateMask.fieldPaths=transcriptionStatus')).length >= 2, true);
 });
@@ -263,7 +263,7 @@ test('Podcast Prep transcription downloads trusted storage path and records Open
       return new Response(JSON.stringify({
         fields: {
           storagePath: { stringValue: 'podcast_recordings/podcast-1/guest-uid/q1/v1.webm' },
-          audioMimeType: { stringValue: 'audio/webm' },
+          audioMimeType: { stringValue: 'audio/webm;codecs=opus' },
         },
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
@@ -276,6 +276,12 @@ test('Podcast Prep transcription downloads trusted storage path and records Open
     }
     if (urlText === 'https://api.openai.com/v1/audio/transcriptions') {
       assert.equal(options.headers.Authorization, 'Bearer openai-key');
+      assert.equal(options.body.get('model'), 'gpt-4o-mini-transcribe');
+      assert.equal(options.body.get('response_format'), 'json');
+      const file = options.body.get('file');
+      assert.equal(file.name, 'podcast-prep-v1.webm');
+      assert.equal(file.type, 'audio/webm');
+      assert.equal(await file.text(), 'audio bytes');
       return new Response(JSON.stringify({ text: 'Manual prep transcript from OpenAI.' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
     throw new Error('Unexpected fetch: ' + urlText);
@@ -291,8 +297,73 @@ test('Podcast Prep transcription downloads trusted storage path and records Open
   assert.equal(body.ok, true);
   assert.equal(body.status, 'completed');
   assert.equal(calls.some((call) => call.url.includes('podcast_recordings%2Fattacker%2Fpath.webm')), false);
-  assert.equal(calls.some((call) => call.url === 'https://api.openai.com/v1/audio/transcriptions'), true);
+  assert.equal(calls.findIndex((call) => call.url.includes('storage.googleapis.com/storage/v1/b/wocult-tasks.firebasestorage.app/o/')) < calls.findIndex((call) => call.url === 'https://api.openai.com/v1/audio/transcriptions'), true);
   assert.equal(calls.some((call) => call.url.includes('updateMask.fieldPaths=transcriptionSource')), true);
+});
+
+test('Podcast Prep transcription keeps retry path when OpenAI rejects the request', async (t) => {
+  const calls = [];
+  let tokenCalls = 0;
+  const failedPatches = [];
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    const urlText = String(url);
+    calls.push({ url: urlText, options });
+    if (urlText.startsWith('https://identitytoolkit.googleapis.com/v1/accounts:lookup')) {
+      return new Response(JSON.stringify({
+        users: [{ email: 'anmadaan@gmail.com', emailVerified: true, localId: 'staff-uid' }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText === 'https://oauth2.googleapis.com/token') {
+      tokenCalls += 1;
+      return new Response(JSON.stringify({ access_token: tokenCalls === 1 ? 'firestore-token' : 'storage-read-token' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.endsWith('/documents/podcast_sessions/podcast-1')) {
+      return new Response(JSON.stringify({
+        fields: {
+          normalizedGuestEmail: { stringValue: 'guest@example.com' },
+          guestUid: { stringValue: 'guest-uid' },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.endsWith('/documents/podcast_sessions/podcast-1/responses/q1/versions/v1')) {
+      return new Response(JSON.stringify({
+        fields: {
+          storagePath: { stringValue: 'podcast_recordings/podcast-1/guest-uid/q1/v1.webm' },
+          audioMimeType: { stringValue: 'audio/webm;codecs=opus' },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.includes('/documents/podcast_sessions/podcast-1/responses/q1/versions/v1?updateMask.fieldPaths=')) {
+      const body = JSON.parse(options.body);
+      if (body.fields?.transcriptionStatus?.stringValue === 'failed') failedPatches.push(body);
+      return new Response(JSON.stringify({ fields: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlText.includes('storage.googleapis.com/storage/v1/b/wocult-tasks.firebasestorage.app/o/')) {
+      return new Response(new Blob(['audio bytes'], { type: 'audio/webm;codecs=opus' }), { status: 200, headers: { 'Content-Type': 'audio/webm;codecs=opus' } });
+    }
+    if (urlText === 'https://api.openai.com/v1/audio/transcriptions') {
+      const file = options.body.get('file');
+      assert.equal(file.type, 'audio/webm');
+      return new Response(JSON.stringify({ error: { message: 'Unsupported audio payload', type: 'invalid_request_error' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    throw new Error('Unexpected fetch: ' + urlText);
+  });
+
+  const res = await worker.fetch(firebaseAuthed('/podcast-prep/transcribe', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: 'podcast-1', questionId: 'q1', versionId: 'v1' }),
+    headers: { 'Content-Type': 'application/json' },
+  }), await serviceAccountEnv({ OPENAI_API_KEY: 'openai-key' }));
+  const body = await res.json();
+  assert.equal(res.status, 502);
+  assert.equal(body.error, 'Transcription could not be completed. Please try again.');
+  assert.equal(failedPatches.length, 1);
+  assert.equal(failedPatches[0].fields.transcriptionStatus.stringValue, 'failed');
+  assert.equal(failedPatches[0].fields.transcriptionError.stringValue, 'Transcription could not be completed. Please try again.');
+  assert.equal(calls.some((call) => call.url.includes('updateMask.fieldPaths=transcript&')), false);
 });
 
 test('Podcast Prep transcription does not overwrite a completed manual transcript', async (t) => {

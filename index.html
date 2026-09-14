@@ -265,7 +265,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.16</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.17</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <span id="top-auth-email" class="top-auth-email"></span>
@@ -7229,41 +7229,59 @@ function startPodcastPrepWaveform(stream) {
     state.audioContext = ctx;
     state.analyser = analyser;
     state.analyserSource = source;
-    var data = new Uint8Array(analyser.frequencyBinCount);
+    var frequencyData = new Uint8Array(analyser.frequencyBinCount);
+    var timeData = new Uint8Array(analyser.frequencyBinCount);
     var draw = function() {
       var target = document.getElementById('podcast-waveform');
+      var label = document.getElementById('podcast-waveform-level');
       if (!target || state.analyser !== analyser) return;
       var dpr = window.devicePixelRatio || 1;
       var width = target.clientWidth || 320;
-      var height = target.clientHeight || 56;
+      var height = target.clientHeight || 82;
       if (target.width !== Math.floor(width * dpr) || target.height !== Math.floor(height * dpr)) {
         target.width = Math.floor(width * dpr);
         target.height = Math.floor(height * dpr);
       }
       var g = target.getContext('2d');
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      analyser.getByteTimeDomainData(data);
+      analyser.getByteFrequencyData(frequencyData);
+      analyser.getByteTimeDomainData(timeData);
       g.clearRect(0, 0, width, height);
-      g.fillStyle = '#fff8df';
+      g.fillStyle = '#fffdf6';
       g.fillRect(0, 0, width, height);
-      g.strokeStyle = '#111';
-      g.lineWidth = 2;
-      g.beginPath();
-      for (var i=0; i<data.length; i++) {
-        var x = (i / (data.length - 1)) * width;
-        var centered = (data[i] - 128) / 128;
-        var y = (height / 2) + centered * (height * 0.42);
-        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
-      }
-      g.stroke();
       var sum = 0;
-      for (var j=0; j<data.length; j++) {
-        var v = (data[j] - 128) / 128;
+      for (var j=0; j<timeData.length; j++) {
+        var v = (timeData[j] - 128) / 128;
         sum += v * v;
       }
-      var level = Math.min(1, Math.sqrt(sum / data.length) * 4);
-      g.fillStyle = '#f5c542';
-      g.fillRect(0, height - 5, width * level, 5);
+      var rms = Math.sqrt(sum / timeData.length);
+      var level = Math.min(1, rms * 5.5);
+      var levelState = level < 0.18 ? 'Low' : (level < 0.72 ? 'Good' : 'High');
+      var activeColor = levelState === 'Low' ? '#f5c542' : (levelState === 'Good' ? '#2f9e44' : '#d64545');
+      if (label) {
+        label.textContent = levelState;
+        label.style.color = activeColor;
+      }
+      var barCount = 42;
+      var gap = Math.max(3, width * 0.009);
+      var barWidth = Math.max(3, (width - gap * (barCount - 1)) / barCount);
+      var center = height / 2;
+      var maxBar = height * 0.78;
+      for (var i=0; i<barCount; i++) {
+        var mirroredIndex = i < barCount / 2 ? i : barCount - 1 - i;
+        var bin = Math.min(frequencyData.length - 1, Math.floor((mirroredIndex / (barCount / 2)) * frequencyData.length * 0.72));
+        var raw = frequencyData[bin] / 255;
+        var distance = Math.abs((i + 0.5) / barCount - 0.5);
+        var centerBias = 1 - distance * 0.86;
+        var barLevel = Math.max(0.05, Math.min(1, raw * 0.82 + level * 0.42)) * centerBias;
+        var barHeight = Math.max(6, barLevel * maxBar);
+        var x = i * (barWidth + gap);
+        var y = center - barHeight / 2;
+        g.fillStyle = 'rgba(17,17,17,0.10)';
+        g.fillRect(x, center - 3, barWidth, 6);
+        g.fillStyle = activeColor;
+        g.fillRect(x, y, barWidth, barHeight);
+      }
       state.waveformFrame = requestAnimationFrame(draw);
     };
     draw();
@@ -7283,7 +7301,7 @@ function startPodcastPrepRecording() {
   clearPodcastPrepLocalTake();
   navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream) {
     var panel = document.getElementById('podcast-recording-panel');
-    if (panel) panel.innerHTML = '<button class="btn-lg btn-y" id="podcast-record-btn" onclick="stopPodcastPrepRecording()">Stop recording</button><div id="podcast-recording-status" class="hint" style="margin-top:10px">Recording... 0:00</div><canvas id="podcast-waveform" width="640" height="112" style="width:100%;height:56px;margin-top:10px;border:1px solid var(--bdr);border-radius:8px;background:#fff8df;display:block"></canvas><div id="podcast-local-playback" style="margin-top:12px"></div>';
+    if (panel) panel.innerHTML = '<button class="btn-lg btn-y" id="podcast-record-btn" onclick="stopPodcastPrepRecording()">Stop recording</button><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px"><div id="podcast-recording-status" class="hint">Recording... 0:00</div><div id="podcast-waveform-level" style="font-size:12px;font-weight:700;color:#f5c542">Low</div></div><canvas id="podcast-waveform" width="672" height="164" aria-label="Live microphone level waveform" style="width:100%;height:82px;margin-top:10px;border:1px solid var(--bdr);border-radius:8px;background:#fffdf6;display:block"></canvas><div id="podcast-local-playback" style="margin-top:12px"></div>';
     status = document.getElementById('podcast-recording-status');
     playback = document.getElementById('podcast-local-playback');
     btn = document.getElementById('podcast-record-btn');

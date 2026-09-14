@@ -125,7 +125,17 @@ test('Podcast Prep recording uses a real Web Audio waveform and cleans it up saf
   assert.match(start, /window\.AudioContext \|\| window\.webkitAudioContext/);
   assert.match(start, /ctx\.createAnalyser\(\)/);
   assert.match(start, /ctx\.createMediaStreamSource\(stream\)/);
-  assert.match(start, /analyser\.getByteTimeDomainData\(data\)/);
+  assert.match(start, /analyser\.getByteFrequencyData\(frequencyData\)/);
+  assert.match(start, /analyser\.getByteTimeDomainData\(timeData\)/);
+  assert.match(start, /var barCount = 42/);
+  assert.match(start, /g\.fillRect\(x, y, barWidth, barHeight\)/);
+  assert.doesNotMatch(start, /g\.lineTo/);
+  assert.match(start, /level < 0\.18 \? 'Low'/);
+  assert.match(start, /level < 0\.72 \? 'Good'/);
+  assert.match(start, /'#f5c542'/);
+  assert.match(start, /'#2f9e44'/);
+  assert.match(start, /'#d64545'/);
+  assert.match(start, /label\.textContent = levelState/);
   assert.match(start, /requestAnimationFrame\(draw\)/);
   assert.match(start, /console\.warn\('Podcast Prep waveform unavailable:'/);
 
@@ -138,6 +148,7 @@ test('Podcast Prep recording uses a real Web Audio waveform and cleans it up saf
   const record = functionBody('startPodcastPrepRecording');
   assert.match(record, /startPodcastPrepWaveform\(stream\)/);
   assert.match(record, /id="podcast-waveform"/);
+  assert.match(record, /id="podcast-waveform-level"/);
   assert.match(record, /Recording\.\.\. 0:00/);
 
   const clear = functionBody('clearPodcastPrepLocalTake');
@@ -477,8 +488,9 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.16', () => {
-  assert.match(html, />15\.16<\/div>/);
+test('application version badge is 15.17', () => {
+  assert.match(html, />15\.17<\/div>/);
+  assert.doesNotMatch(html, />15\.16<\/div>/);
   assert.doesNotMatch(html, />15\.15<\/div>/);
   assert.doesNotMatch(html, />15\.14<\/div>/);
   assert.doesNotMatch(html, />15\.13<\/div>/);
