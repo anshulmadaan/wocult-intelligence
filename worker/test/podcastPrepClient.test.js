@@ -65,6 +65,8 @@ test('Podcast Prep guest save confirms authorization and binding before Storage 
   assert.ok(save.indexOf('ensurePodcastPrepGuestUploadAuthorization(session)') < save.indexOf('storage.ref(storagePath).put'));
   assert.match(save, /state\.session = Object\.assign\(\{\}, state\.session \|\| \{\}, authorizedSession\)/);
   assert.match(save, /getPodcastRecordingStoragePath\(session\.id, currentUser\.uid, q\.id, versionRef\.id, state\.localBlob\.type\)/);
+  assert.match(save, /logPodcastPrepUploadDiagnostics\(\{/);
+  assert.ok(save.indexOf('guestUidBound') < save.indexOf('storage.ref(storagePath).put'));
 });
 
 test('Podcast Prep guest save still advances after persisted audio without automatic transcription', () => {
@@ -79,11 +81,27 @@ test('Podcast Prep guest save still advances after persisted audio without autom
 
 test('Podcast Prep guest save shows friendly retryable upload errors', () => {
   const body = functionBody('savePodcastPrepResponse');
+  const catchStart = body.indexOf("}).catch(function(err) {");
+  const finallyStart = body.indexOf("}).finally(function() {");
+  const catchBody = body.slice(catchStart, finallyStart);
+  assert.notEqual(catchStart, -1);
+  assert.notEqual(finallyStart, -1);
   assert.match(body, /console\.warn\('Podcast Prep response save failed:', err\)/);
+  assert.match(body, /stage: 'storage error code: ' \+ \(err && err\.code \|\| 'unknown'\)/);
   assert.match(body, /We couldn't save your recording\. Your recording is still available on this page\. Please try again\./);
   assert.match(body, /Your recording uploaded, but we couldn't finish saving it\. Your recording is still available on this page\. Please try again\./);
+  assert.doesNotMatch(catchBody, /clearPodcastPrepLocalTake\(\)/);
   assert.doesNotMatch(body, /Could not upload your response: '\+err\.message/);
   assert.doesNotMatch(body, /storagePath \+ err\.message/);
+});
+
+test('Podcast Prep upload diagnostics are safe and do not expose tokens or recording contents', () => {
+  const body = functionBody('logPodcastPrepUploadDiagnostics');
+  assert.match(body, /console\.info\('\[PodcastPrep Upload\]'/);
+  for (const key of ['authUidMatch', 'emailMatch', 'emailVerified', 'guestUidBound', 'mime', 'bytes', 'question', 'extension', 'stage']) {
+    assert.match(body, new RegExp(`${key}:`));
+  }
+  assert.doesNotMatch(body, /getIdToken|idToken|Authorization|Bearer|access_token|refresh_token|localUrl|transcript|audio controls/);
 });
 
 test('Podcast Prep final submit does not start transcription', () => {
@@ -404,8 +422,9 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.15', () => {
-  assert.match(html, />15\.15<\/div>/);
+test('application version badge is 15.16', () => {
+  assert.match(html, />15\.16<\/div>/);
+  assert.doesNotMatch(html, />15\.15<\/div>/);
   assert.doesNotMatch(html, />15\.14<\/div>/);
   assert.doesNotMatch(html, />15\.13<\/div>/);
   assert.doesNotMatch(html, />15\.12<\/div>/);

@@ -124,6 +124,10 @@ function authedVerifiedStorage(email, uid = '') {
   return authedVerified(email, uid).storage();
 }
 
+function uploadPodcastBlob(storage, path, blob) {
+  return uploadBytes(storageRef(storage, path), blob, { contentType: blob.type || 'audio/webm' });
+}
+
 function anon() {
   return testEnv.unauthenticatedContext().firestore();
 }
@@ -202,6 +206,7 @@ before(async () => {
 
 beforeEach(async () => {
   await testEnv.clearFirestore();
+  if (process.env.STORAGE_EMULATOR_HOST) await testEnv.clearStorage();
 });
 
 after(async () => {
@@ -564,9 +569,11 @@ test('Podcast Prep Storage recordings are isolated by verified guest email, UID 
     t.skip('Storage emulator not running; run firebase emulators:exec --only firestore,storage.');
     return;
   }
-  await seed('podcast_sessions/podcast-1', podcastSession({ guestUid: '' }));
-  await seed('podcast_sessions/podcast-2', podcastSession({
-    sessionId: 'podcast-2',
+  const sessionId = `podcast-storage-${Date.now()}`;
+  const otherSessionId = `podcast-storage-other-${Date.now()}`;
+  await seed(`podcast_sessions/${sessionId}`, podcastSession({ sessionId, guestUid: '' }));
+  await seed(`podcast_sessions/${otherSessionId}`, podcastSession({
+    sessionId: otherSessionId,
     guestEmail: 'other@example.com',
     normalizedGuestEmail: 'other@example.com',
     guestUid: 'other-uid',
@@ -577,21 +584,30 @@ test('Podcast Prep Storage recordings are isolated by verified guest email, UID 
   const staffStorage = authedVerifiedStorage('anmadaan@gmail.com', 'staff-uid');
   const anonStorage = testEnv.unauthenticatedContext().storage();
   const audio = new Blob(['audio'], { type: 'audio/webm' });
-  const guestPath = 'podcast_recordings/podcast-1/guest-uid/q1/v1.webm';
-  const otherPath = 'podcast_recordings/podcast-2/other-uid/q1/v1.webm';
+  const chromeEdgeWebm = new Blob(['webm opus'], { type: 'video/webm;codecs=opus' });
+  const unsafeFile = new Blob(['not audio'], { type: 'text/plain' });
+  const guestPath = `podcast_recordings/${sessionId}/guest-uid/q1/v1.webm`;
+  const chromeEdgePath = `podcast_recordings/${sessionId}/guest-uid/q1/v2.webm`;
+  const otherPath = `podcast_recordings/${otherSessionId}/other-uid/q1/v1.webm`;
+  const unsafePath = `podcast_recordings/${sessionId}/guest-uid/q1/v3.txt`;
+  const oversizedPath = `podcast_recordings/${sessionId}/guest-uid/q1/v4.webm`;
 
-  await assertSucceeds(updateDoc(podcastRef(authedVerifiedDb('guest@example.com', 'guest-uid')), {
+  await assertSucceeds(updateDoc(podcastRef(authedVerifiedDb('guest@example.com', 'guest-uid'), sessionId), {
     guestUid: 'guest-uid',
     status: 'opened',
     openedAt: new Date(),
     updatedAt: new Date(),
   }));
-  await assertSucceeds(getDoc(podcastRef(authedVerifiedDb('guest@example.com', 'guest-uid'))));
+  await assertSucceeds(getDoc(podcastRef(authedVerifiedDb('guest@example.com', 'guest-uid'), sessionId)));
   const guestStorage = authedVerifiedStorage('guest@example.com', 'guest-uid');
-  await assertSucceeds(uploadBytes(storageRef(guestStorage, guestPath), audio));
-  await assertFails(uploadBytes(storageRef(guestStorage, 'podcast_recordings/podcast-1/other-uid/q1/v2.webm'), audio));
-  await assertFails(uploadBytes(storageRef(wrongEmailStorage, guestPath), audio));
-  await assertFails(uploadBytes(storageRef(anonStorage, guestPath), audio));
+  await assertSucceeds(uploadPodcastBlob(guestStorage, guestPath, audio));
+  await assertSucceeds(uploadPodcastBlob(guestStorage, chromeEdgePath, chromeEdgeWebm));
+  await assertFails(uploadPodcastBlob(guestStorage, unsafePath, unsafeFile));
+  await assertFails(uploadPodcastBlob(guestStorage, oversizedPath, new Blob([new Uint8Array((100 * 1024 * 1024) + 1)], { type: 'audio/webm' })));
+  await assertFails(uploadPodcastBlob(guestStorage, `podcast_recordings/${sessionId}/other-uid/q1/v2.webm`, audio));
+  await assertFails(uploadPodcastBlob(guestStorage, `podcast_recordings/${otherSessionId}/guest-uid/q1/v2.webm`, audio));
+  await assertFails(uploadPodcastBlob(wrongEmailStorage, guestPath, audio));
+  await assertFails(uploadPodcastBlob(anonStorage, guestPath, audio));
 
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await uploadBytes(storageRef(context.storage(), otherPath), audio);

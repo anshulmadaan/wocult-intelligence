@@ -265,7 +265,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.15</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.16</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <span id="top-auth-email" class="top-auth-email"></span>
@@ -7090,6 +7090,22 @@ function ensurePodcastPrepGuestUploadAuthorization(session) {
     });
   });
 }
+function logPodcastPrepUploadDiagnostics(details) {
+  try {
+    details = details || {};
+    console.info('[PodcastPrep Upload]', {
+      authUidMatch: !!details.authUidMatch,
+      emailMatch: !!details.emailMatch,
+      emailVerified: !!details.emailVerified,
+      guestUidBound: !!details.guestUidBound,
+      mime: details.mime || '',
+      bytes: details.bytes || 0,
+      question: details.question || '',
+      extension: details.extension || '',
+      stage: details.stage || ''
+    });
+  } catch(e) {}
+}
 function firstPodcastPrepUnansweredIndex(session, responses) {
   var questions = session.questions || [];
   for (var i=0; i<questions.length; i++) {
@@ -7234,6 +7250,17 @@ function savePodcastPrepResponse() {
     session = authorizedSession;
     state.session = Object.assign({}, state.session || {}, authorizedSession);
     storagePath = getPodcastRecordingStoragePath(session.id, currentUser.uid, q.id, versionRef.id, state.localBlob.type);
+    logPodcastPrepUploadDiagnostics({
+      authUidMatch: storagePath.indexOf('/' + currentUser.uid + '/') !== -1,
+      emailMatch: podcastPrepNormalizeEmail(session.guestEmail || session.normalizedGuestEmail) === podcastPrepNormalizeEmail(currentUser && currentUser.email),
+      emailVerified: !!(currentUser && currentUser.emailVerified),
+      guestUidBound: !!(session.guestUid && session.guestUid === currentUser.uid),
+      mime: state.localBlob.type || 'audio/webm',
+      bytes: state.localBlob.size || 0,
+      question: q.id,
+      extension: storagePath.split('.').pop() || '',
+      stage: 'starting storage upload'
+    });
     return storage.ref(storagePath).put(state.localBlob, {contentType: state.localBlob.type || 'audio/webm'});
   }).then(function() {
     uploadCompleted = true;
@@ -7277,6 +7304,17 @@ function savePodcastPrepResponse() {
     renderPodcastPrepQuestion();
   }).catch(function(err) {
     console.warn('Podcast Prep response save failed:', err);
+    logPodcastPrepUploadDiagnostics({
+      authUidMatch: !!(storagePath && currentUser && storagePath.indexOf('/' + currentUser.uid + '/') !== -1),
+      emailMatch: !!(session && currentUser && podcastPrepNormalizeEmail(session.guestEmail || session.normalizedGuestEmail) === podcastPrepNormalizeEmail(currentUser.email)),
+      emailVerified: !!(currentUser && currentUser.emailVerified),
+      guestUidBound: !!(session && currentUser && session.guestUid === currentUser.uid),
+      mime: state.localBlob && state.localBlob.type || '',
+      bytes: state.localBlob && state.localBlob.size || 0,
+      question: q.id,
+      extension: storagePath ? (storagePath.split('.').pop() || '') : '',
+      stage: 'storage error code: ' + (err && err.code || 'unknown')
+    });
     if (uploadCompleted && !versionRegistered && storagePath) {
       storage.ref(storagePath).delete().catch(function(cleanupErr) {
         console.warn('Podcast Prep cleanup failed for unregistered audio:', cleanupErr);

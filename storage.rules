@@ -36,12 +36,20 @@ service firebase.storage {
         );
     }
 
+    function isValidPodcastRecordingContentType(versionFile) {
+      return request.resource.contentType.matches('audio/.*')
+        || (
+          versionFile.matches('.*\\.webm')
+          && request.resource.contentType.matches('video/webm(;codecs=opus)?')
+        );
+    }
+
     match /podcast_recordings/{sessionId}/{uid}/{questionId}/{versionFile} {
       allow read: if canAccessPodcastRecording(sessionId, uid);
       allow write: if canAccessPodcastRecording(sessionId, uid)
         && request.auth.uid == uid
         && request.resource.size < 100 * 1024 * 1024
-        && request.resource.contentType.matches('audio/.*');
+        && isValidPodcastRecordingContentType(versionFile);
     }
 
     match /interview_recordings/{allPaths=**} {
