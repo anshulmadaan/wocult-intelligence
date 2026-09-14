@@ -40,7 +40,7 @@ service firebase.storage {
       return request.resource.contentType.matches('audio/.*')
         || (
           versionFile.matches('.*\\.webm')
-          && request.resource.contentType.matches('video/webm(;codecs=opus)?')
+          && request.resource.contentType.matches('video/webm(;[ ]*codecs=.*)?')
         );
     }
 

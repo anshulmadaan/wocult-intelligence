@@ -21,7 +21,7 @@ import {
   uploadBytes,
 } from 'firebase/storage';
 
-const PROJECT_ID = 'demo-wocult-rules';
+const PROJECT_ID = process.env.GCLOUD_PROJECT || process.env.GCLOUD_CLOUD_PROJECT || 'demo-no-project';
 const RULES = readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8');
 const STORAGE_RULES = readFileSync(new URL('../../storage.rules', import.meta.url), 'utf8');
 let testEnv;
@@ -196,7 +196,7 @@ async function assertAdminWriteDenied(payload) {
 }
 
 before(async () => {
-  assert.equal(PROJECT_ID, 'demo-wocult-rules');
+  assert.match(PROJECT_ID, /^demo-/);
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
     firestore: { rules: RULES },
@@ -585,12 +585,16 @@ test('Podcast Prep Storage recordings are isolated by verified guest email, UID 
   const anonStorage = testEnv.unauthenticatedContext().storage();
   const audio = new Blob(['audio'], { type: 'audio/webm' });
   const chromeEdgeWebm = new Blob(['webm opus'], { type: 'video/webm;codecs=opus' });
+  const chromeEdgeWebmWithCodecList = new Blob(['webm vp8 opus'], { type: 'video/webm; codecs=vp8,opus' });
   const unsafeFile = new Blob(['not audio'], { type: 'text/plain' });
+  const unsafeVideoFile = new Blob(['not permitted'], { type: 'video/mp4' });
   const guestPath = `podcast_recordings/${sessionId}/guest-uid/q1/v1.webm`;
   const chromeEdgePath = `podcast_recordings/${sessionId}/guest-uid/q1/v2.webm`;
+  const chromeEdgeCodecListPath = `podcast_recordings/${sessionId}/guest-uid/q1/v3.webm`;
   const otherPath = `podcast_recordings/${otherSessionId}/other-uid/q1/v1.webm`;
-  const unsafePath = `podcast_recordings/${sessionId}/guest-uid/q1/v3.txt`;
-  const oversizedPath = `podcast_recordings/${sessionId}/guest-uid/q1/v4.webm`;
+  const unsafePath = `podcast_recordings/${sessionId}/guest-uid/q1/v4.txt`;
+  const unsafeVideoPath = `podcast_recordings/${sessionId}/guest-uid/q1/v5.mp4`;
+  const oversizedPath = `podcast_recordings/${sessionId}/guest-uid/q1/v6.webm`;
 
   await assertSucceeds(updateDoc(podcastRef(authedVerifiedDb('guest@example.com', 'guest-uid'), sessionId), {
     guestUid: 'guest-uid',
@@ -602,7 +606,9 @@ test('Podcast Prep Storage recordings are isolated by verified guest email, UID 
   const guestStorage = authedVerifiedStorage('guest@example.com', 'guest-uid');
   await assertSucceeds(uploadPodcastBlob(guestStorage, guestPath, audio));
   await assertSucceeds(uploadPodcastBlob(guestStorage, chromeEdgePath, chromeEdgeWebm));
+  await assertSucceeds(uploadPodcastBlob(guestStorage, chromeEdgeCodecListPath, chromeEdgeWebmWithCodecList));
   await assertFails(uploadPodcastBlob(guestStorage, unsafePath, unsafeFile));
+  await assertFails(uploadPodcastBlob(guestStorage, unsafeVideoPath, unsafeVideoFile));
   await assertFails(uploadPodcastBlob(guestStorage, oversizedPath, new Blob([new Uint8Array((100 * 1024 * 1024) + 1)], { type: 'audio/webm' })));
   await assertFails(uploadPodcastBlob(guestStorage, `podcast_recordings/${sessionId}/other-uid/q1/v2.webm`, audio));
   await assertFails(uploadPodcastBlob(guestStorage, `podcast_recordings/${otherSessionId}/guest-uid/q1/v2.webm`, audio));
