@@ -334,7 +334,7 @@ test('Podcast Prep route logs safe diagnostics and keeps staff dashboard hidden 
 
 test('Podcast Prep route remains ahead of Guest Writer and preserves session id through sign-in', () => {
   const router = functionBody('routeSignedInUser');
-  assert.match(router, /var podcastPrepId = getPodcastPrepIdFromUrl\(\) \|\| sessionStorage\.getItem\('wocultPodcastPrepSessionId'\) \|\| ''/);
+  assert.match(router, /var podcastPrepId = getPendingPodcastPrepSessionId\(\)/);
   assert.match(router, /if \(podcastPrepId\) \{/);
   assert.match(router, /rememberPodcastPrepRoute\(podcastPrepId\)/);
   assert.match(router, /loadPodcastPrepGuestSession\(podcastPrepId\)/);
@@ -345,10 +345,68 @@ test('Podcast Prep route remains ahead of Guest Writer and preserves session id 
   const remember = functionBody('rememberPodcastPrepRoute');
   assert.match(remember, /sessionStorage\.setItem\('wocultAccessMode', 'podcast_prep_guest'\)/);
   assert.match(remember, /sessionStorage\.setItem\('wocultPodcastPrepSessionId', sessionId\)/);
+  assert.match(remember, /sessionStorage\.setItem\('pendingPodcastPrepSessionId', sessionId\)/);
+
+  const pending = functionBody('getPendingPodcastPrepSessionId');
+  assert.match(pending, /getPodcastPrepIdFromUrl\(\)/);
+  assert.match(pending, /sessionStorage\.getItem\('pendingPodcastPrepSessionId'\)/);
+  assert.match(pending, /sessionStorage\.getItem\('wocultPodcastPrepSessionId'\)/);
 
   const boot = html.slice(html.indexOf('var accessKeyFromUrl ='), html.indexOf('</script>', html.indexOf('var accessKeyFromUrl =')));
   assert.match(boot, /if \(podcastPrepFromUrl\) \{/);
   assert.ok(boot.indexOf('if (podcastPrepFromUrl) {') < boot.indexOf("accessKeyFromUrl && accessKeyFromUrl.trim().toUpperCase().indexOf('INT-')"));
+});
+
+test('Podcast Prep auth restoration blocks Guest Writer onboarding for email and Google login', () => {
+  const email = functionBody('submitEmailAuth');
+  const google = functionBody('signInWithGoogle');
+  const opening = functionBody('showPendingPodcastPrepOpeningState');
+  const loader = functionBody('loadPodcastPrepGuestSession');
+
+  assert.match(email, /showPendingPodcastPrepOpeningState\(\)/);
+  assert.match(google, /showPendingPodcastPrepOpeningState\(\)/);
+  assert.ok(email.indexOf('showPendingPodcastPrepOpeningState()') < email.indexOf('auth.signInWithEmailAndPassword'));
+  assert.ok(google.indexOf('showPendingPodcastPrepOpeningState()') < google.indexOf('auth.signInWithPopup'));
+  assert.match(opening, /currentAccessMode = 'podcast_prep_guest'/);
+  assert.match(opening, /showPodcastPrepGuestShell\(\)/);
+  assert.match(opening, /Opening Podcast Prep/);
+  assert.doesNotMatch(opening, /loadGuestWriterProfile|showGuestWriterRegistration/);
+  assert.match(loader, /renderPodcastPrepAccessDenied\(\)/);
+  assert.match(loader, /renderPodcastPrepRouteError/);
+  assert.doesNotMatch(loader, /loadGuestWriterProfile|showGuestWriterRegistration/);
+});
+
+test('Podcast Prep pending route clears only after a Podcast Prep state renders', () => {
+  const clear = functionBody('clearPendingPodcastPrepRoute');
+  const guest = functionBody('loadPodcastPrepGuestSession');
+  const denied = functionBody('renderPodcastPrepAccessDenied');
+  const unverified = functionBody('renderPodcastPrepVerifyEmail');
+
+  assert.match(clear, /removeItem\('pendingPodcastPrepSessionId'\)/);
+  assert.match(guest, /renderPodcastPrepGuestWelcome\(\);[\s\S]*clearPendingPodcastPrepRoute\(\)/);
+  assert.match(denied, /This Podcast Prep invitation was sent to a different email address/);
+  assert.match(denied, /podcastPrepSignedInEmailHtml\(\)/);
+  assert.match(denied, /clearPendingPodcastPrepRoute\(\)/);
+  assert.match(unverified, /clearPendingPodcastPrepRoute\(\)/);
+  assert.doesNotMatch(functionBody('renderPodcastPrepRouteError'), /clearPendingPodcastPrepRoute/);
+});
+
+test('shared login password visibility is accessible and does not persist the password', () => {
+  assert.match(html, /id="login-password" type="password"/);
+  assert.match(html, /id="login-password-toggle"[^>]*aria-label="Show password"[^>]*aria-controls="login-password"[^>]*aria-pressed="false"/);
+  assert.match(html, /id="login-password-toggle"[^>]*onclick="togglePasswordVisibility\(\)"/);
+
+  const toggle = functionBody('togglePasswordVisibility');
+  assert.match(toggle, /field\.type = show \? 'text' : 'password'/);
+  assert.match(toggle, /toggle\.textContent = show \? 'Hide password' : 'Show password'/);
+  assert.match(toggle, /setAttribute\('aria-label'/);
+  assert.match(toggle, /setAttribute\('aria-pressed'/);
+  assert.doesNotMatch(toggle, /field\.value\s*=/);
+  assert.doesNotMatch(toggle, /localStorage|sessionStorage|location|console/);
+
+  const reset = functionBody('resetPasswordVisibility');
+  assert.match(reset, /field\.type = 'password'/);
+  assert.match(functionBody('showAccessScreen'), /resetPasswordVisibility\(\)/);
 });
 
 test('staff dashboard rendering requires explicit staff authorization', () => {
@@ -488,8 +546,9 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.17', () => {
-  assert.match(html, />15\.17<\/div>/);
+test('application version badge is 15.18', () => {
+  assert.match(html, />15\.18<\/div>/);
+  assert.doesNotMatch(html, />15\.17<\/div>/);
   assert.doesNotMatch(html, />15\.16<\/div>/);
   assert.doesNotMatch(html, />15\.15<\/div>/);
   assert.doesNotMatch(html, />15\.14<\/div>/);
