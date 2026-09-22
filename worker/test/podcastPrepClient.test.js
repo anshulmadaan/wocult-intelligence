@@ -374,6 +374,34 @@ test('Podcast Prep auth restoration blocks Guest Writer onboarding for email and
   assert.match(loader, /renderPodcastPrepAccessDenied\(\)/);
   assert.match(loader, /renderPodcastPrepRouteError/);
   assert.doesNotMatch(loader, /loadGuestWriterProfile|showGuestWriterRegistration/);
+  assert.doesNotMatch(email, /routeSignedInUser|loadGuestWriterProfile|showGuestWriterRegistration|goToLanding/);
+  assert.doesNotMatch(google, /routeSignedInUser|loadGuestWriterProfile|showGuestWriterRegistration|goToLanding/);
+});
+
+test('Podcast Prep route is captured before login and one auth-state router owns destination selection', () => {
+  const capture = html.indexOf('var initialPodcastPrepSessionId = getPodcastPrepIdFromUrl()');
+  const setup = html.indexOf('setupUnsavedChangeTracking();');
+  const boot = html.slice(html.indexOf('var accessKeyFromUrl ='), html.indexOf('</script>', html.indexOf('var accessKeyFromUrl =')));
+  const authState = functionBody('handleAuthStateChanged');
+
+  assert.notEqual(capture, -1);
+  assert.ok(capture < setup);
+  assert.match(html.slice(capture, setup), /sessionStorage\.setItem\('pendingPodcastPrepSessionId', initialPodcastPrepSessionId\)/);
+  assert.match(boot, /auth\.onAuthStateChanged\(handleAuthStateChanged\)/);
+  assert.doesNotMatch(boot, /onAuthStateChanged\(function/);
+  assert.match(authState, /routeSignedInUser\(user\)/);
+  assert.match(authState, /showAccessScreen\(\)/);
+});
+
+test('a pending Podcast Prep session makes Guest Writer onboarding unreachable for that routing pass', () => {
+  const router = functionBody('routeSignedInUser');
+  const pendingBranch = router.indexOf('if (podcastPrepId) {');
+  const podcastReturn = router.indexOf('return loadPodcastPrepGuestSession(podcastPrepId)');
+  const writerFallback = router.indexOf('return loadGuestWriterProfile(user.uid)');
+
+  assert.ok(pendingBranch !== -1 && podcastReturn > pendingBranch);
+  assert.ok(writerFallback > podcastReturn);
+  assert.match(router.slice(pendingBranch, writerFallback), /return loadPodcastPrepGuestSession\(podcastPrepId\)/);
 });
 
 test('Podcast Prep pending route clears only after a Podcast Prep state renders', () => {
@@ -546,8 +574,9 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.18', () => {
-  assert.match(html, />15\.18<\/div>/);
+test('application version badge is 15.19', () => {
+  assert.match(html, />15\.19<\/div>/);
+  assert.doesNotMatch(html, />15\.18<\/div>/);
   assert.doesNotMatch(html, />15\.17<\/div>/);
   assert.doesNotMatch(html, />15\.16<\/div>/);
   assert.doesNotMatch(html, />15\.15<\/div>/);

@@ -266,7 +266,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
   <div class="tbar-sub">Editing Studio</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.18</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px">15.19</div>
   <div class="tbar-r">
     <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
     <span id="top-auth-email" class="top-auth-email"></span>
@@ -1663,6 +1663,14 @@ try {
   auth = firebase.auth();
   storage = firebase.storage();
 } catch(e) { console.warn('Firebase init failed:', e.message); }
+var initialPodcastPrepSessionId = getPodcastPrepIdFromUrl();
+if (initialPodcastPrepSessionId) {
+  sessionStorage.setItem('pendingPodcastPrepSessionId', initialPodcastPrepSessionId);
+  sessionStorage.setItem('wocultPodcastPrepSessionId', initialPodcastPrepSessionId);
+  sessionStorage.setItem('wocultAccessMode', 'podcast_prep_guest');
+}
+console.info('[PodcastPrep Route] URL session:', !!initialPodcastPrepSessionId);
+console.info('[PodcastPrep Route] Pending session:', !!sessionStorage.getItem('pendingPodcastPrepSessionId'));
 var _memoryNotes = [];
 
 function getInterviewRecordingStoragePath(sessionId, uid, questionIndex) {
@@ -2166,9 +2174,7 @@ function submitEmailAuth() {
   var action = loginMode === 'signin'
     ? auth.signInWithEmailAndPassword(email, password)
     : auth.createUserWithEmailAndPassword(email, password);
-  action.then(function(result) {
-    if (result && result.user) routeSignedInUser(result.user);
-  }).catch(function(err) {
+  action.catch(function(err) {
     if (getPendingPodcastPrepSessionId()) showAccessScreen();
     setLoginError(loginAuthMessage(err));
   }).finally(function() {
@@ -2195,9 +2201,7 @@ function signInWithGoogle() {
   setLoginBusy(true);
   setLoginError('');
   showPendingPodcastPrepOpeningState();
-  auth.signInWithPopup(provider).then(function(result) {
-    if (result && result.user) routeSignedInUser(result.user);
-  }).catch(function(err) {
+  auth.signInWithPopup(provider).catch(function(err) {
     if (getPendingPodcastPrepSessionId()) showAccessScreen();
     setLoginError(err.message || 'Could not sign in with Google.');
   }).finally(function() {
@@ -2261,6 +2265,7 @@ function rememberPodcastPrepRoute(sessionId) {
   sessionStorage.setItem('pendingPodcastPrepSessionId', sessionId);
 }
 function clearPendingPodcastPrepRoute() {
+  console.info('[PodcastPrep Route] Clearing pending route after render');
   sessionStorage.removeItem('pendingPodcastPrepSessionId');
   sessionStorage.removeItem('wocultPodcastPrepSessionId');
   if (sessionStorage.getItem('wocultAccessMode') === 'podcast_prep_guest') sessionStorage.removeItem('wocultAccessMode');
@@ -2283,9 +2288,11 @@ function logPodcastPrepRouteState(message, details) {
 function routeSignedInUser(user) {
   currentUser = user;
   if (!user) { currentAccessMode = ''; showAccessScreen(); return; }
+  console.info('[PodcastPrep Route] Auth resolved');
   clearUnsavedChanges();
   var podcastPrepId = getPendingPodcastPrepSessionId();
   if (podcastPrepId) {
+    console.info('[PodcastPrep Route] Selecting Podcast Prep');
     logPodcastPrepRouteState('route detected', {hasSessionId: true});
     logPodcastPrepRouteState('auth resolved', {email: user.email || '', staff: isStaffUser(user), accessMode: currentAccessMode || ''});
     rememberPodcastPrepRoute(podcastPrepId);
@@ -2301,8 +2308,7 @@ function routeSignedInUser(user) {
     currentAccessMode = 'podcast_prep_guest';
     currentAccessKey = podcastPrepId;
     updateAuthenticatedNavigationForMode();
-    loadPodcastPrepGuestSession(podcastPrepId);
-    return;
+    return loadPodcastPrepGuestSession(podcastPrepId);
   }
   updateAuthenticatedNavigationForMode();
   loadNotifications();
@@ -2315,7 +2321,12 @@ function routeSignedInUser(user) {
     return;
   }
   currentAccessMode = 'guest_writer';
-  loadGuestWriterProfile(user.uid);
+  return loadGuestWriterProfile(user.uid);
+}
+function handleAuthStateChanged(user) {
+  console.info('[PodcastPrep Route] Pending session:', !!sessionStorage.getItem('pendingPodcastPrepSessionId'));
+  if (user) return routeSignedInUser(user);
+  showAccessScreen();
 }
 function navigateHome() {
   if (currentAccessMode === 'podcast_prep_guest') {
@@ -7052,7 +7063,7 @@ function loadPodcastPrepGuestSession(sessionId) {
   logPodcastPrepRouteState('opening guest route', {hasSessionId: true, email: currentUser && currentUser.email ? currentUser.email : '', staff: isStaffUser(currentUser), accessMode: currentAccessMode || ''});
   var root = showPodcastPrepGuestShell();
   if (root) root.innerHTML = '<h2>Opening Podcast Prep...</h2>'+podcastPrepSignedInEmailHtml()+'<p class="sub">Please wait while we open your preparation room.</p>';
-  checkPodcastPrepAccess(sessionId).then(function(access) {
+  return checkPodcastPrepAccess(sessionId).then(function(access) {
     logPodcastPrepRouteState('access check result', {ok: !!(access && access.ok), reason: access && access.reason ? access.reason : '', role: access && access.role ? access.role : '', staff: isStaffUser(currentUser)});
     if (!access.ok) {
       if (access.reason === 'unverified') {
@@ -15312,15 +15323,12 @@ renderSaved();
 renderSourceFilters();
 loadAll();
 var accessKeyFromUrl = new URLSearchParams(window.location.search).get('key');
-var podcastPrepFromUrl = getPodcastPrepIdFromUrl();
+var podcastPrepFromUrl = initialPodcastPrepSessionId || getPodcastPrepIdFromUrl();
 var staffViewFromUrl = getStaffViewParams();
 if (podcastPrepFromUrl) {
   rememberPodcastPrepRoute(podcastPrepFromUrl);
   if (auth) {
-    auth.onAuthStateChanged(function(user) {
-      if (user) routeSignedInUser(user);
-      else showAccessScreen();
-    });
+    auth.onAuthStateChanged(handleAuthStateChanged);
   } else {
     showAccessScreen();
   }
@@ -15328,10 +15336,7 @@ if (podcastPrepFromUrl) {
   handleAccessKey(accessKeyFromUrl);
 } else if (staffViewFromUrl || !restoreAccessSession()) {
   if (auth) {
-    auth.onAuthStateChanged(function(user) {
-      if (user) routeSignedInUser(user);
-      else showAccessScreen();
-    });
+    auth.onAuthStateChanged(handleAuthStateChanged);
   } else {
     showAccessScreen();
   }
