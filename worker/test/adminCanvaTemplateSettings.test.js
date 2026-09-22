@@ -299,8 +299,8 @@ test('headline and subtitle exact-fill paths remain separate from AI bullet gene
   assert.match(functionBlock('generateNewsBriefCreativeFields'), /Generate structured JSON only for Wocult Canva Template 3 bullets/);
 });
 
-test('dashboard version badge is 15.19 and static IDs are not duplicated', () => {
-  assert.match(html, />15\.19<\/div>/);
+test('dashboard version badge is 15.20 and static IDs are not duplicated', () => {
+  assert.match(html, />15\.20<\/div>/);
   assert.doesNotMatch(html, />15\.16<\/div>/);
   assert.doesNotMatch(html, />15\.15<\/div>/);
   assert.doesNotMatch(html, />15\.14<\/div>/);

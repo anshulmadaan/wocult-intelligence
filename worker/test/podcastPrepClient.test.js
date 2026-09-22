@@ -243,6 +243,64 @@ test('Podcast Prep talking points are staff-authored, guest read-only and export
   assert.match(docx, /q\.talkingPoints/);
 });
 
+test('staff can edit an existing Podcast Prep title and question text without changing identity or guest link', () => {
+  const detail = functionBody('renderPodcastPrepStaffDetail');
+  const save = functionBody('savePodcastPrepSessionContent');
+
+  assert.match(detail, /Edit session/);
+  assert.match(detail, /id="podcast-session-title-input"/);
+  assert.match(detail, /class="podcast-question-text-input"/);
+  assert.match(detail, /class="podcast-question-talking-points"/);
+  assert.match(detail, /Save changes/);
+  assert.match(detail, /Cancel/);
+  assert.match(detail, /var guestLink = buildPodcastPrepLink\(session\.id\)/);
+
+  assert.match(save, /db\.collection\('podcast_sessions'\)\.doc\(sessionId\)\.update/);
+  assert.match(save, /podcastTitle: podcastTitle/);
+  assert.match(save, /questions: questions/);
+  assert.match(save, /updatedAt: firebase\.firestore\.FieldValue\.serverTimestamp\(\)/);
+  assert.match(save, /Object\.assign\(\{\}, q,/);
+  assert.match(save, /el\.getAttribute\('data-question-id'\) === q\.id/);
+  assert.doesNotMatch(save, /q\.id\s*=|id:\s*'q'|order:/);
+  assert.doesNotMatch(save, /sessionId:|guestLink:|completedQuestionCount:|status:|guestUid:|overallFeedback:/);
+  assert.doesNotMatch(save, /collection\('responses'\)|collection\('versions'\)|storage\.|delete\(/);
+  assert.match(save, /Session updated\./);
+});
+
+test('failed session-content save retains staff edits and cancel restores cached session content', () => {
+  const save = functionBody('savePodcastPrepSessionContent');
+  const editMode = functionBody('setPodcastPrepSessionEditMode');
+
+  assert.match(save, /Could not update session\. Please try again\./);
+  assert.doesNotMatch(save.slice(save.indexOf('.catch')), /renderPodcastPrepStaffDetail/);
+  assert.match(editMode, /renderPodcastPrepStaffDetail\(detail\._podcastPrepSession, detail\._podcastPrepResponses \|\| \{\}, detail\._podcastPrepVersions \|\| \{\}\)/);
+});
+
+test('guest reload uses current session title and questions while saved response snapshots remain isolated', () => {
+  const loader = functionBody('loadPodcastPrepGuestSession');
+  const question = functionBody('renderPodcastPrepQuestion');
+  const saveResponse = functionBody('savePodcastPrepResponse');
+  const sessionSave = functionBody('savePodcastPrepSessionContent');
+
+  assert.match(loader, /db\.collection\('podcast_sessions'\)\.doc\(sessionId\)\.get\(\)/);
+  assert.match(loader, /window\._podcastPrepGuest\.session = updatedSession/);
+  assert.match(question, /session\.podcastTitle/);
+  assert.match(question, /q\.question/);
+  assert.match(question, /q\.talkingPoints/);
+  assert.match(saveResponse, /questionText: q\.question \|\| ''/);
+  assert.match(saveResponse, /questionOrder: q\.order \|\| \(state\.activeIndex \+ 1\)/);
+  assert.doesNotMatch(sessionSave, /questionText|questionOrder|transcript|storagePath|versionRef|responseRef/);
+});
+
+test('Podcast Prep security keeps content staff-editable and guest read-only without a rules change', () => {
+  const rules = readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8');
+  const sessionRules = rules.slice(rules.indexOf('match /podcast_sessions/{sessionId}'), rules.indexOf('match /editorial_config/{documentId}'));
+  assert.match(sessionRules, /allow update: if isWocultStaff\(\)/);
+  assert.match(rules, /request\.resource\.data\.questions == resource\.data\.questions/);
+  assert.match(rules, /request\.resource\.data\.questionText == resource\.data\.questionText/);
+  assert.match(rules, /request\.resource\.data\.questionOrder == resource\.data\.questionOrder/);
+});
+
 test('Podcast Prep bulk transcription processes eligible responses sequentially and skips completed ones', () => {
   const eligible = functionBody('podcastPrepTranscriptionEligible');
   assert.match(eligible, /status === 'not_requested'/);
@@ -574,8 +632,9 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.19', () => {
-  assert.match(html, />15\.19<\/div>/);
+test('application version badge is 15.20', () => {
+  assert.match(html, />15\.20<\/div>/);
+  assert.doesNotMatch(html, />15\.19<\/div>/);
   assert.doesNotMatch(html, />15\.18<\/div>/);
   assert.doesNotMatch(html, />15\.17<\/div>/);
   assert.doesNotMatch(html, />15\.16<\/div>/);
