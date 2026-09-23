@@ -30,8 +30,9 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.20 for Podcast Prep session editing', () => {
-  assert.match(html, />15\.20<\/div>/);
+test('dashboard version badge is 15.21 for enterprise shell', () => {
+  assert.match(html, /id="app-version">v15\.21<\/small>/);
+  assert.doesNotMatch(html, />15\.20<\/div>/);
   assert.doesNotMatch(html, />15\.16<\/div>/);
   assert.doesNotMatch(html, />15\.15<\/div>/);
   assert.doesNotMatch(html, />15\.14<\/div>/);
@@ -68,9 +69,9 @@ test('Draft new stories card icons match the pre-15.1 dashboard values', () => {
   assert.doesNotMatch(html, /<div class="lcard-icon">\?\?<\/div>/);
 });
 
-test('dashboard visible Unicode symbols are not replaced with literal question marks', () => {
+test('dashboard visible symbols and notification outline icon render without literal question marks', () => {
   assert.doesNotMatch(html, /\?\?/);
-  assert.match(html, /title="Notifications">🔔<span/);
+  assert.match(html, /title="Notifications" aria-label="Notifications"><svg/);
   assert.match(html, /Open dashboard →/);
   assert.match(html, /← Back/);
 });
