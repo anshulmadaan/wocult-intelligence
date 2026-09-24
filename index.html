@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="app-ui.css">
+<link rel="stylesheet" href="app-ui.css?v=15.24">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-height:100vh}
@@ -265,7 +265,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <div class="app-brand"><span class="app-brand-mark">W</span><span><strong>Wocult</strong><small>Intelligence</small></span></div>
   <nav id="app-nav" class="app-nav" aria-label="Primary"></nav>
   <div class="app-profile">
-    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.23</small></span></div>
+    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.24</small></span></div>
     <button type="button" class="app-logout" onclick="logout()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></svg><span>Logout</span></button>
   </div>
 </aside>
@@ -278,17 +278,9 @@ We’re looking for honest, experience-led stories — not polished perfection.<
     <text x="17" y="23" text-anchor="middle" font-family="Georgia,serif" font-size="18" font-weight="700" fill="#1a1a1a">W</text>
     <text x="42" y="24" font-family="Georgia,serif" font-size="22" font-weight="600" letter-spacing="2" fill="#FAC775">WOCULT</text>
   </svg>
-  <div class="tbar-sub" id="app-page-title">Home</div>
   <div class="tbar-r">
-    <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
-    <span id="top-auth-email" class="top-auth-email"></span>
-    <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
-    <button class="btn" id="rbtn" onclick="loadAll()" style="display:none">Refresh</button>
     <button class="notification-bell" id="notification-bell" onclick="toggleNotificationsPanel()" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="notification-badge" id="notification-count">0</span></button>
     <button type="button" id="app-theme-toggle" class="app-icon-button" aria-label="Switch to dark theme" aria-pressed="false" onclick="toggleAppTheme()"><svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></svg><svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8 8 0 0 1 9.8 3.5 9 9 0 1 0 20.5 14.2Z"/></svg></button>
-    <button class="btn" onclick="showSubmitStoryIdeaScreen()" style="font-size:11px;display:none;background:#FAC775;color:var(--blk)" id="btn-new-guest-story">+ New Story</button>
-    <button class="btn btn-ghost" onclick="handleHomeClick()" style="font-size:11px;display:none" id="btn-back-landing">Home</button>
-    <button class="btn btn-ghost" onclick="logout()" style="font-size:11px;display:none" id="btn-logout">Logout</button>
   </div>
 </div>
 
@@ -300,30 +292,6 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <div id="notifications-list" style="padding:12px;display:flex;flex-direction:column;gap:10px"></div>
 </div>
 
-<div class="stats" id="stats-bar" style="display:none">
-  <div class="stat hl"><div class="sn" id="s0">0</div><div class="sl">Stories tracked</div></div>
-  <div class="stat"><div class="sn" id="s1">-</div><div class="sl">Hottest sector</div></div>
-  <div class="stat"><div class="sn" id="s2">0</div><div class="sl">Hiring signals</div></div>
-  <div class="stat"><div class="sn" id="s3">0</div><div class="sl">Layoff alerts</div></div>
-</div>
-
-<div class="errbanner" id="err"></div>
-
-<div class="saved-section" id="saved-section" style="display:none">
-  <div class="saved-header">
-    <span class="saved-label">Saved for later</span>
-    <span style="font-size:11px;color:var(--g3)" id="saved-count"></span>
-  </div>
-  <div class="saved-grid" id="saved-grid"></div>
-  <div class="saved-add">
-    <input class="saved-input" id="saved-url-input" placeholder="Paste any article URL to save..." onkeydown="if(event.key==='Enter')saveUrl()" />
-    <button class="btn" onclick="saveUrl()">Save URL</button>
-  </div>
-</div>
-
-<div id="saved-toggle-bar" style="padding:8px 24px 0;display:none;justify-content:flex-end">
-  <button onclick="toggleSaved()" style="font-size:12px;color:var(--yd);background:none;border:none;cursor:pointer;font-weight:500" id="toggle-saved-btn">+ Save for later</button>
-</div>
 
 <!-- ACCESS SCREEN -->
 <div id="access-screen" class="landing login-screen">
@@ -430,6 +398,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <div class="scratch-screen" style="max-width:1120px">
     <h2>My stories</h2>
     <p class="sub">Track your submitted ideas, revisions, and published stories.</p>
+    <button class="btn" onclick="showSubmitStoryIdeaScreen()" style="font-size:11px;display:none;background:#FAC775;color:var(--blk);margin-bottom:16px" id="btn-new-guest-story">+ New Story</button>
     <div id="guest-writer-dashboard-status" class="hint" style="margin-bottom:12px"></div>
     <div style="overflow:auto;border:1px solid var(--bdr);border-radius:8px;background:#fff">
       <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:760px">
@@ -1466,6 +1435,38 @@ There are no right or wrong answers here. Please answer openly and in your own v
 </div><!-- /landing -->
 
 <div id="main" class="app-workspace" style="display:none">
+<div class="errbanner" id="err"></div>
+<header class="app-page-tools"><h1>Draft from trending news</h1>
+    <span id="top-updated-status" style="display:none"><span class="dot" id="dot"></span><span class="ts" id="ts">Loading...</span></span>
+    <button class="btn btn-ghost" onclick="openDraftFromUrl()" style="font-size:11px" id="btn-draft-url">+ Draft from URL</button>
+    <button class="btn" id="rbtn" onclick="loadAll()" style="display:none">Refresh</button>
+    <button class="btn btn-ghost" onclick="handleHomeClick()" style="font-size:11px;display:none" id="btn-back-landing">Home</button>
+</header>
+<div class="stats" id="stats-bar" style="display:none">
+  <div class="stat hl"><div class="sn" id="s0">0</div><div class="sl">Stories tracked</div></div>
+  <div class="stat"><div class="sn" id="s1">-</div><div class="sl">Hottest sector</div></div>
+  <div class="stat"><div class="sn" id="s2">0</div><div class="sl">Hiring signals</div></div>
+  <div class="stat"><div class="sn" id="s3">0</div><div class="sl">Layoff alerts</div></div>
+</div>
+
+
+<div class="saved-section" id="saved-section" style="display:none">
+  <div class="saved-header">
+    <span class="saved-label">Saved for later</span>
+    <span style="font-size:11px;color:var(--g3)" id="saved-count"></span>
+  </div>
+  <div class="saved-grid" id="saved-grid"></div>
+  <div class="saved-add">
+    <input class="saved-input" id="saved-url-input" placeholder="Paste any article URL to save..." onkeydown="if(event.key==='Enter')saveUrl()" />
+    <button class="btn" onclick="saveUrl()">Save URL</button>
+  </div>
+</div>
+
+<div id="saved-toggle-bar" style="padding:8px 24px 0;display:none;justify-content:flex-end">
+  <button onclick="toggleSaved()" style="font-size:12px;color:var(--yd);background:none;border:none;cursor:pointer;font-weight:500" id="toggle-saved-btn">+ Save for later</button>
+</div>
+
+
 <div class="tabs">
   <div class="tab on" id="tab-newsTracker" onclick="switchTab('newsTracker')">News Tracker</div>
   <div class="tab" id="tab-cards" onclick="switchTab('cards')">RSS</div>
@@ -15417,6 +15418,6 @@ if (podcastPrepFromUrl) {
   }
 }
 </script>
-<script src="app-ui.js"></script>
+<script src="app-ui.js?v=15.24"></script>
 </body>
 </html>

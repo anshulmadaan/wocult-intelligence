@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '15.23';
+  var APP_VERSION = '15.24';
   var THEME_KEY = 'wocult_ui_theme';
   var currentSection = 'home';
   var lastDrawerFocus = null;
@@ -161,15 +161,18 @@
 
   function setSection(section, title) {
     currentSection = section;
-    var heading = document.getElementById('app-page-title');
-    if (heading) heading.textContent = title || (sectionDefinitions[section] && sectionDefinitions[section].title) || 'Wocult Intelligence';
     renderAppShell();
   }
   function overviewRoot() { return document.getElementById('landing-cards'); }
   function emptyState(title, copy) { return '<div class="app-empty"><span class="app-empty-icon">'+svg('empty')+'</span><strong>'+safe(title)+'</strong><span>'+safe(copy)+'</span></div>'; }
   function panelHeading(title, icon, tone) { return '<header class="app-panel-heading"><span class="app-panel-icon '+safe(tone)+'">'+svg(icon)+'</span><h2>'+safe(title)+'</h2></header>'; }
   function renderCards(def) {
-    return '<div class="app-overview"><header class="app-page-header"><div><h1>'+safe(def.title)+'</h1><p>'+safe(def.sub)+'</p></div></header><div class="app-launcher-grid">'+def.cards.map(function(card,index){return '<button type="button" class="app-launcher" data-card-index="'+index+'"><span class="app-launcher-icon">'+svg(card[2])+'</span><span class="app-launcher-title">'+safe(card[0])+'</span><span class="app-launcher-desc">'+safe(card[1])+'</span><span class="app-launcher-chevron" aria-hidden="true">›</span></button>';}).join('')+'</div></div>';
+    var draftActions = ['Open dashboard','Paste a URL','Start writing','Open editor','Open editor','Review briefs'];
+    var isDraft = def === sectionDefinitions.draft;
+    return '<div class="app-overview"><header class="app-page-header"><div><h1>'+safe(def.title)+'</h1><p>'+safe(def.sub)+'</p></div></header><div class="app-launcher-grid">'+def.cards.map(function(card,index){
+      var divider = isDraft && (index === 0 || index === 3) ? '<div class="app-draft-divider">'+(index === 0 ? 'Draft new stories' : 'More ways to draft')+'</div>' : '';
+      return divider+'<button type="button" class="app-launcher" data-card-index="'+index+'"><span class="app-launcher-icon">'+svg(card[2])+'</span><span class="app-launcher-title">'+safe(card[0])+'</span><span class="app-launcher-desc">'+safe(card[1])+'</span><span class="app-launcher-action">'+(isDraft ? draftActions[index] : 'Open')+'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="app-launcher-chevron" aria-hidden="true">&#8250;</span></button>';
+    }).join('')+'</div></div>';
   }
   function bindCards(def) { document.querySelectorAll('#landing-cards .app-launcher').forEach(function(card){ card.addEventListener('click',def.cards[Number(card.getAttribute('data-card-index'))][3]); }); }
 

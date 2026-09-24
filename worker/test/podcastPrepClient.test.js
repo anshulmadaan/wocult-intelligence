@@ -204,8 +204,9 @@ test('Podcast Prep staff dashboard and detail expose copyable guest links withou
   assert.match(detail, /Copy link/);
 });
 
-test('authenticated top bar shows current Firebase email while preserving Podcast Prep guest controls', () => {
-  assert.match(html, /id="top-auth-email" class="top-auth-email"/);
+test('sidebar owns the profile while Podcast Prep guest notification rules remain unchanged', () => {
+  assert.match(html, /id="app-profile-email"/);
+  assert.doesNotMatch(html, /id="top-auth-email"/);
   const nav = functionBody('updateAuthenticatedNavigationForMode');
   assert.match(nav, /email\.textContent = currentUser && currentUser\.email \? currentUser\.email : ''/);
   assert.match(nav, /email\.style\.display = currentUser && currentUser\.email \? 'inline-flex' : 'none'/);
@@ -632,8 +633,8 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.23', () => {
-  assert.match(html, /id="app-version">v15\.23<\/small>/);
+test('application version badge is 15.24', () => {
+  assert.match(html, /id="app-version">v15\.24<\/small>/);
   assert.doesNotMatch(html, />15\.20<\/div>/);
   assert.doesNotMatch(html, />15\.19<\/div>/);
   assert.doesNotMatch(html, />15\.18<\/div>/);
