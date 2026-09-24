@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '15.21';
+  var APP_VERSION = '15.22';
   var THEME_KEY = 'wocult_ui_theme';
   var currentSection = 'home';
   var lastDrawerFocus = null;
@@ -155,7 +155,8 @@
     renderAppShell();
   }
   function overviewRoot() { return document.getElementById('landing-cards'); }
-  function emptyState(title, copy) { return '<div class="app-empty">'+svg('empty')+'<strong>'+safe(title)+'</strong><span>'+safe(copy)+'</span></div>'; }
+  function emptyState(title, copy) { return '<div class="app-empty"><span class="app-empty-icon">'+svg('empty')+'</span><strong>'+safe(title)+'</strong><span>'+safe(copy)+'</span></div>'; }
+  function panelHeading(title, icon, tone) { return '<header class="app-panel-heading"><span class="app-panel-icon '+safe(tone)+'">'+svg(icon)+'</span><h2>'+safe(title)+'</h2></header>'; }
   function renderCards(def) {
     return '<div class="app-overview"><header class="app-page-header"><div><h1>'+safe(def.title)+'</h1><p>'+safe(def.sub)+'</p></div></header><div class="app-launcher-grid">'+def.cards.map(function(card,index){return '<button type="button" class="app-launcher" data-card-index="'+index+'"><span class="app-launcher-icon">'+svg(card[2])+'</span><span class="app-launcher-title">'+safe(card[0])+'</span><span class="app-launcher-desc">'+safe(card[1])+'</span><span class="app-launcher-chevron" aria-hidden="true">›</span></button>';}).join('')+'</div></div>';
   }
@@ -167,7 +168,7 @@
   function renderHomeShell() {
     var root=overviewRoot(); if(!root)return;
     homeActions=[];
-    root.innerHTML='<div class="app-overview"><header class="app-page-header"><div><h1>Home</h1><p>Your editorial work and upcoming schedule.</p></div></header><div class="app-dashboard-grid"><section class="app-dashboard-panel attention"><h2 class="app-section-label">Needs attention</h2><div id="app-home-attention">'+emptyState('Checking current work','Loading actionable editorial items.')+'</div></section><section class="app-dashboard-panel"><h2 class="app-section-label">Upcoming</h2><div id="app-home-upcoming">'+emptyState('Checking the calendar','Loading upcoming Editorial Calendar items.')+'</div></section><section class="app-dashboard-panel"><h2 class="app-section-label">Recent activity</h2>'+emptyState('No activity history available','A reliable cross-product activity source is not currently available.')+'</section></div></div>';
+    root.innerHTML='<div class="app-overview"><header class="app-page-header"><div><h1>Home</h1><p>Your editorial work and upcoming schedule.</p></div></header><div class="app-dashboard-grid"><section class="app-dashboard-panel attention">'+panelHeading('Needs attention','empty','attention')+'<div id="app-home-attention">'+emptyState('Checking current work','Loading actionable editorial items.')+'</div></section><section class="app-dashboard-panel">'+panelHeading('Upcoming','calendar','upcoming')+'<div id="app-home-upcoming">'+emptyState('Checking the calendar','Loading upcoming Editorial Calendar items.')+'</div></section><section class="app-dashboard-panel">'+panelHeading('Recent activity','tracker','activity')+emptyState('No activity history available','A reliable cross-product activity source is not currently available.')+'</section></div></div>';
   }
   function loadHomeData() {
     if (!window.db || currentAccessMode !== 'staff') return;

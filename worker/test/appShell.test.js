@@ -11,7 +11,7 @@ test('authenticated application shell exposes persistent navigation, profile and
   assert.match(html, /id="app-nav"[^>]+aria-label="Primary"/);
   assert.match(html, /id="app-profile-email"/);
   assert.match(html, /id="app-avatar"/);
-  assert.match(html, /id="app-version">v15\.21/);
+  assert.match(html, /id="app-version">v15\.22/);
   assert.match(html, /id="app-menu-toggle"[^>]+aria-controls="app-sidebar"[^>]+aria-expanded="false"/);
   assert.match(html, /id="app-theme-toggle"[^>]+aria-label="Switch to dark theme"/);
   assert.match(css, /body\.app-authenticated \.app-sidebar\{display:flex\}/);
@@ -61,7 +61,31 @@ test('theme defaults to light, persists only UI preference and supports designed
   assert.match(ui, /localStorage\.setItem\(THEME_KEY,next\)/);
   assert.doesNotMatch(ui, /matchMedia|prefers-color-scheme/);
   assert.match(css, /:root\[data-theme="dark"\]/);
-  assert.match(css, /--app-surface:#22231f/);
+  assert.match(css, /--app-workspace-dark:#1b1f26/);
+  assert.match(css, /--app-surface-dark:#242a33/);
+});
+
+test('authenticated top bar stays minimal while required controls remain available', () => {
+  assert.match(html, /id="notification-bell"[^>]+aria-label="Notifications"/);
+  assert.match(html, /id="app-theme-toggle"[^>]+aria-label="Switch to dark theme"/);
+  assert.match(html, /class="app-logout"[^>]+onclick="logout\(\)"/);
+  assert.match(css, /body\.app-authenticated #btn-back-landing[^}]+display:none!important/);
+  assert.match(css, /body\.app-authenticated #btn-logout[^}]+display:none!important/);
+});
+
+test('home records keep title and metadata as distinct elements', () => {
+  assert.match(ui, /class="app-record-title"/);
+  assert.match(ui, /class="app-record-meta"/);
+  assert.match(css, /\.app-record-title\{display:block/);
+  assert.match(css, /\.app-record-meta\{display:block/);
+});
+
+test('shell tokens preserve visible controls in light mode and layered surfaces in dark mode', () => {
+  assert.match(css, /--app-control-text:#202733/);
+  assert.match(css, /--app-control-border:#cfd5de/);
+  assert.match(css, /--app-workspace-dark:#1b1f26/);
+  assert.match(css, /--app-surface-dark:#242a33/);
+  assert.match(css, /--app-surface-raised-dark:#2b323d/);
 });
 
 test('legacy route and authorization functions remain in place', () => {
