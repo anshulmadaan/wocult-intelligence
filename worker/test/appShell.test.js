@@ -11,7 +11,7 @@ test('authenticated application shell exposes persistent navigation, profile and
   assert.match(html, /id="app-nav"[^>]+aria-label="Primary"/);
   assert.match(html, /id="app-profile-email"/);
   assert.match(html, /id="app-avatar"/);
-  assert.match(html, /id="app-version">v15\.22/);
+  assert.match(html, /id="app-version">v15\.23/);
   assert.match(html, /id="app-menu-toggle"[^>]+aria-controls="app-sidebar"[^>]+aria-expanded="false"/);
   assert.match(html, /id="app-theme-toggle"[^>]+aria-label="Switch to dark theme"/);
   assert.match(css, /body\.app-authenticated \.app-sidebar\{display:flex\}/);
@@ -92,4 +92,33 @@ test('legacy route and authorization functions remain in place', () => {
   for (const contract of ['pendingPodcastPrepSessionId','routeSignedInUser','handleAuthStateChanged','loadPodcastPrepGuestSession','loadGuestWriterProfile','handleAccessKey','logout','guardStaffScreen']) assert.match(html, new RegExp(contract));
   assert.match(html, /if \(podcastPrepFromUrl\)/);
   assert.match(html, /accessKeyFromUrl.+INT-/s);
+});
+
+test('authenticated shell gives the top bar and scrolling workspace separate viewport regions', () => {
+  assert.match(css, /--app-topbar-height:64px/);
+  assert.match(css, /body\.app-authenticated\{position:fixed;inset:0;overflow:hidden/);
+  assert.match(css, /body\.app-authenticated>\.app-workspace\{position:fixed;inset:var\(--app-topbar-height\) 0 0 var\(--app-sidebar-width\)/);
+  assert.match(css, /body\.app-authenticated>\.app-workspace\{[^}]+overflow-x:hidden;overflow-y:auto/);
+  assert.match(css, /body\.app-authenticated \.topbar\{[^}]+height:var\(--app-topbar-height\)/);
+  assert.doesNotMatch(css, /body\.app-authenticated>\.app-workspace\{[^}]+100vh/);
+});
+
+test('all top-level authenticated screens use the one shared workspace contract', () => {
+  for (const id of ['landing','main','workflow','guest-placeholder','guest-writer-registration','guest-writer-pending','guest-writer-dashboard','guest-writer-stories','guest-writer-idea','guest-writer-idea-discussion','guest-writer-status-screen']) {
+    assert.match(html, new RegExp(`id="${id}"[^>]+class="[^"]*app-workspace`));
+  }
+  assert.match(ui, /title:'Draft new stories'/);
+  assert.match(ui, /title:'Podcast'/);
+  assert.match(html, /id="podcast-prep-guest-screen" class="landing"/);
+  assert.match(ui, /body\.app-authenticated > \.app-workspace/);
+});
+
+test('workspace scrolling preserves stable sidebar, responsive drawer and programmatic top resets', () => {
+  assert.match(css, /\.app-sidebar\{position:fixed/);
+  assert.match(css, /@media\(max-width:800px\)/);
+  assert.match(css, /body\.app-authenticated>\.app-workspace\{left:0\}/);
+  assert.match(css, /body\.app-drawer-open \.app-sidebar\{transform:translateX\(0\)\}/);
+  assert.match(ui, /scrollAppWorkspaceToTop/);
+  assert.match(ui, /workspaces\[index\]\.scrollTo\(\{top:0, left:0, behavior:'auto'\}\)/);
+  assert.doesNotMatch(html, /window\.scrollTo\(0,\s*0\)/);
 });

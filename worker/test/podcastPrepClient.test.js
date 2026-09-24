@@ -349,7 +349,7 @@ test('Podcast Prep DOCX export includes manual transcripts and not_requested sta
 });
 
 test('Podcast Prep guest shell reopens hidden landing parent without staff dashboard cards', () => {
-  assert.match(html, /<div id="landing" style="display:none">/);
+  assert.match(html, /<div id="landing" class="app-workspace" style="display:none">/);
   assert.match(html, /<div id="landing-cards" class="landing" style="display:none">/);
 
   const hideAll = functionBody('hideAllAppScreens');
@@ -632,8 +632,8 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.22', () => {
-  assert.match(html, /id="app-version">v15\.22<\/small>/);
+test('application version badge is 15.23', () => {
+  assert.match(html, /id="app-version">v15\.23<\/small>/);
   assert.doesNotMatch(html, />15\.20<\/div>/);
   assert.doesNotMatch(html, />15\.19<\/div>/);
   assert.doesNotMatch(html, />15\.18<\/div>/);

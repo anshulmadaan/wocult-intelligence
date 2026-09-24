@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '15.22';
+  var APP_VERSION = '15.23';
   var THEME_KEY = 'wocult_ui_theme';
   var currentSection = 'home';
   var lastDrawerFocus = null;
@@ -103,6 +103,17 @@
     var toggle = document.getElementById('app-menu-toggle');
     if (toggle) { toggle.setAttribute('aria-expanded','false'); toggle.setAttribute('aria-label','Open navigation'); }
     if (wasOpen && lastDrawerFocus && typeof lastDrawerFocus.focus === 'function') lastDrawerFocus.focus();
+  };
+
+  window.scrollAppWorkspaceToTop = function () {
+    var workspaces = document.querySelectorAll('body.app-authenticated > .app-workspace');
+    for (var index = 0; index < workspaces.length; index += 1) {
+      if (getComputedStyle(workspaces[index]).display !== 'none') {
+        workspaces[index].scrollTo({top:0, left:0, behavior:'auto'});
+        return;
+      }
+    }
+    window.scrollTo(0,0);
   };
 
   function readTheme() { try { return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; } catch(e) { return 'light'; } }

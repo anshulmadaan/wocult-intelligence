@@ -265,7 +265,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <div class="app-brand"><span class="app-brand-mark">W</span><span><strong>Wocult</strong><small>Intelligence</small></span></div>
   <nav id="app-nav" class="app-nav" aria-label="Primary"></nav>
   <div class="app-profile">
-    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.22</small></span></div>
+    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.23</small></span></div>
     <button type="button" class="app-logout" onclick="logout()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></svg><span>Logout</span></button>
   </div>
 </aside>
@@ -384,7 +384,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 </div>
 
 <!-- GUEST PLACEHOLDER -->
-<div id="guest-placeholder" class="landing" style="display:none">
+<div id="guest-placeholder" class="landing app-workspace" style="display:none">
   <div class="scratch-screen">
     <div id="guest-message">
       <h2>Interview access found</h2>
@@ -396,7 +396,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 </div>
 
 <!-- GUEST WRITER REGISTRATION -->
-<div id="guest-writer-registration" class="landing" style="display:none;padding-top:32px">
+<div id="guest-writer-registration" class="landing app-workspace" style="display:none;padding-top:32px">
   <div class="scratch-screen">
     <h2>Create your writer profile</h2>
     <p class="sub">Tell us who you are, what you’d like to write about, and the experience or perspective you’d bring to Wocult.</p>
@@ -418,7 +418,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   </div>
 </div>
 
-<div id="guest-writer-pending" class="landing" style="display:none">
+<div id="guest-writer-pending" class="landing app-workspace" style="display:none">
   <div class="scratch-screen">
     <h2>Thank you for your interest in writing for Wocult.</h2>
     <p class="sub">We’ve received your writer profile and our editorial team is reviewing it. If approved, you’ll get access to the Wocult writing tool where you can draft and submit your story.</p>
@@ -426,7 +426,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   </div>
 </div>
 
-<div id="guest-writer-dashboard" class="landing" style="display:none">
+<div id="guest-writer-dashboard" class="landing app-workspace" style="display:none">
   <div class="scratch-screen" style="max-width:1120px">
     <h2>My stories</h2>
     <p class="sub">Track your submitted ideas, revisions, and published stories.</p>
@@ -449,7 +449,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   </div>
 </div>
 
-<div id="guest-writer-stories" class="landing" style="display:none;padding-top:32px">
+<div id="guest-writer-stories" class="landing app-workspace" style="display:none;padding-top:32px">
   <div class="scratch-screen" style="max-width:900px">
     <button onclick="showGuestWriterDashboard()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Back</button>
     <h2>My stories</h2>
@@ -460,7 +460,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   </div>
 </div>
 
-<div id="guest-writer-idea" class="landing" style="display:none;padding-top:32px">
+<div id="guest-writer-idea" class="landing app-workspace" style="display:none;padding-top:32px">
   <div class="scratch-screen">
     <h2>Submit a story idea</h2>
     <p class="sub">Share one story idea for Wocult’s editorial team to review.</p>
@@ -492,7 +492,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   </div>
 </div>
 
-<div id="guest-writer-idea-discussion" class="landing" style="display:none;padding-top:32px">
+<div id="guest-writer-idea-discussion" class="landing app-workspace" style="display:none;padding-top:32px">
   <div class="scratch-screen" style="max-width:780px">
     <button onclick="goGuestWriterDashboardWithUnsavedCheck()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin-bottom:20px">← Go back to dashboard</button>
     <h2 style="margin-bottom:18px">Idea discussion</h2>
@@ -507,7 +507,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   </div>
 </div>
 
-<div id="guest-writer-status-screen" class="landing" style="display:none">
+<div id="guest-writer-status-screen" class="landing app-workspace" style="display:none">
   <div class="scratch-screen guest-writer-status-scroll">
     <button onclick="goGuestWriterDashboardWithUnsavedCheck()" style="background:none;border:none;color:var(--g3);cursor:pointer;font-size:13px;padding:0;margin:0 24px 20px">← Go back to dashboard</button>
     <h2 id="guest-writer-status-title">Story status</h2>
@@ -516,7 +516,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
 </div>
 
 <!-- LANDING SCREEN -->
-<div id="landing" style="display:none">
+<div id="landing" class="app-workspace" style="display:none">
 
   <!-- Card selection screen -->
   <div id="landing-cards" class="landing" style="display:none">
@@ -1465,7 +1465,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
 
 </div><!-- /landing -->
 
-<div id="main" style="display:none">
+<div id="main" class="app-workspace" style="display:none">
 <div class="tabs">
   <div class="tab on" id="tab-newsTracker" onclick="switchTab('newsTracker')">News Tracker</div>
   <div class="tab" id="tab-cards" onclick="switchTab('cards')">RSS</div>
@@ -1507,7 +1507,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
 </div>
 </div><!-- /main -->
 
-<div id="workflow">
+<div id="workflow" class="app-workspace">
 <div class="wf-header">
   <button class="wf-back" onclick="goWorkflowBack()">Back</button>
   <button class="wf-back" onclick="goWorkflowHome()">Home</button>
@@ -9692,7 +9692,7 @@ Return ONLY valid JSON, no markdown:
       {role:'assistant', content:'Ready. I refined the draft while preserving the writer’s voice. What would you like to change?'}
     ];
     markUnsavedChanges();
-    window.scrollTo(0,0);
+    scrollAppWorkspaceToTop();
   }).catch(function(err){
     clearInterval(anim);
     document.getElementById('step2').innerHTML += '<div style="color:var(--red);padding:16px">Generation failed: '+err.message+'</div>';
@@ -9864,7 +9864,7 @@ function openUploadedGuestWriterStoryWithoutAI(topic, storyText) {
   resetDraftRevert();
   updateWordCount();
   markUnsavedChanges();
-  window.scrollTo(0,0);
+  scrollAppWorkspaceToTop();
 }
 function startGenerationDirect(sourceInfo) {
   var steps = ['gs1','gs2','gs3','gs4'];
@@ -9943,7 +9943,7 @@ Return ONLY valid JSON, no markdown:
       {role:'assistant', content:'Ready. This is their story — I\'ll preserve their voice. What would you like to refine?'}
     ];
     markUnsavedChanges();
-    window.scrollTo(0,0);
+    scrollAppWorkspaceToTop();
   }).catch(function(err){
     clearInterval(anim);
     document.getElementById('step2').innerHTML += '<div style="color:var(--red);padding:16px">Generation failed: '+err.message+'</div>';
@@ -10984,7 +10984,7 @@ function finalizeGeneratedNewsBrief(content, card) {
     }
   ];
   markUnsavedChanges();
-  window.scrollTo(0, 0);
+  scrollAppWorkspaceToTop();
   pendingNewsBriefCard = null;
 }
 function generateNewsBrief(card, instructions) {
@@ -11474,7 +11474,7 @@ function renderNewsBriefInstructionScreen(card) {
   if (actions) {
     actions.innerHTML = '<button class="btn-lg" onclick="closeWorkflow()" style="background:var(--gray);border:1px solid var(--g2);cursor:pointer;color:var(--blk)">Cancel</button><button class="btn-lg btn-y" onclick="startNewsBriefGenerationFromInstructions()">Generate news brief</button>';
   }
-  window.scrollTo(0, 0);
+  scrollAppWorkspaceToTop();
 }
 function startNewsBriefGenerationFromInstructions() {
   if (!pendingNewsBriefCard) return;
@@ -11568,7 +11568,7 @@ function showWorkflowStep(stepKey) {
   updateWorkflowStepNav();
   var workflow = document.getElementById('workflow');
   if (workflow) workflow.style.overflowY = stepKey === 'refine' ? 'hidden' : 'auto';
-  window.scrollTo(0,0);
+  scrollAppWorkspaceToTop();
 }
 function navigateWorkflowStep(stepKey) {
   if (!canNavigateWorkflowStep(stepKey) || stepKey === 'generate') return;
@@ -11757,7 +11757,7 @@ var hasUrl = !!currentCard._url;
       {role:'assistant', content: 'Ready. Tell me what to change — a section, the tone, the headline — or ask me to research something.'}
     ];
     markUnsavedChanges();
-    window.scrollTo(0,0);
+    scrollAppWorkspaceToTop();
   }).catch(function(e) {
     clearInterval(anim);
     showWorkflowStep(workflowHasBriefStep ? 'brief' : 'refine');
