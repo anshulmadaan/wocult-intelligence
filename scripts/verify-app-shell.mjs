@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import {writeFileSync} from 'node:fs';
 const { chromium } = await import(pathToFileURL(resolve(process.argv[2] || 'node_modules/playwright/index.mjs')));
 const output = resolve(process.argv[3] || 'tmp/shell-qa');
 const source = resolve(process.argv[4] || '.');
@@ -57,11 +58,35 @@ async function checkShell(label) {
   return g;
 }
 
+async function designSnapshot() {
+  return page.evaluate(()=>Object.fromEntries(['.app-sidebar','.topbar','.app-page-header h1','.app-page-header p','.app-draft-divider','.app-launcher','.app-launcher-title','.app-launcher-desc','.app-launcher-action','.app-launcher-icon','.app-nav-item','.app-profile-copy strong','.app-profile-copy small'].map(selector=>{
+    const e=document.querySelector(selector);if(!e)return[selector,null];
+    const c=getComputedStyle(e),r=e.getBoundingClientRect();
+    return[selector,{x:r.x,y:r.y,width:r.width,height:r.height,padding:c.padding,gap:c.gap,radius:c.borderRadius,font:c.fontFamily,size:c.fontSize,weight:c.fontWeight,lineHeight:c.lineHeight,tracking:c.letterSpacing}];
+  })));
+}
+
+// Theme parity is a computed-layout contract, including typography and wrapping.
+for(const width of [1920,1440,900,390]) {
+ await page.setViewportSize({width,height:860});
+ const snapshots={};
+ for(const theme of ['light','dark']) {
+  await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
+  await page.evaluate(()=>document.fonts.ready);
+  snapshots[theme]=await designSnapshot();
+ }
+ assert.deepEqual(snapshots.light,snapshots.dark,'same component geometry and typography at '+width);
+ writeFileSync(resolve(output,`geometry-${width}.json`),JSON.stringify(snapshots,null,2));
+}
+await page.setViewportSize({width:1440,height:860});
+await page.evaluate(()=>document.documentElement.dataset.theme='light');
+
 const baselineLight=await page.locator('.app-launcher').first().evaluate(e=>{
   const c=getComputedStyle(e);return {background:c.backgroundColor,radius:c.borderRadius,padding:c.padding,font:c.fontFamily};
 });
 assert.equal(baselineLight.background,'rgb(255, 255, 255)');
-assert.equal(baselineLight.radius,'11px');
+assert.equal(baselineLight.radius,'14px');
+await page.evaluate(()=>document.fonts.ready);
 await checkShell('Light desktop');
 await page.screenshot({path:resolve(output,'light-draft-1440.png')});
 await page.locator('#app-theme-toggle').click();
@@ -81,23 +106,47 @@ assert.equal(await page.evaluate(()=>{
  const color=getComputedStyle(anchor).color;anchor.remove();return color;
 }),'rgb(245, 243, 238)','unstyled legacy links cannot inherit browser blue');
 
+for (const theme of ['light','dark']) {
+await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
 for (const width of [1920,1440,900,390]) {
   await page.setViewportSize({width,height:860});
   for(const section of ['home','draft','interviews','podcast','community','editorial','webcomm','admin']) {
     await page.evaluate(s=>showAppSection(s),section);
     const g=await checkShell(section+' '+width);
     assert.equal(g.titles.length,1,section+' one primary title');
-    assert.ok(g.backgrounds.every(c=>c==='rgb(28, 28, 31)'),section+' continuous Dark workspace');
-    await page.screenshot({path:resolve(output,`dark-${section}-${width}.png`)});
+    assert.ok(g.backgrounds.every(c=>c===(theme==='dark'?'rgb(28, 28, 31)':'rgb(246, 247, 248)')),section+' continuous themed workspace');
+    await page.screenshot({path:resolve(output,`${theme}-${section}-${width}.png`)});
   }
   await page.evaluate(()=>showUrlEntry());
   await checkShell('URL '+width);
-  await page.screenshot({path:resolve(output,`dark-url-${width}.png`)});
+  await page.screenshot({path:resolve(output,`${theme}-url-${width}.png`)});
   await page.evaluate(()=>showMain());
   await checkShell('News dashboard '+width);
   assert.equal(await page.locator('#stats-bar').evaluate(e=>e.closest('.app-workspace').id),'main');
   assert.ok(await page.locator('#stats-bar').evaluate(e=>e.getBoundingClientRect().top>=64));
 }
+}
+
+// Exercise the real Home renderer with isolated, read-only query fixtures.
+await page.setViewportSize({width:1440,height:860});
+for(const theme of ['light','dark']) {
+ await page.evaluate(({theme})=>{
+  document.documentElement.dataset.theme=theme;
+  const datasets={podcast_sessions:[{id:'qa-podcast',podcastTitle:'Podcast preparation response',guestName:'Test guest',status:'submitted',updatedAt:new Date().toISOString()}],articles:[{id:'qa-story',title:'A changing workplace',writerName:'Test writer',status:'submitted',updatedAt:new Date().toISOString()}],unsent_submissions:[],editorial_calendar:[{id:'qa-calendar',title:'Upcoming editorial story',publishDate:'2099-01-01',status:'scheduled'}]};
+  db={collection(name){const q={where(){return q;},orderBy(){return q;},limit(){return q;},get(){return Promise.resolve({forEach(fn){(datasets[name]||[]).forEach(d=>fn({id:d.id,data:()=>d}));}});}};return q;}};
+  showAppSection('home');
+ },{theme});
+ await page.waitForFunction(()=>document.querySelectorAll('#app-home-attention .app-record').length===2);
+ assert.equal(await page.locator('#app-home-upcoming .app-record').count(),1);
+ const row=await page.locator('.app-record').first().evaluate(e=>{
+   const title=e.querySelector('.app-record-title').getBoundingClientRect(),meta=e.querySelector('.app-record-meta').getBoundingClientRect();
+   return {separated:meta.top>=title.bottom,height:e.getBoundingClientRect().height};
+ });
+ assert.ok(row.separated);assert.ok(row.height>=68);
+ await page.screenshot({path:resolve(output,`${theme}-home-populated.png`)});
+}
+await page.evaluate(()=>{db=null;showAppSection('draft');});
+await page.setViewportSize({width:390,height:860});
 
 // Real scrolling, focus scrolling, and the mobile drawer must preserve the row boundary.
 await page.evaluate(()=>showAppSection('draft'));
@@ -149,6 +198,10 @@ for(const mode of ['podcast_prep_guest','guest_writer','guest']){
  },mode);
  await checkShell(mode);
  await page.screenshot({path:resolve(output,`dark-${mode}.png`)});
+ await page.evaluate(()=>document.documentElement.dataset.theme='light');
+ await checkShell('Light '+mode);
+ await page.screenshot({path:resolve(output,`light-${mode}.png`)});
+ await page.evaluate(()=>document.documentElement.dataset.theme='dark');
  if(mode==='podcast_prep_guest') assert.equal(await page.locator('#notification-bell').isVisible(),false);
  if(mode==='guest_writer') {
    assert.equal(await page.locator('#btn-new-guest-story').isVisible(),true);

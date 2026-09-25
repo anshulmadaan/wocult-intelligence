@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '15.24';
+  var APP_VERSION = '15.25';
   var THEME_KEY = 'wocult_ui_theme';
   var currentSection = 'home';
   var lastDrawerFocus = null;

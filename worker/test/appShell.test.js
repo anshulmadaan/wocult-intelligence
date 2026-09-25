@@ -12,10 +12,10 @@ test('authenticated application shell exposes persistent navigation, profile and
   assert.match(html, /id="app-nav"[^>]+aria-label="Primary"/);
   assert.match(html, /id="app-profile-email"/);
   assert.match(html, /id="app-avatar"/);
-  assert.match(html, /id="app-version">v15\.24/);
-  assert.match(ui, /APP_VERSION = '15\.24'/);
-  assert.match(html, /app-ui\.css\?v=15\.24/);
-  assert.match(html, /app-ui\.js\?v=15\.24/);
+  assert.match(html, /id="app-version">v15\.25/);
+  assert.match(ui, /APP_VERSION = '15\.25'/);
+  assert.match(html, /app-ui\.css\?v=15\.25/);
+  assert.match(html, /app-ui\.js\?v=15\.25/);
   assert.match(html, /id="app-menu-toggle"[^>]+aria-controls="app-sidebar"[^>]+aria-expanded="false"/);
   assert.match(html, /id="app-theme-toggle"[^>]+aria-label="Switch to dark theme"/);
   assert.match(css, /body\.app-authenticated \.app-sidebar\{display:flex\}/);
@@ -131,7 +131,8 @@ test('workspace scrolling preserves stable sidebar, responsive drawer and progra
 
 test('approved Dark tokens and launcher accents are centralized', () => {
   for (const token of ['--app-sidebar:#141416','--app-accent:#FFC500','--app-border:rgba(255,255,255,.07)','--app-sidebar-active:rgba(255,197,0,.14)','--app-accent-soft:rgba(255,197,0,.13)']) assert.ok(css.includes(token), token);
-  assert.ok(css.includes('color:var(--app-accent);margin:0'));
+  assert.ok(css.includes('--app-icon-accent:var(--app-accent)'));
+  assert.ok(css.includes('color:var(--app-icon-accent);margin:0'));
   assert.ok(css.includes('body.app-authenticated a{color:var(--app-text)}'));
   assert.ok(css.includes('body.app-authenticated .landing{background:var(--app-bg)'));
 });
