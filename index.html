@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="app-ui.css?v=15.25">
+<link rel="stylesheet" href="app-ui.css?v=15.26">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1a1a;min-height:100vh}
@@ -265,7 +265,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <div class="app-brand"><span class="app-brand-mark">W</span><span><strong>Wocult</strong><small>Intelligence</small></span></div>
   <nav id="app-nav" class="app-nav" aria-label="Primary"></nav>
   <div class="app-profile">
-    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.25</small></span></div>
+    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.26</small></span></div>
     <button type="button" class="app-logout" onclick="logout()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></svg><span>Logout</span></button>
   </div>
 </aside>
@@ -10238,6 +10238,10 @@ function renderSaved() {
 }
 
 function setCardsForActiveTab(nextCards) {
+  if (activeTab === 'newsTracker') {
+    newsTrackerCards = recentTrendingCards(nextCards || [], Date.now());
+    nextCards = newsTrackerCards;
+  }
   cards = nextCards || [];
   render();
 }
@@ -10386,9 +10390,7 @@ function loadNewsTracker(forceRefresh) {
     .then(function(r){ if (!r.ok) throw new Error('Tracker API returned '+r.status); return r.json(); })
     .then(function(data) {
       if (!data || data.ok === false) throw new Error((data && data.error) || 'Tracker API failed');
-      newsTrackerCards = (data.items || []).map(normalizeNewsTrackerCard).sort(function(a,b) {
-        return newsTrackerDateValue(b.dateFound || b.pub) - newsTrackerDateValue(a.dateFound || a.pub);
-      });
+      newsTrackerCards = (data.items || []).map(normalizeNewsTrackerCard);
       newsTrackerLoaded = true;
       setCardsForActiveTab(newsTrackerCards);
       return newsTrackerCards;
@@ -10433,6 +10435,41 @@ function refreshNewsTracker() {
         btn.textContent = 'Refresh tracker';
       }
     });
+}
+
+// Trending recency is intentionally frontend-only; automation uses the unchanged feed.
+function trendingTimestamp(value) {
+  if (typeof value !== 'string' || !value.trim()) return NaN;
+  var raw = value.trim();
+  var local = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (local) {
+    var year = Number(local[3]);
+    if (year < 100) year += 2000;
+    var month = Number(local[2]), day = Number(local[1]);
+    var hour = Number(local[4] || 0), minute = Number(local[5] || 0), second = Number(local[6] || 0);
+    var date = new Date(year, month - 1, day, hour, minute, second);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day && hour < 24 && minute < 60 && second < 60 ? date.getTime() : NaN;
+  }
+  var iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
+  if (!iso) return NaN;
+  var calendar = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+  if (calendar.getUTCFullYear() !== Number(iso[1]) || calendar.getUTCMonth() !== Number(iso[2]) - 1 || calendar.getUTCDate() !== Number(iso[3])) return NaN;
+  // Native ISO parsing preserves UTC/offsets and the existing local-time interpretation of naive datetimes.
+  return new Date(raw).getTime();
+}
+
+function recentTrendingCards(records, now) {
+  var cutoff = now - 72 * 60 * 60 * 1000;
+  var old = 0, invalid = 0;
+  var eligible = records.map(function(record) {
+    return { record: record, timestamp: trendingTimestamp(record.dateFound) };
+  }).filter(function(entry) {
+    if (!Number.isFinite(entry.timestamp)) { invalid++; return false; }
+    if (entry.timestamp < cutoff) { old++; return false; }
+    return true;
+  }).sort(function(a, b) { return b.timestamp - a.timestamp; });
+  console.info('Trending records loaded: '+records.length+'; Within 72 hours: '+eligible.length+'; Excluded because old: '+old+'; Excluded because invalid date: '+invalid);
+  return eligible.map(function(entry) { return entry.record; });
 }
 
 function newsTrackerDateValue(value) {
@@ -10492,7 +10529,7 @@ function normalizeNewsTrackerCard(item) {
     sent: 'neutral',
     ago: ago(foundDate),
     pub: foundDate,
-    dateFound: foundDate,
+    dateFound: item.dateFound || '',
     link: item.link || '#',
     whyItMatters: strip(item.whyItMatters || ''),
     suggestedFormat: strip(item.suggestedFormat || ''),
@@ -10542,7 +10579,7 @@ function render() {
   else if (activeTab !== 'official') data = af==='all' ? cards : cards.filter(function(c){return c.cat===af;});
   if (activeTab === 'official' && officialFilter !== 'all') data = cards.filter(function(c){return c.officialType===officialFilter;});
   if (!data.length) {
-    grid.innerHTML = '<div class="empty">'+(activeTab === 'newsTracker' ? 'No News Tracker stories available for this filter.' : activeTab === 'official' ? 'No official signals found yet. Try refreshing later.' : activeTab === 'reddit' ? 'No Reddit signals found yet. Try refreshing later.' : 'No stories in this category.')+'</div>';
+    grid.innerHTML = '<div class="empty">'+(activeTab === 'newsTracker' ? 'No trending stories found in the last 3 days.' : activeTab === 'official' ? 'No official signals found yet. Try refreshing later.' : activeTab === 'reddit' ? 'No Reddit signals found yet. Try refreshing later.' : 'No stories in this category.')+'</div>';
     updateStats();
     return;
   }
@@ -15418,6 +15455,6 @@ if (podcastPrepFromUrl) {
   }
 }
 </script>
-<script src="app-ui.js?v=15.25"></script>
+<script src="app-ui.js?v=15.26"></script>
 </body>
 </html>
