@@ -132,9 +132,9 @@ test('Podcast Prep recording uses a real Web Audio waveform and cleans it up saf
   assert.doesNotMatch(start, /g\.lineTo/);
   assert.match(start, /level < 0\.18 \? 'Low'/);
   assert.match(start, /level < 0\.72 \? 'Good'/);
-  assert.match(start, /'#f5c542'/);
-  assert.match(start, /'#2f9e44'/);
-  assert.match(start, /'#d64545'/);
+  assert.match(start, /'--app-warning'/);
+  assert.match(start, /'--app-success'/);
+  assert.match(start, /'--app-error'/);
   assert.match(start, /label\.textContent = levelState/);
   assert.match(start, /requestAnimationFrame\(draw\)/);
   assert.match(start, /console\.warn\('Podcast Prep waveform unavailable:'/);
@@ -633,8 +633,8 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.26', () => {
-  assert.match(html, /id="app-version">v15\.26<\/small>/);
+test('application version badge is 15.27', () => {
+  assert.match(html, /id="app-version">v15\.27<\/small>/);
   assert.doesNotMatch(html, />15\.20<\/div>/);
   assert.doesNotMatch(html, />15\.19<\/div>/);
   assert.doesNotMatch(html, />15\.18<\/div>/);

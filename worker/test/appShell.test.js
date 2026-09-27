@@ -12,10 +12,10 @@ test('authenticated application shell exposes persistent navigation, profile and
   assert.match(html, /id="app-nav"[^>]+aria-label="Primary"/);
   assert.match(html, /id="app-profile-email"/);
   assert.match(html, /id="app-avatar"/);
-  assert.match(html, /id="app-version">v15\.26/);
-  assert.match(ui, /APP_VERSION = '15\.26'/);
-  assert.match(html, /app-ui\.css\?v=15\.26/);
-  assert.match(html, /app-ui\.js\?v=15\.26/);
+  assert.match(html, /id="app-version">v15\.27/);
+  assert.match(ui, /APP_VERSION = '15\.27'/);
+  assert.match(html, /app-ui\.css\?v=15\.27/);
+  assert.match(html, /app-ui\.js\?v=15\.27/);
   assert.match(html, /id="app-menu-toggle"[^>]+aria-controls="app-sidebar"[^>]+aria-expanded="false"/);
   assert.match(html, /id="app-theme-toggle"[^>]+aria-label="Switch to dark theme"/);
   assert.match(css, /body\.app-authenticated \.app-sidebar\{display:flex\}/);
@@ -73,7 +73,7 @@ test('authenticated top bar stays minimal while required controls remain availab
   assert.match(html, /id="notification-bell"[^>]+aria-label="Notifications"/);
   assert.match(html, /id="app-theme-toggle"[^>]+aria-label="Switch to dark theme"/);
   assert.match(html, /class="app-logout"[^>]+onclick="logout\(\)"/);
-  const topbar = html.slice(html.indexOf('<div class="topbar">'), html.indexOf('<div id="notifications-panel"'));
+  const topbar = html.slice(html.indexOf('<div class="topbar">'), html.lastIndexOf('<div', html.indexOf('id="notifications-panel"')));
   assert.doesNotMatch(topbar, /app-page-title|tbar-sub|btn-back-landing|btn-logout|top-auth-email|Search|btn-draft-url|btn-new-guest-story|id="rbtn"/);
   assert.match(topbar, /notification-bell/);
   assert.match(topbar, /app-theme-toggle/);
