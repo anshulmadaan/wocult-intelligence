@@ -65,5 +65,3 @@ for(const [width,height] of [[1920,1080],[1920,900],[1440,900],[1366,768],[1100,
 writeFileSync(resolve(out,'results.json'),JSON.stringify(results,null,2));
 console.log(`Passed ${results.length} Refine layout/theme cases, editor isolation, keyboard composer access and workflow exit.`);
 await browser.close();
-
-
