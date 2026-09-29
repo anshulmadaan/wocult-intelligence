@@ -13,6 +13,7 @@ import {
   getDoc,
   getDocs,
   setDoc,
+  serverTimestamp,
   updateDoc,
 } from 'firebase/firestore';
 import {
@@ -650,4 +651,69 @@ test('existing Storage namespaces keep interview and editorial calendar behavior
   await assertSucceeds(uploadBytes(storageRef(staffStorage, calendarPath), image));
   await assertSucceeds(getBytes(storageRef(anonStorage, calendarPath)));
   await assertFails(uploadBytes(storageRef(ordinaryStorage, 'editorial_calendar_images/item-2/image.png'), image));
+});
+
+
+async function seedGuestStory(status = 'idea_under_review', extra = {}) {
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'articles/guest-status'), {
+      sourceType:'guest_writer', writerUid:'guest-writer', status,
+      ideaStatus:status === 'idea_under_review' ? 'under_review' : 'approved',
+      writingUnlocked:status === 'draft' || status === 'changes_requested',
+      ...extra
+    });
+  });
+}
+
+test('Guest Writer approval is staff-only and records exact server status time', async () => {
+  await seedGuestStory();
+  const writer = authedVerifiedDb('writer@example.test','guest-writer');
+  const change = {status:'draft',ideaStatus:'approved',writingUnlocked:true,statusChangedAt:serverTimestamp()};
+  await assertFails(updateDoc(doc(writer,'articles/guest-status'), change));
+  await assertFails(updateDoc(doc(anon(),'articles/guest-status'), change));
+  await assertSucceeds(updateDoc(doc(authed('anmadaan@gmail.com'),'articles/guest-status'), change));
+  const saved = (await getDoc(doc(writer,'articles/guest-status'))).data();
+  assert.equal(saved.status,'draft');assert.ok(saved.statusChangedAt.toMillis() > 0);
+});
+
+test('Guest Writer draft permits writing, preserves date on edits, and submits to review', async () => {
+  await seedGuestStory('draft');
+  const ref = doc(authedVerifiedDb('writer@example.test','guest-writer'),'articles/guest-status');
+  await assertSucceeds(updateDoc(ref,{body:'My story',updatedAt:serverTimestamp()}));
+  await assertFails(updateDoc(ref,{statusChangedAt:serverTimestamp()}));
+  await assertSucceeds(updateDoc(ref,{status:'under_review',writingUnlocked:false,submittedAt:serverTimestamp(),statusChangedAt:serverTimestamp()}));
+  await assertSucceeds(updateDoc(ref,{currentVersion:1}));
+  await assertFails(updateDoc(ref,{body:'Overwrite submitted story'}));
+});
+
+test('Guest Writer cannot forge approval, timestamp, ownership or published state', async () => {
+  await seedGuestStory('draft');
+  const ref = doc(authedVerifiedDb('writer@example.test','guest-writer'),'articles/guest-status');
+  for (const patch of [{ideaStatus:'approved-again'},{ideaApprovedAt:serverTimestamp()},{writerUid:'another'}, {status:'published',statusChangedAt:serverTimestamp()}, {sourceType:'staff'}]) await assertFails(updateDoc(ref,patch));
+  await assertFails(updateDoc(doc(authedVerifiedDb('other@example.test','other'),'articles/guest-status'),{body:'Other writer'}));
+  await assertFails(updateDoc(ref,{status:'under_review',writingUnlocked:false,statusChangedAt:new Date(0)}));
+});
+
+test('preapproval remains blocked; changes requested remains writable; legacy draft lock can clear', async () => {
+  const ref = doc(authedVerifiedDb('writer@example.test','guest-writer'),'articles/guest-status');
+  await seedGuestStory();await assertFails(updateDoc(ref,{body:'Not approved'}));
+  await seedGuestStory('changes_requested');await assertSucceeds(updateDoc(ref,{body:'Revision',writingUnlocked:true}));
+  await seedGuestStory('draft',{locked:true,writingUnlocked:false});await assertSucceeds(updateDoc(ref,{body:'Approved writing',locked:false,writingUnlocked:true}));
+});
+
+test('new Guest Writer ideas cannot start with self-approved status', async () => {
+  const ref = doc(authedVerifiedDb('writer@example.test','guest-writer'),'articles/new-guest');
+  const data = {sourceType:'guest_writer',writerUid:'guest-writer',status:'idea_under_review',ideaStatus:'under_review',writingUnlocked:false,statusChangedAt:serverTimestamp()};
+  await assertFails(setDoc(ref,{...data,status:'draft',ideaStatus:'approved',writingUnlocked:true}));
+  await assertSucceeds(setDoc(ref,data));
+});
+
+test('staff same-status metadata edits preserve status date; unrelated articles and discussions are unchanged', async () => {
+  await seedGuestStory('draft');
+  const staff=authed('anmadaan@gmail.com');
+  await assertSucceeds(updateDoc(doc(staff,'articles/guest-status'),{title:'Corrected title'}));
+  await assertFails(updateDoc(doc(staff,'articles/guest-status'),{statusChangedAt:serverTimestamp()}));
+  await assertSucceeds(setDoc(doc(anon(),'articles/ordinary'),{sourceType:'news',status:'draft'}));
+  await assertSucceeds(updateDoc(doc(anon(),'articles/ordinary'),{status:'submitted'}));
+  await assertSucceeds(setDoc(doc(authedVerifiedDb('writer@example.test','guest-writer'),'articles/guest-status/idea_messages/note'),{message:'Question'}));
 });

@@ -286,6 +286,51 @@ service cloud.firestore {
         && isValidCanvaTemplate(request.resource.data.template4);
     }
 
+    // Guest Writer approval is staff-owned. Other article workflows retain their existing rules.
+    function guestStoryStatusDateValid() {
+      return request.resource.data.status == resource.data.status
+        ? !request.resource.data.diff(resource.data).affectedKeys().hasAny(["statusChangedAt"])
+        : request.resource.data.statusChangedAt == request.time;
+    }
+
+    function guestStoryWriterUpdate() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let writing = resource.data.status in ["draft", "changes_requested"];
+      return request.auth != null
+        && resource.data.writerUid == request.auth.uid
+        && !changed.hasAny(["writerUid", "ideaStatus", "ideaApprovedAt", "publishedAt", "publishedBy", "publishedLink"])
+        && (
+          (writing
+            && request.resource.data.status in [resource.data.status, "under_review"]
+            && request.resource.data.get("locked", false) == false
+            && request.resource.data.writingUnlocked == (request.resource.data.status != "under_review"))
+          || (request.resource.data.status == resource.data.status
+            && changed.hasOnly(["currentVersion", "updatedAt"]))
+        );
+    }
+
+    match /articles/{articleId} {
+      allow read, delete: if true; // Existing contracts; this change only scopes approval/status writes.
+      allow create: if request.resource.data.get("sourceType", "") != "guest_writer"
+        || isWocultStaff()
+        || (request.auth != null
+          && request.resource.data.writerUid == request.auth.uid
+          && request.resource.data.status == "idea_under_review"
+          && request.resource.data.ideaStatus == "under_review"
+          && request.resource.data.writingUnlocked == false
+          && request.resource.data.statusChangedAt == request.time
+          && !request.resource.data.keys().hasAny(["ideaApprovedAt", "publishedAt", "publishedBy"]));
+      allow update: if
+        (resource.data.get("sourceType", "") != "guest_writer"
+          && request.resource.data.get("sourceType", "") != "guest_writer")
+        || (request.resource.data.get("sourceType", "") == "guest_writer"
+          && resource.data.get("sourceType", "") == "guest_writer"
+          && guestStoryStatusDateValid()
+          && (isWocultStaff() || guestStoryWriterUpdate()));
+      // Discussion, review and version subcollections are unchanged by this approval fix.
+      match /{subcollection}/{nested=**} { allow read, write: if true; }
+    }
+
     match /editorial_config/canva_templates {
       allow read: if request.auth != null;
 
@@ -349,7 +394,8 @@ service cloud.firestore {
 
     match /{collection}/{document=**} {
       allow read, write: if
-        collection != "news_brief_automation"
+        collection != "articles"
+        && collection != "news_brief_automation"
         && collection != "news_brief_automation_runs"
         && collection != "podcast_sessions"
         && collection != "editorial_config";
