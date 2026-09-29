@@ -4,6 +4,7 @@
 @font-face{font-family:Wocult Sora;src:url('assets/fonts/sora-700.ttf') format('truetype');font-weight:700;font-display:swap}
 @font-face{font-family:Wocult Merriweather;src:url('assets/fonts/merriweather-700.ttf') format('truetype');font-weight:700 900;font-display:swap}
 :root{
+  --refine-scrollbar-thumb:rgba(46,46,48,.22);--refine-scrollbar-thumb-active:rgba(46,46,48,.40);
   --font-ui:"Wocult Sora",system-ui,sans-serif;--font-heading:var(--font-ui);--font-brand:"Wocult Merriweather",Georgia,serif;
   --text-page-title:28px;--text-section-title:14px;--text-card-title:14.5px;--text-body:14px;--text-subtitle:14.5px;--text-small:12.5px;--text-meta:11.5px;--text-nav:13.5px;--text-section-label:12px;--text-profile:12px;--text-version:10.5px;
   --line-height-tight:1.2;--line-height-body:1.5;--line-height-subtitle:1.55;--tracking-section-label:.8px;--tracking-page-title:-.3px;
@@ -25,6 +26,7 @@
   --text-label:12.5px;--text-control:14px;--text-dialog-title:20px;
 }
 :root[data-theme="dark"]{
+  --refine-scrollbar-thumb:rgba(245,243,238,.18);--refine-scrollbar-thumb-active:rgba(245,243,238,.34);
   --app-bg:var(--app-workspace-dark);--app-surface:var(--app-surface-dark);--app-surface-2:var(--app-surface-raised-dark);--app-surface-hover:#2D2D31;
   --app-border:rgba(255,255,255,.07);--app-border-strong:rgba(255,255,255,.16);--app-text:#F5F3EE;--app-muted:rgba(245,243,238,.55);--app-description:rgba(245,243,238,.50);--app-meta:rgba(245,243,238,.40);
   --app-control-text:var(--app-text);--app-control-border:rgba(255,255,255,.08);
@@ -261,3 +263,19 @@ body.app-authenticated :is(.app-icon-button,.notification-bell):hover{background
 /* Shared contextual Back action; destinations are resolved by app-navigation.js. */
 :root .app-back-link{display:inline-flex;align-items:center;align-self:flex-start;gap:6px;background:transparent;color:var(--app-muted);border:0;padding:8px 0;margin-bottom:12px;cursor:pointer;font:500 var(--text-small)/var(--line-height-body) var(--font-ui);text-decoration:none}
 :root .app-back-link:hover{color:var(--app-text)}
+
+/* Only the outer Refine workspace: preserve native editor/history controls. */
+#refine-content{--refine-scrollbar-current:var(--refine-scrollbar-thumb);scrollbar-width:thin;scrollbar-color:var(--refine-scrollbar-current) transparent}
+#refine-content:hover,#refine-content:focus-within{--refine-scrollbar-current:var(--refine-scrollbar-thumb-active)}
+#refine-content>*{scrollbar-color:auto}
+/* Chromium/Safari need auto standard properties to honor the inset thumb. */
+@supports selector(::-webkit-scrollbar){
+  @media (forced-colors:none){
+    #refine-content{scrollbar-width:auto;scrollbar-color:auto}
+    #refine-content::-webkit-scrollbar{width:8px;height:8px;background:transparent}
+    #refine-content::-webkit-scrollbar-track{background:transparent;border:none;box-shadow:none}
+    #refine-content::-webkit-scrollbar-thumb{background-color:var(--refine-scrollbar-current);border:2px solid transparent;background-clip:padding-box;border-radius:999px}
+    #refine-content::-webkit-scrollbar-button{width:0;height:0;display:none}
+    #refine-content::-webkit-scrollbar-corner{background:transparent}
+  }
+}

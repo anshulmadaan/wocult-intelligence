@@ -18,3 +18,15 @@ test('Refine controls remain outside scroll content and composer stays in normal
  for(const handler of ['updateDraft()','revertDraftUpdate()','proceedToReview()','sendChatMessage()','updateWordCount()'])assert(refine.includes(handler));
  assert.match(html,/#step2b #chat-messages\{[^}]*max-height:126px;overflow-y:auto/);
 });
+
+test('outer Refine scrollbar is subtle, theme-aware and leaves inner scrollbars native',()=>{
+ const css=readFileSync(new URL('../../app-ui.css',import.meta.url),'utf8');
+ assert.match(css,/#refine-content\{[^}]*scrollbar-width:thin;scrollbar-color:var\(--refine-scrollbar-current\) transparent/);
+ assert.match(css,/#refine-content>\*\{scrollbar-color:auto\}/);
+ assert.match(css,/#refine-content::-webkit-scrollbar\{width:8px/);
+ assert.match(css,/#refine-content::-webkit-scrollbar-thumb\{[^}]*border:2px solid transparent;background-clip:padding-box;border-radius:999px/);
+ assert.match(css,/#refine-content:hover,#refine-content:focus-within/);
+ assert.match(css,/--refine-scrollbar-thumb:rgba\(46,46,48,\.22\)/);
+ assert.match(css,/--refine-scrollbar-thumb:rgba\(245,243,238,\.18\)/);
+ assert.doesNotMatch(css,/scrollbar-width:none/);
+});

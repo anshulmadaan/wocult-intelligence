@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const {chromium}=await import(pathToFileURL(resolve(process.argv[2]||'tmp/theme-reference-15.24/tooling/node_modules/playwright/index.mjs')));
 const out=resolve(process.argv[3]||'tmp/refine-15.29/qa');mkdirSync(out,{recursive:true});
 const source=resolve(process.argv[4]||'.');
-const browser=await chromium.launch({channel:'chrome',headless:true});
+const browser=await chromium.launch({channel:'chrome',headless:true,ignoreDefaultArgs:['--hide-scrollbars']});
 const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
 await page.route('**/*',async route=>{
  const url=new URL(route.request().url());
@@ -28,6 +28,21 @@ for(const [width,height] of [[1920,1080],[1920,900],[1440,900],[1366,768],[1100,
   document.getElementById('chat-messages').innerHTML='<div>Wocult AI: Your draft is ready to refine.</div>'.repeat(20);
  },theme);
  await page.evaluate(()=>document.fonts.ready);
+ await page.evaluate(()=>document.activeElement?.blur());
+ await page.mouse.move(0,0);
+ const scrollbar=()=>page.locator('#refine-content').evaluate(e=>{
+  const thumb=getComputedStyle(e,'::-webkit-scrollbar-thumb');
+  return {width:getComputedStyle(e,'::-webkit-scrollbar').width,color:thumb.backgroundColor,border:thumb.borderLeftWidth,clip:thumb.backgroundClip,track:getComputedStyle(e,'::-webkit-scrollbar-track').backgroundColor,editor:getComputedStyle(document.getElementById('chat-article-preview')).scrollbarColor};
+ });
+ const rest=await scrollbar();
+ assert.equal(rest.width,'8px');assert.equal(rest.border,'2px');assert.equal(rest.clip,'padding-box');assert.equal(rest.track,'rgba(0, 0, 0, 0)');assert.equal(rest.editor,'auto');
+ assert.equal(rest.color,theme==='light'?'rgba(46, 46, 48, 0.22)':'rgba(245, 243, 238, 0.18)');
+ await page.locator('#refine-content').hover();
+ const activeColor=theme==='light'?'rgba(46, 46, 48, 0.4)':'rgba(245, 243, 238, 0.34)';
+ assert.equal((await scrollbar()).color,activeColor);
+ await page.mouse.move(0,0);await page.locator('#chat-article-preview').focus();
+ assert.equal((await scrollbar()).color,activeColor);
+ await page.evaluate(()=>document.activeElement.blur());
  await page.locator('#refine-content').evaluate(e=>e.scrollTop=0);
  const initial=await page.evaluate(()=>{
   const ids=['workflow','refine-header','refine-content','chat-article-preview'];
