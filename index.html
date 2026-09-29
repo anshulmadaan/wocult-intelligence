@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="app-ui.css?v=15.28">
+<link rel="stylesheet" href="app-ui.css?v=15.29">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font-ui);background:var(--app-bg);color:var(--app-text);min-height:100vh}
@@ -176,13 +176,22 @@ body{font-family:var(--font-ui);background:var(--app-bg);color:var(--app-text);m
 .chat-msg-claude{background:var(--app-surface);border:1px solid var(--bdr);padding:8px 12px;border-radius:12px 12px 12px 2px;font-size:var(--text-small);align-self:flex-start;max-width:90%;line-height:1.5}
 .chat-msg-thinking{color:var(--g3);font-size:var(--text-small);font-style:italic;align-self:flex-start}
 .wf-actions{display:flex;gap:12px;justify-content:flex-end;padding-top:8px}
-#step2b{height:calc(100vh - 52px);max-height:calc(100vh - 52px);max-width:none!important;margin:0!important;padding:0!important;overflow:hidden;flex-direction:column}
+/* Refine is bounded by the shell; only its content and editor scroll. */
+#workflow.app-refining{flex-direction:column;padding-bottom:0;overflow:hidden}
+#workflow.app-refining>.wf-header{flex:0 0 auto;position:relative;top:auto}
+#step2b{height:auto;min-height:0;max-height:none;flex:1 1 0;max-width:none!important;margin:0!important;padding:0!important;overflow:hidden;flex-direction:column}
 #step2b #refine-header{position:relative!important;top:auto!important;flex:0 0 auto}
-#refine-content{max-width:820px;width:100%;margin:0 auto;min-height:0;flex:1;display:flex;flex-direction:column}
-#step2b #chat-article-preview{height:auto!important;min-height:220px;max-height:calc(100vh - 330px);flex:1 1 auto;overflow-y:auto!important;overscroll-behavior:contain}
+#refine-header>div:first-child{flex-wrap:wrap;gap:8px}
+#refine-header>div:first-child>div:last-child{flex-wrap:wrap}
+#refine-header button{white-space:nowrap}
+#refine-content{max-width:820px;width:100%;margin:0 auto;min-height:0;flex:1 1 0;display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;scroll-padding-block:16px}
+#step2b #chat-article-preview{height:clamp(220px,50dvh,500px)!important;min-height:220px;max-height:none;flex:0 0 auto;overflow-y:auto!important;overscroll-behavior:contain}
 #step2b #word-count-bar{flex:0 0 auto}
-#step2b .refine-chat-panel{flex:0 0 auto;max-height:220px;display:flex;flex-direction:column}
-#step2b #chat-messages{max-height:126px;overflow-y:auto}
+#step2b .refine-chat-panel{flex:0 0 auto;display:flex;flex-direction:column}
+#step2b #chat-messages{min-height:0;max-height:126px;overflow-y:auto;flex:0 0 auto}
+#step2b #chat-messages>*{flex-shrink:0}
+#step2b .refine-composer{position:relative;min-width:0}
+#step2b #chat-input{min-width:0;scroll-margin-block:16px}
 #step3{padding-bottom:140px!important}
 .btn-lg{padding:10px 28px;border-radius:var(--app-radius);font-size:var(--text-body);font-weight:500;cursor:pointer;border:none}
 .btn-y{background:var(--y);color:var(--app-text)}.btn-y:hover{background:var(--app-accent-hover)}
@@ -265,7 +274,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <div class="app-brand"><span class="app-brand-mark">W</span><span><strong>Wocult</strong><small>Intelligence</small></span></div>
   <nav id="app-nav" class="app-nav" aria-label="Primary"></nav>
   <div class="app-profile">
-    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.28</small></span></div>
+    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.29</small></span></div>
     <button type="button" class="app-logout" onclick="logout()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></svg><span>Logout</span></button>
   </div>
 </aside>
@@ -1550,7 +1559,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
   </div>
 </div>
 <div id="step2b" class="wf-body" style="display:none;padding:0">
-  <!-- Sticky header rendered outside the flex column -->
+  <!-- Stable controls above the independently scrolling Refine content. -->
   <div class="app-panel-surface" id="refine-header" style="position:sticky;top:52px;z-index:130;border-bottom:1px solid var(--bdr);box-shadow:0 2px 8px rgba(0,0,0,0.06)">
     <div style="max-width:820px;margin:0 auto;padding:10px 24px;display:flex;justify-content:space-between;align-items:center">
       <div style="display:flex;align-items:center;gap:10px">
@@ -1586,7 +1595,7 @@ There are no right or wrong answers here. Please answer openly and in your own v
     </div>
     <div class="refine-chat-panel" style="background:var(--gray);border-top:2px solid var(--bdr)">
       <div id="chat-messages" style="padding:16px;display:flex;flex-direction:column;gap:10px"></div>
-      <div class="app-panel-surface" style="padding:10px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;align-items:flex-end;position:sticky;bottom:0;z-index:100;box-shadow:0 -2px 8px rgba(0,0,0,0.06)">
+      <div class="app-panel-surface refine-composer" style="padding:10px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;align-items:flex-end;box-shadow:0 -2px 8px rgba(0,0,0,0.06)">
         <textarea id="chat-input" class="wf-textarea" style="margin:0;flex:1;min-height:40px;max-height:120px;resize:none;font-size:var(--text-small)" placeholder="Ask Wocult AI to edit, research, add sections, change tone..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}"></textarea>
         <button class="btn" onclick="sendChatMessage()" id="chat-send-btn" style="height:40px;padding:0 16px;white-space:nowrap">Send</button>
       </div>
@@ -11657,7 +11666,11 @@ function showWorkflowStep(stepKey) {
   maxWorkflowStepReached = Math.max(maxWorkflowStepReached, workflowStepIndex(stepKey));
   updateWorkflowStepNav();
   var workflow = document.getElementById('workflow');
-  if (workflow) workflow.style.overflowY = stepKey === 'refine' ? 'hidden' : 'auto';
+  if (workflow) {
+    workflow.classList.toggle('app-refining', stepKey === 'refine');
+    if (workflow.style.display !== 'none') workflow.style.display = stepKey === 'refine' ? 'flex' : 'block';
+    workflow.style.overflowY = stepKey === 'refine' ? 'hidden' : 'auto';
+  }
   scrollAppWorkspaceToTop();
 }
 function navigateWorkflowStep(stepKey) {
@@ -15498,7 +15511,7 @@ if (podcastPrepFromUrl) {
   }
 }
 </script>
-<script src="app-ui.js?v=15.28"></script>
-<script src="app-navigation.js?v=15.28"></script>
+<script src="app-ui.js?v=15.29"></script>
+<script src="app-navigation.js?v=15.29"></script>
 </body>
 </html>
