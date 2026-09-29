@@ -1,4 +1,4 @@
-# Release 15.29 — Refine scrolling
+# Release 15.29 â€” Refine scrolling
 
 Production before change: 15.28. New visible version: 15.29.
 
@@ -6,7 +6,7 @@ Production before change: 15.28. New visible version: 15.29.
 
 The authenticated shell already reserves the utility bar and uses 100dvh. Body/window scrolling is intentionally disabled. Refine also disables #workflow scrolling, but #step2b used calc(100vh - 52px), ignoring the utility bar and actual wrapping workflow header. #refine-content had no scrolling. At 1366x768, the panel ended at y843.75 and the composer ended at y794: content was clipped by the shell, not an operating-system overlay.
 
-Refine now uses the available shell height as a flex column. Workflow navigation and Refine controls/toolbar occupy nonshrinking rows. #refine-content owns outer vertical scrolling with min-height:0; #chat-article-preview retains independent scrolling and a responsive 220–500px controlled height. Long chat history retains its 126px scroll boundary. The composer is in normal flow instead of bottom-sticky positioning. Existing autosave footer provides bottom spacing. No additional body scrollbar or padding workaround was added. Mobile actions wrap without splitting button labels.
+Refine now uses the available shell height as a flex column. Workflow navigation and Refine controls/toolbar occupy nonshrinking rows. #refine-content owns outer vertical scrolling with min-height:0; #chat-article-preview retains independent scrolling and a responsive 220â€“500px controlled height. Long chat history retains its 126px scroll boundary. The composer is in normal flow instead of bottom-sticky positioning. Existing autosave footer provides bottom spacing. No additional body scrollbar or padding workaround was added. Mobile actions wrap without splitting button labels.
 
 ## Scope and contracts
 
@@ -27,4 +27,4 @@ Files: index.html (layout/presentation and version/cache references); app-ui.js 
 
 ## Release and rollback
 
-One focused commit to main, followed by Pages version/asset verification. Worker redeployed: no. Firebase redeployed: no. Rollback: revert this release commit normally and publish a new version under the standing version rule; no data migration is needed.
+One focused commit to main, followed by Pages version/asset verification. Worker redeployed: no. Firebase redeployed: no. Rollback: revert this release commit normally and publish a new version under the standing version rule; no data migration is needed.
