@@ -27,4 +27,4 @@ Files: index.html (layout/presentation and version/cache references); app-ui.js 
 
 ## Release and rollback
 
-One focused commit to main, followed by Pages version/asset verification. Worker redeployed: no. Firebase redeployed: no. Rollback: revert this release commit normally and publish a new version under the standing version rule; no data migration is needed.
+One focused commit to main, followed by Pages version/asset verification. Worker redeployed: no. Firebase redeployed: no. Rollback: revert this release commit normally and publish a new version under the standing version rule; no data migration is needed.
