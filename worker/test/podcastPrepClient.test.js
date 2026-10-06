@@ -633,8 +633,8 @@ test('Podcast Prep create disables duplicate clicks while creation is in progres
   assert.match(reset, /finishPodcastPrepCreateButton\(false\)/);
 });
 
-test('application version badge is 15.30', () => {
-  assert.match(html, /id="app-version">v15\.30<\/small>/);
+test('application version badge is 15.31', () => {
+  assert.match(html, /id="app-version">v15\.31<\/small>/);
   assert.doesNotMatch(html, />15\.20<\/div>/);
   assert.doesNotMatch(html, />15\.19<\/div>/);
   assert.doesNotMatch(html, />15\.18<\/div>/);

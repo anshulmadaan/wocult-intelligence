@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="app-ui.css?v=15.30">
+<link rel="stylesheet" href="app-ui.css?v=15.31">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font-ui);background:var(--app-bg);color:var(--app-text);min-height:100vh}
@@ -274,7 +274,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <div class="app-brand"><span class="app-brand-mark">W</span><span><strong>Wocult</strong><small>Intelligence</small></span></div>
   <nav id="app-nav" class="app-nav" aria-label="Primary"></nav>
   <div class="app-profile">
-    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.30</small></span></div>
+    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.31</small></span></div>
     <button type="button" class="app-logout" onclick="logout()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></svg><span>Logout</span></button>
   </div>
 </aside>
@@ -11100,14 +11100,14 @@ function generateNewsBrief(card, instructions) {
   }, 900);
   var prompt = `Write a reported Wocult news brief.
 
-Source URL:
+Starting article URL:
 ${card.link || ''}
 
-Context:
 Headline: ${card.title || ''}
-Source: ${card.src || ''}
+Starting publisher: ${card.src || ''}
 
 Editor instructions:
+
 Suggested headline angle:
 ${instructions.headlineAngle || 'No specific headline angle provided.'}
 
@@ -11115,24 +11115,42 @@ Editorial angle, comments, emphasis or things to avoid:
 ${instructions.editorNotes || 'No additional editor instructions provided.'}
 
 Requirements:
-- Use the source URL as the factual basis.
+
+SOURCE AND ATTRIBUTION
+
+- Treat the supplied article as the starting point, not automatically as the original source.
+- Identify where the material facts originated. Prefer the original or primary source where available, such as a company statement or release, regulatory filing, government or court document, official announcement, research report, or direct public statement.
+- If the starting article names or links the original source, verify it. Use web search only when needed to locate or confirm that source. Do not conduct broad background research unless necessary to verify a material fact.
+- If no reliable primary source can be found, use the starting article as the reporting source.
+- Never imply that Wocult independently obtained information, a statement or a quotation that came from another publication.
+- When a material fact relies on another publication's reporting, attribute that publication naturally where the information is used. Do not force attribution into the first or second paragraph.
+- If a company or person gave a statement to another publication, make that explicit, for example: "The company told Reuters..." or "In a statement to The Economic Times..."
+- If a quote or statement comes from an official filing, release, court document, public statement or other primary source, attribute that primary source instead.
+- Do not reproduce a quotation unless its wording and source are verified.
+- Set sourceName and sourceUrl to the best verified original or primary source where one exists. If no reliable primary source is available, use the publication and URL whose reporting the story relies on.
+
 - Follow the editor instructions where they are consistent with the source. If the instructions conflict with the facts in the source, follow the source and do not invent.
 - Do not invent numbers, quotes, claims, company details, or context.
 - Keep it reported and concise, not opinionated.
 - Explain why this matters to working professionals.
 - Use plain English.
+- Use British English.
 - Write the title in sentence case.
 - Do not use title case.
 - Preserve the original casing of all proper nouns, company names, locations, demonyms, product names, visa categories and acronyms, including AI, HR, CEO, EPFO, POSH, TCS and HUL.
 - Return publishedDate as a full ISO date-time string, for example 2026-07-13T12:30:00.000Z.
 - SEO description must be under 250 characters.
-- News brief structure:
+
+News brief structure:
+
 - Title should be a headline only.
+
 - WOCULT AUDIENCE: Wocult is built for people navigating work in India, including employees, managers, jobseekers, independent professionals and business leaders. Choose editorial angles that reveal a meaningful consequence for careers, hiring, skills, pay, management, workplace culture, job security, policy or power at work. Use this audience context to decide the angle. Do not mechanically mention "working professionals", "Indian professionals" or "employees" in the standfirst unless the wording is natural and necessary.
+
 - STANDFIRST PURPOSE: The headline states what happened. The standfirst must add the strongest distinct implication, tension, shift or consequence supported by the story. It must not restate, expand or paraphrase the headline. Use Wocult's audience context to select the angle, but do not explicitly explain that it is "what this means for working professionals".
+
 - STANDFIRST RULES: Write 140 to 200 characters. Carry a distinct angle not already expressed by the headline. When supported by the evidence, relate the angle to careers, hiring, skills, pay, management, workplace culture, job security, policy, labour markets or power at work. Do not repeat, expand or paraphrase the headline. Do not use a generic explanation that the story matters to working professionals. Include the company, number or place only when needed to make the angle clear. Do not repeat these details merely because they appear in the headline. Do not begin with a generic phrase such as "The development comes as". Do not use promotional language. Do not speculate beyond the available evidence. Hand off cleanly to the body without duplicating the opening paragraph. Use sentence case while preserving proper nouns and acronyms exactly. Choose an angle that is relevant to Wocult's audience without explicitly naming the audience unless it is natural and necessary.
-- Negative standfirst example for headline "JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts": "JPMorgan Chase is recruiting around 1,000 technology specialists for its India GCC, targeting AI, cloud architecture, and cybersecurity, even as AI cuts staffing elsewhere in the bank."
-- Positive standfirst example for the same headline: "India's technology hiring is becoming more specialised, with AI infrastructure, cloud architecture and cybersecurity expertise commanding greater demand."
+
 - Body should be 200-350 words.
 - Body must NOT repeat the title.
 - Body must NOT repeat the standfirst.
@@ -11144,7 +11162,8 @@ Requirements:
 - No bullet points unless specifically requested.
 - No invented facts, quotes, dates, numbers, or context.
 - Body must be valid HTML paragraphs only.
-- Return JSON only:
+
+Return JSON only:
 {
   "title": "",
   "slug": "",
@@ -15511,7 +15530,7 @@ if (podcastPrepFromUrl) {
   }
 }
 </script>
-<script src="app-ui.js?v=15.30"></script>
-<script src="app-navigation.js?v=15.30"></script>
+<script src="app-ui.js?v=15.31"></script>
+<script src="app-navigation.js?v=15.31"></script>
 </body>
 </html>

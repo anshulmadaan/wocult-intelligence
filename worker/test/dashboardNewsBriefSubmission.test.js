@@ -30,8 +30,8 @@ test('News Brief submission uses authenticated Worker fetch for Webflow draft cr
   assert.match(createDraft, /collectionName: 'News'/);
 });
 
-test('dashboard version badge is 15.30 for enterprise shell', () => {
-  assert.match(html, /id="app-version">v15\.30<\/small>/);
+test('dashboard version badge is 15.31 for enterprise shell', () => {
+  assert.match(html, /id="app-version">v15\.31<\/small>/);
   assert.doesNotMatch(html, />15\.20<\/div>/);
   assert.doesNotMatch(html, />15\.16<\/div>/);
   assert.doesNotMatch(html, />15\.15<\/div>/);
@@ -181,8 +181,8 @@ test('News Brief generation prompts choose a distinct Wocult-relevant standfirst
     assert.match(block, /Do not repeat these details merely because they appear in the headline/i);
     assert.match(block, /do not invent/i);
     assert.match(block, /Preserve the original casing of all proper nouns/);
-    assert.match(block, /JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts/);
-    assert.match(block, /India's technology hiring is becoming more specialised/);
+    if (block === manual) assert.match(block, /JPMorgan plans 1,000 India GCC hires despite AI-driven workforce cuts/);
+    if (block === manual) assert.match(block, /India's technology hiring is becoming more specialised/);
     assert.doesNotMatch(block, /Make the meaning useful to Indian working professionals/i);
     assert.doesNotMatch(block, /explain what it means for Indian working professionals/i);
     assert.doesNotMatch(block, /what this means for employees/i);
