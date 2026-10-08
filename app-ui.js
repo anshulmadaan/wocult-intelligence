@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '15.31';
+  var APP_VERSION = '15.32';
   var THEME_KEY = 'wocult_ui_theme';
   var currentSection = 'home';
   var lastDrawerFocus = null;
@@ -9,6 +9,7 @@
 
   var icons = {
     home:'<path d="M3 11 12 3l9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',
+    ideas:'<path d="M9 18h6M10 21h4M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 3H9c0-1 0-2-1-3Z"/>',
     draft:'<path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/>',
     interview:'<path d="M7 4h10v12H9l-4 4V6a2 2 0 0 1 2-2ZM9 8h6M9 11h4"/>',
     podcast:'<rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/>',
@@ -34,6 +35,7 @@
   function staffNav() {
     var items = [
       navItem('home','Home','home',function(){ showAppSection('home'); }),
+      navItem('ideas','Idea board','ideas',function(){ showAppSection('ideas'); }),
       navItem('draft','Draft new stories','draft',function(){ showAppSection('draft'); }),
       navItem('interviews','Curate interviews','interview',function(){ showAppSection('interviews'); }),
       navItem('podcast','Podcast','podcast',function(){ showAppSection('podcast'); }),
@@ -57,9 +59,10 @@
     document.body.classList.toggle('app-authenticated', !!visible);
     var sidebar = document.getElementById('app-sidebar');
     if (sidebar) sidebar.setAttribute('aria-hidden', visible ? 'false' : 'true');
-    if (!visible) closeAppDrawer();
+    if (!visible) { closeAppDrawer(); if(typeof stopIdeaBoard==='function')stopIdeaBoard(); }
   };
   window.renderAppShell = function () {
+    if(currentAccessMode!=='staff' && typeof stopIdeaBoard==='function')stopIdeaBoard();
     var visible = shellEligible();
     setAuthenticatedShellVisible(visible);
     if (!visible) return;
@@ -211,7 +214,9 @@
     if (currentAccessMode !== 'staff' || (typeof isStaffUser === 'function' && !isStaffUser(currentUser))) { renderAppShell(); return; }
     if (section === 'admin' && (typeof isAdminUser !== 'function' || !isAdminUser(currentUser))) { if(typeof guardAdminScreen==='function')guardAdminScreen(); return; }
     if (!options || !options.skipHide) { if(typeof hideStaffLandingPanels==='function')hideStaffLandingPanels(); document.getElementById('landing').style.display='block'; document.getElementById('landing-cards').style.display='flex'; document.getElementById('main').style.display='none'; document.getElementById('workflow').style.display='none'; }
+    if(typeof stopIdeaBoard==='function')stopIdeaBoard();
     setSection(section, section==='home'?'Home':null);
+    if(section==='ideas'){mountIdeaBoard(overviewRoot());return;}
     if(section==='home'){renderHomeShell();loadHomeData();return;}
     var def=sectionDefinitions[section]; if(!def)return; overviewRoot().innerHTML=renderCards(def);bindCards(def);
   };

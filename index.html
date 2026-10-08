@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="app-ui.css?v=15.31">
+<link rel="stylesheet" href="app-ui.css?v=15.32">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font-ui);background:var(--app-bg);color:var(--app-text);min-height:100vh}
@@ -274,7 +274,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <div class="app-brand"><span class="app-brand-mark">W</span><span><strong>Wocult</strong><small>Intelligence</small></span></div>
   <nav id="app-nav" class="app-nav" aria-label="Primary"></nav>
   <div class="app-profile">
-    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.31</small></span></div>
+    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.32</small></span></div>
     <button type="button" class="app-logout" onclick="logout()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></svg><span>Logout</span></button>
   </div>
 </aside>
@@ -7814,6 +7814,7 @@ function showMain() {
   switchTab(activeTab || 'cards');
 }
 function hideStaffLandingPanels() {
+  if (typeof stopIdeaBoard === 'function') stopIdeaBoard();
   updateTopUpdatedVisibility(false);
   [
     'landing-cards',
@@ -15530,7 +15531,8 @@ if (podcastPrepFromUrl) {
   }
 }
 </script>
-<script src="app-ui.js?v=15.31"></script>
-<script src="app-navigation.js?v=15.31"></script>
+<script src="idea-board.js?v=15.32"></script>
+<script src="app-ui.js?v=15.32"></script>
+<script src="app-navigation.js?v=15.32"></script>
 </body>
 </html>

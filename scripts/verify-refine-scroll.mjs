@@ -11,7 +11,7 @@ await page.route('**/*',async route=>{
  const url=new URL(route.request().url());
  if(url.hostname!=='theme.test')return route.fulfill({status:503,body:'{"error":"Read-only fixture"}',contentType:'application/json'});
  const name=url.pathname==='/'?'index.html':url.pathname.slice(1);
- if(!['index.html','app-navigation.js','app-ui.css','app-ui.js'].includes(name)&&!name.startsWith('assets/fonts/'))return route.fulfill({status:404,body:''});
+ if(!['index.html','idea-board.js','app-navigation.js','app-ui.css','app-ui.js'].includes(name)&&!name.startsWith('assets/fonts/'))return route.fulfill({status:404,body:''});
  return route.fulfill({body:readFileSync(resolve(source,name)),contentType:{'.html':'text/html','.js':'text/javascript','.css':'text/css','.ttf':'font/ttf'}[extname(name)]});
 });
 await page.goto('http://theme.test');await page.waitForFunction(()=>typeof showAppSection==='function');

@@ -15,7 +15,7 @@ await context.route('**/*', async route => {
   const url = new URL(route.request().url());
   if (url.hostname !== 'shell.test') return route.fulfill({status:503,contentType:'application/json',body:'{"error":"Offline visual fixture"}'});
   const path = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
-  if (!['index.html','app-navigation.js','app-ui.js','app-ui.css'].includes(path) && !path.startsWith('assets/fonts/')) return route.fulfill({status:404,body:''});
+  if (!['index.html','idea-board.js','app-navigation.js','app-ui.js','app-ui.css'].includes(path) && !path.startsWith('assets/fonts/')) return route.fulfill({status:404,body:''});
   const types = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.ttf':'font/ttf'};
   return route.fulfill({contentType:types[extname(path)],body:readFileSync(resolve(source,path))});
 });

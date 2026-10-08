@@ -38,7 +38,7 @@
     ['writer-dashboard','showGuestWriterDashboard','writer'],['writer-story','viewGuestWriterStory','writer'],['writer-idea','showSubmitStoryIdeaScreen','writer']
   ].forEach(function(r){register(r[0],r[1],r[2]);});
   var sectionOriginal=window.showAppSection;
-  ['home','draft','interviews','podcast','community','editorial','webcomm','admin'].forEach(function(key){routes[key]={key:key,role:'staff',section:key};});
+  ['home','ideas','draft','interviews','podcast','community','editorial','webcomm','admin'].forEach(function(key){routes[key]={key:key,role:'staff',section:key};});
   window.showAppSection=function(section, options){
     syncScope(); var outer=depth===0;depth++;
     try { sectionOriginal(section,options); } finally { depth--; }

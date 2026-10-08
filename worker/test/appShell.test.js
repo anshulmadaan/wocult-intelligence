@@ -12,10 +12,10 @@ test('authenticated application shell exposes persistent navigation, profile and
   assert.match(html, /id="app-nav"[^>]+aria-label="Primary"/);
   assert.match(html, /id="app-profile-email"/);
   assert.match(html, /id="app-avatar"/);
-  assert.match(html, /id="app-version">v15\.31/);
-  assert.match(ui, /APP_VERSION = '15\.31'/);
-  assert.match(html, /app-ui\.css\?v=15\.31/);
-  assert.match(html, /app-ui\.js\?v=15\.31/);
+  assert.match(html, /id="app-version">v15\.32/);
+  assert.match(ui, /APP_VERSION = '15\.32'/);
+  assert.match(html, /app-ui\.css\?v=15\.32/);
+  assert.match(html, /app-ui\.js\?v=15\.32/);
   assert.match(html, /id="app-menu-toggle"[^>]+aria-controls="app-sidebar"[^>]+aria-expanded="false"/);
   assert.match(html, /id="app-theme-toggle"[^>]+aria-label="Switch to dark theme"/);
   assert.match(css, /body\.app-authenticated \.app-sidebar\{display:flex\}/);
@@ -25,7 +25,7 @@ test('authenticated application shell exposes persistent navigation, profile and
 
 test('staff navigation order is exact and Podcast directly follows Curate interviews', () => {
   const labels = [...ui.matchAll(/navItem\('[^']+','([^']+)'/g)].map((match) => match[1]);
-  assert.deepEqual(labels.slice(0, 8), ['Home','Draft new stories','Curate interviews','Podcast','Manage community','Editorial tracker','Web Comm','Admin']);
+  assert.deepEqual(labels.slice(0, 9), ['Home','Idea board','Draft new stories','Curate interviews','Podcast','Manage community','Editorial tracker','Web Comm','Admin']);
   assert.equal(labels.indexOf('Podcast'), labels.indexOf('Curate interviews') + 1);
 });
 

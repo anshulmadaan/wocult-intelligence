@@ -392,9 +392,49 @@ service cloud.firestore {
       allow read, write: if documentId != "canva_templates";
     }
 
+    // Idea board reuses the existing staff allowlist and existing single Admin account.
+    function ideaAuthorIsCurrent(data) {
+      return data.createdByUid == request.auth.uid
+        && data.createdByEmail == request.auth.token.email
+        && data.createdByName == (request.auth.token.get('name', '') != ''
+          ? request.auth.token.name : request.auth.token.email);
+    }
+    function validIdea(data) {
+      return data.keys().hasAll(['title','description','priority','createdByUid','createdByEmail','createdByName','createdAt','updatedAt'])
+        && data.keys().hasOnly(['title','description','priority','createdByUid','createdByEmail','createdByName','createdAt','updatedAt'])
+        && data.title is string && data.title.size() <= 200 && data.title.matches('.*[^\\s].*')
+        && data.description is string && data.description.size() <= 10000 && data.description.matches('[\\s\\S]*[^\\s][\\s\\S]*')
+        && data.priority in ['high','medium','low'];
+    }
+    match /ideas/{ideaId} {
+      allow read: if isWocultStaff();
+      allow create: if isWocultStaff() && validIdea(request.resource.data)
+        && ideaAuthorIsCurrent(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isWocultStaff() && (isCanvaAdmin() || resource.data.createdByUid == request.auth.uid)
+        && validIdea(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title','description','priority','updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isCanvaAdmin();
+      match /comments/{commentId} {
+        allow read: if isWocultStaff();
+        allow create: if isWocultStaff()
+          && exists(/databases/$(database)/documents/ideas/$(ideaId))
+          && request.resource.data.keys().hasAll(['body','createdByUid','createdByEmail','createdByName','createdAt'])
+          && request.resource.data.keys().hasOnly(['body','createdByUid','createdByEmail','createdByName','createdAt'])
+          && request.resource.data.body is string && request.resource.data.body.size() <= 4000
+          && request.resource.data.body.matches('[\\s\\S]*[^\\s][\\s\\S]*')
+          && ideaAuthorIsCurrent(request.resource.data) && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if isCanvaAdmin();
+      }
+    }
+
     match /{collection}/{document=**} {
       allow read, write: if
-        collection != "articles"
+        collection != "ideas"
+        && collection != "articles"
         && collection != "news_brief_automation"
         && collection != "news_brief_automation_runs"
         && collection != "podcast_sessions"

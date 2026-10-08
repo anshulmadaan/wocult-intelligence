@@ -8,6 +8,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  onSnapshot,
   deleteDoc,
   doc,
   getDoc,
@@ -716,4 +717,92 @@ test('staff same-status metadata edits preserve status date; unrelated articles 
   await assertSucceeds(setDoc(doc(anon(),'articles/ordinary'),{sourceType:'news',status:'draft'}));
   await assertSucceeds(updateDoc(doc(anon(),'articles/ordinary'),{status:'submitted'}));
   await assertSucceeds(setDoc(doc(authedVerifiedDb('writer@example.test','guest-writer'),'articles/guest-status/idea_messages/note'),{message:'Question'}));
+});
+
+// Idea board V1 permission matrix, including real listeners in two staff contexts.
+const IDEA_A='poorvi.arya23@gmail.com', IDEA_B='divya.madaan@gmail.com', IDEA_ADMIN='anmadaan@gmail.com';
+function ideaIdentity(email){return {createdByUid:email.replace(/[^a-z0-9]/gi,'_'),createdByEmail:email,createdByName:email};}
+function ideaPayload(email=IDEA_A){return {...ideaIdentity(email),title:'An editorial idea',description:'Discuss the evidence.\nThen consider the angle.',priority:'medium',createdAt:serverTimestamp(),updatedAt:serverTimestamp()};}
+function ideaRef(database){return doc(database,'ideas/idea-1');}
+test('Idea board allows staff creation/read; creator edits but only existing Admin deletes',async()=>{
+ const a=authed(IDEA_A),b=authed(IDEA_B),admin=authed(IDEA_ADMIN);
+ await assertSucceeds(setDoc(ideaRef(a),ideaPayload()));
+ for(const database of [a,b,admin])await assertSucceeds(getDocs(collection(database,'ideas')));
+ await assertSucceeds(updateDoc(ideaRef(a),{title:'Creator edit',priority:'high',updatedAt:serverTimestamp()}));
+ await assertFails(updateDoc(ideaRef(b),{description:'Not mine',updatedAt:serverTimestamp()}));
+ await assertFails(deleteDoc(ideaRef(a)));await assertFails(deleteDoc(ideaRef(b)));
+ await assertSucceeds(updateDoc(ideaRef(admin),{description:'Admin edit',updatedAt:serverTimestamp()}));
+ const original=(await getDoc(ideaRef(a))).data();assert.equal(original.createdByUid,ideaIdentity(IDEA_A).createdByUid);
+ for(const database of [a,admin]){
+  for(const patch of [{createdByUid:'other'},{createdByEmail:IDEA_B},{createdByName:'Impersonated'},{createdAt:serverTimestamp()},{status:'done'},{owner:'other'}])await assertFails(updateDoc(ideaRef(database),{...patch,updatedAt:serverTimestamp()}));
+ }
+ await assertSucceeds(deleteDoc(ideaRef(admin)));
+ for(const email of [IDEA_B,IDEA_ADMIN]){await assertSucceeds(setDoc(ideaRef(authed(email)),ideaPayload(email)));await deleteDoc(ideaRef(admin));}
+});
+test('Idea board rejects guests, unauthenticated access, spoofing and malformed writes',async()=>{
+ const a=authed(IDEA_A);await setDoc(ideaRef(a),ideaPayload());
+ for(const database of [anon(),authed('writer@example.com'),authed('podcast@example.com'),authed('interview@example.com')]){
+  await assertFails(getDoc(ideaRef(database)));await assertFails(getDocs(collection(database,'ideas')));
+  await assertFails(setDoc(doc(database,'ideas/forbidden'),ideaPayload()));await assertFails(updateDoc(ideaRef(database),{title:'No',updatedAt:serverTimestamp()}));await assertFails(deleteDoc(ideaRef(database)));
+  await assertFails(getDocs(collection(database,'ideas/idea-1/comments')));
+  await assertFails(setDoc(doc(database,'ideas/idea-1/comments/c'),{...ideaIdentity(IDEA_A),body:'No',createdAt:serverTimestamp()}));
+ }
+ for(const patch of [{createdByUid:'other'},{createdByEmail:IDEA_B},{createdByName:'Another person'},{priority:'urgent'},{title:'  '},{description:' \n '},{createdAt:new Date(0)},{updatedAt:new Date(0)},{status:'new'}])await assertFails(setDoc(doc(a,'ideas/invalid'),{...ideaPayload(),...patch}));
+ const missing=ideaPayload();delete missing.priority;await assertFails(setDoc(doc(a,'ideas/invalid'),missing));
+});
+test('Idea comments authenticate authors, forbid edits and enforce Admin-only deletion',async()=>{
+ await setDoc(ideaRef(authed(IDEA_A)),ideaPayload());
+ for(const email of [IDEA_A,IDEA_B,IDEA_ADMIN]){
+  const database=authed(email),ref=doc(database,'ideas/idea-1/comments/'+ideaIdentity(email).createdByUid);
+  await assertSucceeds(setDoc(ref,{...ideaIdentity(email),body:'A useful discussion',createdAt:serverTimestamp()}));
+  await assertSucceeds(getDoc(ref));await assertFails(updateDoc(ref,{body:'Changed'}));
+  if(email!==IDEA_ADMIN)await assertFails(deleteDoc(ref));
+ }
+ const a=authed(IDEA_A),ref=doc(a,'ideas/idea-1/comments/spoof');
+ for(const patch of [{createdByUid:'other'},{createdByEmail:IDEA_B},{createdByName:'Fake'},{body:'  \n '},{createdAt:new Date(0)}])await assertFails(setDoc(ref,{...ideaIdentity(IDEA_A),body:'Test',createdAt:serverTimestamp(),...patch}));
+ const admin=authed(IDEA_ADMIN);await assertSucceeds(deleteDoc(ideaRef(admin)));
+ await assertFails(setDoc(ref,{...ideaIdentity(IDEA_A),body:'Late comment',createdAt:serverTimestamp()}));
+ const leftovers=await getDocs(collection(admin,'ideas/idea-1/comments'));
+ for(const row of leftovers.docs)await assertSucceeds(deleteDoc(row.ref));
+ assert.equal((await getDocs(collection(admin,'ideas/idea-1/comments'))).size,0);
+});
+function waitForIdeaSnapshot(ref,predicate){
+ return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{stop();reject(new Error('Live Idea board update timed out'));},10000);const stop=onSnapshot(ref,snapshot=>{if(predicate(snapshot)){clearTimeout(timer);stop();resolve(snapshot);}},err=>{clearTimeout(timer);reject(err);});});
+}
+test('two staff contexts receive new ideas and comments through live Firestore listeners',async()=>{
+ const a=authed(IDEA_A),b=authed(IDEA_B);
+ const boardB=waitForIdeaSnapshot(collection(b,'ideas'),s=>s.size===1);
+ await setDoc(ideaRef(a),ideaPayload());assert.equal((await boardB).docs[0].data().title,'An editorial idea');
+ const discussionA=waitForIdeaSnapshot(collection(a,'ideas/idea-1/comments'),s=>s.size===1);
+ await setDoc(doc(b,'ideas/idea-1/comments/reply'),{...ideaIdentity(IDEA_B),body:'Staff B replied',createdAt:serverTimestamp()});
+ assert.equal((await discussionA).docs[0].data().createdByUid,ideaIdentity(IDEA_B).createdByUid);
+});
+
+test('Idea author display names must match authenticated identity, including Admin creation',async()=>{
+ const named=testEnv.authenticatedContext('named-staff',{email:IDEA_A,name:'Staff display name'}).firestore();
+ const payload={...ideaPayload(),createdByUid:'named-staff',createdByName:'Staff display name'};
+ await assertSucceeds(setDoc(ideaRef(named),payload));
+ await assertFails(setDoc(doc(named,'ideas/spoof-name'),{...payload,createdByName:'Someone else'}));
+  await assertSucceeds(setDoc(doc(named,'ideas/idea-1/comments/named'),{createdByUid:'named-staff',createdByEmail:IDEA_A,createdByName:'Staff display name',body:'Named author',createdAt:serverTimestamp()}));
+});
+
+test('Idea ownership uses UID, required fields are enforced, and colleagues cannot mutate comments',async()=>{
+ const a=authed(IDEA_A),b=authed(IDEA_B);
+ await assertSucceeds(setDoc(ideaRef(a),ideaPayload()));
+ const sameEmailDifferentUid=testEnv.authenticatedContext('different-uid',{email:IDEA_A}).firestore();
+ await assertSucceeds(getDoc(ideaRef(sameEmailDifferentUid)));
+ await assertFails(updateDoc(ideaRef(sameEmailDifferentUid),{title:'Same email is not ownership',updatedAt:serverTimestamp()}));
+ for(const key of Object.keys(ideaPayload())){
+  const payload=ideaPayload();delete payload[key];await assertFails(setDoc(doc(a,'ideas/missing-field'),payload));
+ }
+ for(const patch of [{title:'x'.repeat(201)},{description:'x'.repeat(10001)},{priority:null},{title:42},{description:[]}])await assertFails(setDoc(doc(a,'ideas/invalid-shape'),{...ideaPayload(),...patch}));
+ const comment={...ideaIdentity(IDEA_A),body:'Original comment',createdAt:serverTimestamp()};
+ await assertSucceeds(setDoc(doc(a,'ideas/idea-1/comments/original'),comment));
+ await assertSucceeds(getDocs(collection(b,'ideas/idea-1/comments')));
+ await assertFails(updateDoc(doc(b,'ideas/idea-1/comments/original'),{body:'Changed by colleague'}));
+ await assertFails(deleteDoc(doc(b,'ideas/idea-1/comments/original')));
+ for(const key of Object.keys(comment)){
+  const payload={...comment};delete payload[key];await assertFails(setDoc(doc(a,'ideas/idea-1/comments/missing-field'),payload));
+ }
+ await assertFails(setDoc(doc(a,'ideas/idea-1/comments/too-long'),{...comment,body:'x'.repeat(4001)}));
 });
