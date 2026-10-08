@@ -12,10 +12,10 @@ test('authenticated application shell exposes persistent navigation, profile and
   assert.match(html, /id="app-nav"[^>]+aria-label="Primary"/);
   assert.match(html, /id="app-profile-email"/);
   assert.match(html, /id="app-avatar"/);
-  assert.match(html, /id="app-version">v15\.32/);
-  assert.match(ui, /APP_VERSION = '15\.32'/);
-  assert.match(html, /app-ui\.css\?v=15\.32/);
-  assert.match(html, /app-ui\.js\?v=15\.32/);
+  assert.match(html, /id="app-version">v15\.33/);
+  assert.match(ui, /APP_VERSION = '15\.33'/);
+  assert.match(html, /app-ui\.css\?v=15\.33/);
+  assert.match(html, /app-ui\.js\?v=15\.33/);
   assert.match(html, /id="app-menu-toggle"[^>]+aria-controls="app-sidebar"[^>]+aria-expanded="false"/);
   assert.match(html, /id="app-theme-toggle"[^>]+aria-label="Switch to dark theme"/);
   assert.match(css, /body\.app-authenticated \.app-sidebar\{display:flex\}/);

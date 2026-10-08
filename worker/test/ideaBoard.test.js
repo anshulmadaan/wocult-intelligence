@@ -11,7 +11,7 @@ test('Idea board uses existing staff-only navigation and contextual route regist
  assert.deepEqual(labels.slice(0,3),['Home','Idea board','Draft new stories']);
  const nav=readFileSync(new URL('../../app-navigation.js',import.meta.url),'utf8');
  assert.match(nav,/\['home','ideas','draft'/);
- assert.match(html,/idea-board\.js\?v=15\.32/);
+ assert.match(html,/idea-board\.js\?v=15\.33/);
  assert.match(ui,/isStaffUser\(currentUser\)/);assert.match(source,/isAdminUser\(currentUser\)/);
 });
 test('guest and anonymous mounts cannot read Firestore or render staff content',()=>{

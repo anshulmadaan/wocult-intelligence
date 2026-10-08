@@ -1,5 +1,6 @@
 import test, { after, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import {
   assertFails,
@@ -9,6 +10,7 @@ import {
 import {
   collection,
   onSnapshot,
+  runTransaction,
   deleteDoc,
   doc,
   getDoc,
@@ -805,4 +807,26 @@ test('Idea ownership uses UID, required fields are enforced, and colleagues cann
   const payload={...comment};delete payload[key];await assertFails(setDoc(doc(a,'ideas/idea-1/comments/missing-field'),payload));
  }
  await assertFails(setDoc(doc(a,'ideas/idea-1/comments/too-long'),{...comment,body:'x'.repeat(4001)}));
+});
+
+test('Guest Writer profile approval records exact server time and preserves existing registration/welcome access',async()=>{
+ const writer=authed('writer@example.test'),staff=authed('poorvi.arya23@gmail.com');
+ const path='guest_writers/profile-dates',writerRef=doc(writer,path),staffRef=doc(staff,path);
+ await assertSucceeds(setDoc(writerRef,{status:'pending',fullName:'Original profile',createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));
+ const created=(await getDoc(writerRef)).data().createdAt;
+ const html=readFileSync(new URL('../../index.html',import.meta.url),'utf8');
+ const start=html.indexOf('function updateGuestWriterApplicationStatus('),source=html.slice(start,html.indexOf('\nfunction ',start+1));
+ const ref={get:()=>getDoc(staffRef)};
+ const context={currentAccessMode:'staff',currentUser:{uid:'staff'},isStaffUser:()=>true,firebase:{firestore:{FieldValue:{serverTimestamp}}},
+  db:{collection:name=>{assert.equal(name,'guest_writers');return {doc:()=>ref};},runTransaction:callback=>runTransaction(staff,tx=>callback({get:()=>tx.get(staffRef),update:(_,patch)=>tx.update(staffRef,{...patch})}))},
+  _guestWriterApplications:[{id:'profile-dates',status:'pending'}],renderGuestWriterApplications(){},openGuestWriterApplication(){},loadGuestWriterApplications(){},alert(message){throw Error(message);}};
+ context.window=context;vm.createContext(context);vm.runInContext(source,context);
+ await context.updateGuestWriterApplicationStatus('profile-dates','approved');
+ const first=(await assertSucceeds(getDoc(writerRef))).data();
+ assert.equal(first.status,'approved');assert(first.approvedAt.isEqual(first.updatedAt));assert(first.createdAt.isEqual(created));assert.equal(first.fullName,'Original profile');
+ context._guestWriterApplications[0].status='pending';await context.updateGuestWriterApplicationStatus('profile-dates','approved');
+ assert((await getDoc(writerRef)).data().approvedAt.isEqual(first.approvedAt));
+ await assertSucceeds(updateDoc(writerRef,{approvalWelcomeSeen:true,approvalWelcomeSeenAt:serverTimestamp(),updatedAt:serverTimestamp()}));
+ assert((await getDoc(writerRef)).data().approvedAt.isEqual(first.approvedAt));
+ await assertSucceeds(getDocs(collection(staff,'guest_writers')));
 });

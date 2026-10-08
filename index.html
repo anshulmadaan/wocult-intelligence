@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="app-ui.css?v=15.32">
+<link rel="stylesheet" href="app-ui.css?v=15.33">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font-ui);background:var(--app-bg);color:var(--app-text);min-height:100vh}
@@ -274,7 +274,7 @@ We’re looking for honest, experience-led stories — not polished perfection.<
   <div class="app-brand"><span class="app-brand-mark">W</span><span><strong>Wocult</strong><small>Intelligence</small></span></div>
   <nav id="app-nav" class="app-nav" aria-label="Primary"></nav>
   <div class="app-profile">
-    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.32</small></span></div>
+    <div class="app-profile-row"><span id="app-avatar" class="app-avatar" aria-hidden="true">W</span><span class="app-profile-copy"><strong id="app-profile-email"></strong><small id="app-version">v15.33</small></span></div>
     <button type="button" class="app-logout" onclick="logout()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></svg><span>Logout</span></button>
   </div>
 </aside>
@@ -5297,7 +5297,8 @@ function loadGuestWriterApplications(options) {
   if (window._guestWriterApplicationsLoaded && !options.force) { renderGuestWriterApplications(); return; }
   window._guestWriterApplicationsLoading = true;
   if (status) status.textContent = 'Loading writer profiles...';
-  db.collection('guest_writers').orderBy('updatedAt','desc').limit(20).get().then(function(snap) {
+  // Include legacy profiles without createdAt; Firestore orderBy would exclude them.
+  return db.collection('guest_writers').get().then(function(snap) {
     window._guestWriterApplications = [];
     snap.forEach(function(doc){ window._guestWriterApplications.push(Object.assign({id:doc.id}, doc.data())); });
     window._guestWriterApplicationsLoaded = true;
@@ -5308,14 +5309,40 @@ function loadGuestWriterApplications(options) {
     if (list) list.innerHTML = '';
   }).finally(function(){ window._guestWriterApplicationsLoading = false; });
 }
+function guestWriterProfileDate(value) {
+  if (value === null || value === undefined || value === '') return null;
+  try {
+    var date = typeof value.toDate === 'function' ? value.toDate()
+      : typeof value.seconds === 'number' ? new Date(value.seconds * 1000)
+      : typeof value === 'string' || typeof value === 'number' || value instanceof Date ? new Date(value) : null;
+    return date && isFinite(date.getTime()) ? date : null;
+  } catch (_) { return null; }
+}
+function guestWriterProfileDateLabel(value, includeTime) {
+  var date = guestWriterProfileDate(value);
+  if (!date) return 'Date unavailable';
+  return includeTime ? formatFirestoreDate(date) : date.toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'});
+}
+function guestWriterProfileDatesMeta(profile, includeTime) {
+  return 'Requested: '+escapeHtml(guestWriterProfileDateLabel(profile.createdAt, includeTime))
+    + (profile.status === 'approved' ? '<br>Approved: '+escapeHtml(guestWriterProfileDateLabel(profile.approvedAt, includeTime)) : '');
+}
+function sortGuestWriterProfiles(profiles) {
+  return profiles.slice().sort(function(a, b) {
+    var first = guestWriterProfileDate(a.createdAt), second = guestWriterProfileDate(b.createdAt);
+    if (!first) return second ? 1 : 0;
+    if (!second) return -1;
+    return second.getTime() - first.getTime();
+  });
+}
 function renderGuestWriterApplications() {
   var list = document.getElementById('guest-writer-applications-list');
   if (!list) return;
   if (!window._guestWriterApplications.length) { list.innerHTML = '<div class="app-panel-surface" style="padding:18px;border:1px solid var(--bdr);border-radius:var(--app-radius);color:var(--g3);font-size:var(--text-small)">No writer profiles yet.</div>'; return; }
-  list.innerHTML = window._guestWriterApplications.map(function(a) {
+  list.innerHTML = sortGuestWriterProfiles(window._guestWriterApplications).map(function(a) {
     return '<div class="app-panel-surface" style="padding:14px;border:1px solid var(--bdr);border-radius:var(--app-radius);">'
       + '<div style="font-size:var(--text-body);font-weight:700">'+escapeHtml(a.fullName||a.email||'Guest Writer')+'</div>'
-      + '<div style="font-size:var(--text-small);color:var(--g3);line-height:1.6">'+escapeHtml(a.email||'')+'<br>'+escapeHtml(a.preferredSection||'')+'<br>Status: '+escapeHtml(guestWriterProfileStatusLabel(a.status))+'</div>'
+      + '<div style="font-size:var(--text-small);color:var(--g3);line-height:1.6">'+escapeHtml(a.email||'')+'<br>'+escapeHtml(a.preferredSection||'')+'<br>Status: '+escapeHtml(guestWriterProfileStatusLabel(a.status))+'<br>'+guestWriterProfileDatesMeta(a, false)+'</div>'
       + '<button class="btn" style="margin-top:10px" onclick="openGuestWriterApplication(\''+escapeHtml(a.id)+'\')">Open</button>'
       + '</div>';
   }).join('');
@@ -5331,20 +5358,31 @@ function openGuestWriterApplication(id) {
   var approved = a.status === 'approved';
   detail.style.color = 'var(--blk)';
   detail.innerHTML = '<h3 style="font-size:var(--text-card-title);margin-bottom:8px">'+escapeHtml(a.fullName||'Guest Writer')+'</h3>'
-    + '<div style="font-size:var(--text-small);color:var(--g3);line-height:1.7;margin-bottom:12px">Email: '+escapeHtml(a.email||'')+'<br>Alias: '+escapeHtml(a.alias||'-')+'<br>Phone: '+escapeHtml(a.phone||'')+'<br>Location: '+escapeHtml(a.location||'')+'<br>Section: '+escapeHtml(a.preferredSection||'')+'<br>Status: '+escapeHtml(guestWriterProfileStatusLabel(a.status))+'</div>'
+    + '<div style="font-size:var(--text-small);color:var(--g3);line-height:1.7;margin-bottom:12px">Email: '+escapeHtml(a.email||'')+'<br>Alias: '+escapeHtml(a.alias||'-')+'<br>Phone: '+escapeHtml(a.phone||'')+'<br>Location: '+escapeHtml(a.location||'')+'<br>Section: '+escapeHtml(a.preferredSection||'')+'<br>Status: '+escapeHtml(guestWriterProfileStatusLabel(a.status))+'<br>'+guestWriterProfileDatesMeta(a, true)+'</div>'
     + '<div style="font-size:var(--text-small);line-height:1.7"><strong>Bio</strong><br>'+escapeHtml(a.shortBio||'')+'<br><br><strong>Story idea</strong><br>'+escapeHtml(a.storyPitch||'')+'<br><br><strong>Experience or perspective</strong><br>'+escapeHtml(a.experiencePerspective||'')+'</div>'
     + '<div style="display:flex;gap:8px;margin-top:14px"><button class="btn" '+(approved?'disabled style="opacity:0.5;cursor:not-allowed"':'onclick="updateGuestWriterApplicationStatus(\''+escapeHtml(a.id)+'\',\'approved\')"')+'>'+(approved?'Approved':'Approve')+'</button></div>';
 }
 function updateGuestWriterApplicationStatus(id, status) {
+  if (!db || currentAccessMode !== 'staff' || !isStaffUser(currentUser)) return;
   var app = (window._guestWriterApplications||[]).find(function(x){return x.id===id;});
   if (app && app.status === 'approved' && status === 'approved') return;
-  db.collection('guest_writers').doc(id).update({status:status, updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function() {
-    if (app) app.status = status;
+  var ref = db.collection('guest_writers').doc(id);
+  return db.runTransaction(function(tx) {
+    return tx.get(ref).then(function(doc) {
+      if (!doc.exists) throw new Error('Writer profile no longer exists.');
+      // Use persisted status so retries/stale staff screens cannot rewrite an approval date.
+      if (doc.data().status === status) return;
+      var update = {status:status, updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+      if (status === 'approved') update.approvedAt = firebase.firestore.FieldValue.serverTimestamp();
+      tx.update(ref, update);
+    });
+  }).then(function() { return ref.get(); }).then(function(doc) {
+    if (app && doc.exists) Object.assign(app, doc.data());
     window._guestWriterApplicationsLoaded = false;
     renderGuestWriterApplications();
     openGuestWriterApplication(id);
     loadGuestWriterApplications({force:true});
-  }).catch(function(err){ alert('Could not update writer profile: '+err.message); });
+  }).catch(function(err){ alert('Could not update or refresh writer profile: '+err.message); });
 }
 function showStaffGuestWriterStories() {
   if (!guardStaffScreen()) return;
@@ -15531,8 +15569,8 @@ if (podcastPrepFromUrl) {
   }
 }
 </script>
-<script src="idea-board.js?v=15.32"></script>
-<script src="app-ui.js?v=15.32"></script>
-<script src="app-navigation.js?v=15.32"></script>
+<script src="idea-board.js?v=15.33"></script>
+<script src="app-ui.js?v=15.33"></script>
+<script src="app-navigation.js?v=15.33"></script>
 </body>
 </html>
