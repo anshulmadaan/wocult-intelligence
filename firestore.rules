@@ -431,9 +431,28 @@ service cloud.firestore {
       }
     }
 
+    // Blog Comments queries submissions across posts. Collection-group queries
+    // need an explicit recursive match to authorize staff collection-group reads.
+    // Validate new public submissions only; historical documents need no migration.
+    match /comments/{postSlug}/submissions/{submissionId} {
+      allow create: if isWocultStaff() || (
+        request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.get('message', request.resource.data.get('comment', request.resource.data.get('text', ''))) is string
+        && request.resource.data.get('message', request.resource.data.get('comment', request.resource.data.get('text', ''))).size() > 0
+        && (!('pageUrl' in request.resource.data) || request.resource.data.pageUrl is string)
+      );
+      allow read, update, delete: if isWocultStaff();
+    }
+
+    match /{path=**}/submissions/{submissionId} {
+      allow read: if isWocultStaff();
+    }
+
     match /{collection}/{document=**} {
       allow read, write: if
-        collection != "ideas"
+        collection != "comments"
+        && collection != "ideas"
         && collection != "articles"
         && collection != "news_brief_automation"
         && collection != "news_brief_automation_runs"

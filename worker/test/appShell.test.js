@@ -12,7 +12,7 @@ test('authenticated application shell exposes persistent navigation, profile and
   assert.match(html, /id="app-nav"[^>]+aria-label="Primary"/);
   assert.match(html, /id="app-profile-email"/);
   assert.match(html, /id="app-avatar"/);
-  assert.match(html, /id="app-version">v15\.33/);
+  assert.match(html, /id="app-version">v15\.34/);
   assert.match(ui, /APP_VERSION = '15\.33'/);
   assert.match(html, /app-ui\.css\?v=15\.33/);
   assert.match(html, /app-ui\.js\?v=15\.33/);

@@ -9,6 +9,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  collectionGroup,
   onSnapshot,
   runTransaction,
   deleteDoc,
@@ -112,6 +113,54 @@ function dashboardDefaultConfig() {
 function authed(email) {
   return testEnv.authenticatedContext(email.replace(/[^a-z0-9]/gi, '_'), { email }).firestore();
 }
+
+test('Blog Comments staff collection-group query retrieves existing comments across posts', async () => {
+  const paths = ['comments/first-post/submissions/legacy', 'comments/second-post/submissions/newer'];
+  await testEnv.withSecurityRulesDisabled(async context => {
+    for (const path of paths) await setDoc(doc(context.firestore(), path), { comment: path, approved: false });
+  });
+  for (const email of ['poorvi.arya23@gmail.com', 'divya.madaan@gmail.com', 'anmadaan@gmail.com']) {
+    const snapshot = await assertSucceeds(getDocs(collectionGroup(authed(email), 'submissions')));
+    assert.deepEqual(snapshot.docs.map(item => item.ref.path).sort(), paths);
+    for (const item of snapshot.docs) assert.deepEqual(item.data(), { comment: item.ref.path, approved: false });
+  }
+});
+
+test('Blog Comments collection-group query rejects anonymous and non-staff users', async () => {
+  for (const db of [testEnv.unauthenticatedContext().firestore(), authed('guest@example.test')]) {
+    await assertFails(getDocs(collectionGroup(db, 'submissions')));
+  }
+});
+
+test('Blog Comments public create preserves current form and historical field aliases', async () => {
+  const db = testEnv.unauthenticatedContext().firestore();
+  for (const [i, data] of [
+    { name: 'Visitor', message: 'Current form', pageUrl: 'https://www.wocult.com/post', createdAt: serverTimestamp() },
+    { name: 'Visitor', comment: 'Legacy', submittedAt: '2025-01-01' },
+    { name: 'Visitor', text: 'Legacy text', timestamp: 12345 },
+    { name: 'Visitor', message: 'Date alias', date: '2025-01-01' },
+  ].entries()) await assertSucceeds(setDoc(doc(db, 'comments/post/submissions/' + i), data));
+  for (const data of [{}, { name: 'Visitor' }, { name: 42, message: 'bad' }, { name: 'Visitor', message: '' }, { name: 'Visitor', message: 42 }, { name: 'Visitor', message: 'text', pageUrl: 42 }]) {
+    await assertFails(setDoc(doc(db, 'comments/post/submissions/malformed'), data));
+  }
+});
+
+test('Blog Comments direct reads and moderation reject visitors; staff can edit and delete legacy data', async () => {
+  const path = 'comments/existing-post/submissions/comment';
+  await testEnv.withSecurityRulesDisabled(context => setDoc(doc(context.firestore(), path), { text: 'Historical comment', date: '2020-01-01' }));
+  for (const db of [testEnv.unauthenticatedContext().firestore(), authed('guest@example.test')]) {
+    await assertFails(getDoc(doc(db, path)));
+    await assertFails(getDocs(collection(db, 'comments/existing-post/submissions')));
+    await assertFails(updateDoc(doc(db, path), { message: 'tampered' }));
+    await assertFails(deleteDoc(doc(db, path)));
+  }
+  for (const email of ['poorvi.arya23@gmail.com', 'divya.madaan@gmail.com', 'anmadaan@gmail.com']) {
+    const db = authed(email);
+    await assertSucceeds(updateDoc(doc(db, path), { name: 'Edited', message: email, updatedAt: serverTimestamp() }));
+    assert.equal((await assertSucceeds(getDoc(doc(db, path)))).data().message, email);
+  }
+  await assertSucceeds(deleteDoc(doc(authed('anmadaan@gmail.com'), path)));
+});
 
 function authedVerified(email, uid = '') {
   return testEnv.authenticatedContext(uid || email.replace(/[^a-z0-9]/gi, '_'), {
