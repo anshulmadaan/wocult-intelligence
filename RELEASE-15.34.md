@@ -1,4 +1,4 @@
-# v15.34 — Blog Comments permissions
+# v15.34 - Blog Comments permissions
 
 Production version before release: v15.33 (downloaded from intelligence.wocult.com).
 
