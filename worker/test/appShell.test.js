@@ -12,10 +12,10 @@ test('authenticated application shell exposes persistent navigation, profile and
   assert.match(html, /id="app-nav"[^>]+aria-label="Primary"/);
   assert.match(html, /id="app-profile-email"/);
   assert.match(html, /id="app-avatar"/);
-  assert.match(html, /id="app-version">v15\.34/);
-  assert.match(ui, /APP_VERSION = '15\.33'/);
-  assert.match(html, /app-ui\.css\?v=15\.33/);
-  assert.match(html, /app-ui\.js\?v=15\.33/);
+  assert.match(html, /id="app-version">v15\.35/);
+  assert.match(ui, /APP_VERSION = '15\.35'/);
+  assert.match(html, /app-ui\.css\?v=15\.35/);
+  assert.match(html, /app-ui\.js\?v=15\.35/);
   assert.match(html, /id="app-menu-toggle"[^>]+aria-controls="app-sidebar"[^>]+aria-expanded="false"/);
   assert.match(html, /id="app-theme-toggle"[^>]+aria-label="Switch to dark theme"/);
   assert.match(css, /body\.app-authenticated \.app-sidebar\{display:flex\}/);
@@ -63,7 +63,7 @@ test('theme defaults to light, persists only UI preference and supports designed
   assert.equal((ui.match(/wocult_ui_theme/g) || []).length >= 1, true);
   assert.match(ui, /return 'light'/);
   assert.match(ui, /localStorage\.setItem\(THEME_KEY,next\)/);
-  assert.doesNotMatch(ui, /matchMedia|prefers-color-scheme/);
+  assert.doesNotMatch(ui, /prefers-color-scheme/);
   assert.match(css, /:root\[data-theme="dark"\]/);
   assert.match(css, /--app-workspace-dark:#1C1C1F/);
   assert.match(css, /--app-surface-dark:#232326/);

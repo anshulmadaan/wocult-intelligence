@@ -59,7 +59,8 @@ for(const [width,height] of [[1920,1080],[1920,900],[1440,900],[1366,768],[1100,
   return {top:composer.top,bottom:composer.bottom,outerTop:outer.getBoundingClientRect().top,header:document.getElementById('refine-header').getBoundingClientRect().top,body:document.documentElement.scrollHeight,viewport:innerHeight,width:document.documentElement.scrollWidth};
  });
  assert(bottom.bottom<=height && bottom.top>=bottom.outerTop,'composer fully reachable');
- assert.equal(bottom.header,initial['refine-header'].top);
+ if(width>800)assert.equal(bottom.header,initial['refine-header'].top);
+ else assert(bottom.header<=initial['refine-header'].top,'mobile toolbar shares outer scrolling');
  assert(bottom.body<=height && bottom.width<=width,'no page overflow');
  await page.screenshot({path:resolve(out,`${width}-${height}-${theme}.png`)});
  await page.locator('#refine-content').evaluate(e=>e.scrollTop=0);

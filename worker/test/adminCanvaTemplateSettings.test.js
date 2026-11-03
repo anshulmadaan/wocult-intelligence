@@ -300,7 +300,7 @@ test('headline and subtitle exact-fill paths remain separate from AI bullet gene
 });
 
 test('dashboard version badge is 15.33 and static IDs are not duplicated', () => {
-  assert.match(html, /id="app-version">v15\.34<\/small>/);
+  assert.match(html, /id="app-version">v15\.35<\/small>/);
   assert.doesNotMatch(html, />15\.20<\/div>/);
   assert.doesNotMatch(html, />15\.16<\/div>/);
   assert.doesNotMatch(html, />15\.15<\/div>/);

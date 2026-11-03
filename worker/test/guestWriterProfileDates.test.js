@@ -64,5 +64,5 @@ test('guest callers and failed approval transactions do not mutate the profile',
  c.currentAccessMode='staff';c.db.runTransaction=async()=>{throw Error('offline');};await c.updateGuestWriterApplicationStatus('a','approved');assert.equal(record.status,'pending');assert.equal(record.approvedAt,undefined);assert.match(alerts[0],/offline/);
  assert.match(fn('showGuestWriterApplications'),/guardStaffScreen\(\)/);
  assert(!fn('showGuestWriterPending').includes('guestWriterProfileDatesMeta'));
- assert.match(html,/id="app-version">v15\.34/);
+ assert.match(html,/id="app-version">v15\.35/);
 });

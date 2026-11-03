@@ -51,10 +51,10 @@ try{
   }
  }
  await cards.nth(2).getByRole('button',{name:'Open',exact:true}).click();assert.match(await detail.textContent(),/Approved: Date unavailable/);
- assert.equal(await page.locator('#app-version').textContent(),'v15.34');
+ assert.equal(await page.locator('#app-version').textContent(),'v15.35');
  for(const mode of ['guest_writer','podcast_prep_guest','guest']){
   await page.evaluate(m=>{hideAllAppScreens();currentUser={uid:'guest',email:'guest@example.test'};currentAccessMode=m;renderAppShell();showGuestWriterApplications();},mode);
   assert(!(await page.locator('#landing-guest-writer-applications').isVisible()));
  }
- console.log('PASS: profile date/time, ordering, historical records, approval refresh, staff-only screen, Light/Dark desktop/mobile, v15.34. No production writes.');
+ console.log('PASS: profile date/time, ordering, historical records, approval refresh, staff-only screen, Light/Dark desktop/mobile, v15.35. No production writes.');
 }finally{await browser.close();}

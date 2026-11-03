@@ -58,7 +58,7 @@ await page.evaluate(()=>ideaFixture.fail=false);await page.getByRole('button',{n
 await page.evaluate(()=>{for(const l of ideaFixture.listeners)if(l.path.includes('/comments'))l.error(Error('Fixture read failure'));});assert(await page.getByText('Failed to load comments. Reopen this idea to retry.').isVisible());
 await page.keyboard.press('Escape');await page.evaluate(()=>mountIdeasAs('Creator','poorvi.arya23@gmail.com'));await page.locator('.idea-card').click();assert.match(await page.locator('.idea-comment').textContent(),/Colleague/);await page.keyboard.press('Escape');
 await page.getByRole('button',{name:'+ New idea',exact:true}).click();await page.locator('#idea-title').fill('Newest idea');await page.locator('#idea-description-input').fill('Keep this for the next editorial discussion.');await page.locator('#idea-priority-input').selectOption('low');await page.getByRole('button',{name:'Save idea',exact:true}).click();await page.waitForSelector('dialog',{state:'detached'});assert.match(await page.locator('.idea-card').first().textContent(),/Newest idea/);
-for(const width of [1920,1440,820,390]){
+for(const width of [1920,1366,820,768,430,390,360,320]){
  await page.setViewportSize({width,height:900});
  for(const theme of ['light','dark']){
   await page.evaluate(t=>{if(document.documentElement.dataset.theme!==t)toggleAppTheme();},theme);
@@ -68,7 +68,9 @@ for(const width of [1920,1440,820,390]){
   await page.locator('.idea-card').first().click();assert(await page.locator('#idea-comment').isVisible());
   assert(await page.locator('dialog').evaluate(e=>e.getBoundingClientRect().right<=innerWidth));
   await page.screenshot({path:resolve(out,`detail-${width}-${theme}.png`)});await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'+ New idea',exact:true}).click();assert.equal(await page.evaluate(()=>document.activeElement.id),'idea-title');await page.screenshot({path:resolve(out,`create-${width}-${theme}.png`)});await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'+ New idea',exact:true}).click();assert.equal(await page.evaluate(()=>document.activeElement.id),'idea-title');await page.screenshot({path:resolve(out,`create-${width}-${theme}.png`)});
+  if(width<=800){await page.locator('#idea-description-input').focus();await page.setViewportSize({width,height:400});await page.getByRole('button',{name:'Save idea',exact:true}).scrollIntoViewIfNeeded();const box=await page.locator('dialog').boundingBox();assert(box.y>=0&&box.y+box.height<=401);await page.setViewportSize({width,height:900});}
+  await page.keyboard.press('Escape');
  }
 }
 await page.evaluate(()=>mountIdeasAs('Admin','anmadaan@gmail.com'));await page.locator('.idea-card').filter({hasText:'Updated idea'}).click();

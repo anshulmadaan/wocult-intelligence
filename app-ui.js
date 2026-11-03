@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '15.33';
+  var APP_VERSION = '15.35';
   var THEME_KEY = 'wocult_ui_theme';
   var currentSection = 'home';
   var lastDrawerFocus = null;
@@ -93,12 +93,41 @@
     if (version) version.textContent = 'v'+APP_VERSION;
   };
 
+  // Keep viewport-constrained controls reachable when browser chrome/keyboard resizes.
+  var mobileShell = window.matchMedia('(max-width:800px)');
+  function syncMobileViewport() {
+    var viewport = window.visualViewport;
+    if (viewport && viewport.scale === 1) {
+      document.documentElement.style.setProperty('--app-visual-height', viewport.height + 'px');
+      document.documentElement.style.setProperty('--app-visual-top', viewport.offsetTop + 'px');
+    }
+  }
+  function syncResponsiveShell() {
+    closeAppDrawer();
+    // On phones the toolbar scrolls with Refine, leaving room for the editor and composer.
+    var header = document.getElementById('refine-header');
+    var content = document.getElementById('refine-content');
+    var step = document.getElementById('step2b');
+    if (header && content && step) {
+      if (mobileShell.matches) content.insertBefore(header, content.firstChild);
+      else step.insertBefore(header, content);
+    }
+    syncMobileViewport();
+  }
+  mobileShell.addEventListener('change', syncResponsiveShell);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', syncMobileViewport);
+    window.visualViewport.addEventListener('scroll', syncMobileViewport);
+  }
+  window.addEventListener('resize', syncMobileViewport);
+  window.addEventListener('DOMContentLoaded', syncResponsiveShell);
+
   window.toggleAppDrawer = function () {
     var open = !document.body.classList.contains('app-drawer-open');
     document.body.classList.toggle('app-drawer-open', open);
     var toggle = document.getElementById('app-menu-toggle');
     if (toggle) { toggle.setAttribute('aria-expanded', String(open)); toggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation'); }
-    if (open) { lastDrawerFocus = document.activeElement; var first = document.querySelector('.app-nav-item'); if (first) first.focus(); }
+    if (open) { lastDrawerFocus = document.activeElement; var first = document.querySelector('.app-nav-item.active') || document.querySelector('.app-nav-item'); if (first) { first.focus(); first.scrollIntoView({block:'nearest'}); } }
   };
   window.closeAppDrawer = function () {
     var wasOpen = document.body.classList.contains('app-drawer-open');

@@ -160,6 +160,8 @@ const scrollBeforeDrawer=await page.locator('#landing').evaluate(e=>e.scrollTop)
 const urlBeforeDrawer=page.url();
 await page.locator('#app-menu-toggle').click();
 assert.equal(await page.getAttribute('#app-menu-toggle','aria-expanded'),'true');
+assert(await page.evaluate(()=>document.activeElement.classList.contains('active')),'drawer focuses current section');
+await page.locator('#app-nav .app-nav-item').first().focus();
 await page.keyboard.press('Shift+Tab');
 assert.equal(await page.evaluate(()=>document.activeElement.className),'app-logout','drawer wraps backwards');
 await page.keyboard.press('Tab');
